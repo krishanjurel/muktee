@@ -20,7 +20,6 @@ public class PercolationStats {
         this.trials = trials;
 
         for (int i = 0; i < trials; i++) {
-            //System.out.println("Trials: " + (i + 1) + "/" + trials);
             means[i] = 0;
             opened = 0;
             Percolation perc = new Percolation(n);
@@ -66,9 +65,9 @@ public class PercolationStats {
         int n = Integer.parseInt(args[0]);
         int trials = Integer.parseInt(args[1]);
         PercolationStats percolationStats = new PercolationStats(n, trials);
-        //System.out.println("Mean: " + percolationStats.mean());
-        //System.out.println("stddev :" + percolationStats.stddev());
-        //System.out.println("lo confidenece :" + percolationStats.confidenceLo());
-        //System.out.println("Hi confidenece :" + percolationStats.confidenceHi());
+        System.out.println("Mean: " + percolationStats.mean());
+        System.out.println("stddev :" + percolationStats.stddev());
+        System.out.println("lo confidenece :" + percolationStats.confidenceLo());
+        System.out.println("Hi confidenece :" + percolationStats.confidenceHi());
     }
 }

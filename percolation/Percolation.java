@@ -1,13 +1,18 @@
 /* *****************************************************************************
  *  Name: krishan
  *  Date: 14 May 2020
- *  Description: Monte Carlo percolation simulation
+ *  Description: Monte Carlo percolation simulation, requires algs4.jar java package
+ *
+ *  This is part of the algorithms course from coursera (Princeton University).
+ *  Use the test text files for testing with the provided java program of PercolationVisualizer.java
+ *
+ *
  **************************************************************************** */
 
 public class Percolation {
     /* identifier of every node */
-    private static int siteOpen = 1;
-    private static int siteClose = 0;
+    final static int siteOpen = 1;
+    final static int siteClose = 0;
 
 
     private int[] id;
@@ -45,9 +50,7 @@ public class Percolation {
 
     /* find the root */
     private int findRoot(int i) {
-        //System.out.print("findRoot of i " + i);
         while (i != id[i]) i = id[i];
-        //System.out.println(" is " + i);
         return i;
     }
 
@@ -56,7 +59,6 @@ public class Percolation {
         if (row - 1 >= 1) {
             topIndex = (row - 2) * n + col - 1;
         }
-        //System.out.println("row:col:topIndex " + row + ":" + col + ":" + topIndex);
         return topIndex;
     }
 
@@ -65,7 +67,6 @@ public class Percolation {
         if (row + 1 <= n) {
             belowIndex = row * n + col - 1;
         }
-        //System.out.println("row:col:bleowIndex " + row + ":" + col + ":" + belowIndex);
         return belowIndex;
     }
 
@@ -74,7 +75,6 @@ public class Percolation {
         if (col - 1 >= 1) {
             leftIndex = (row - 1) * n + col - 2;
         }
-        //System.out.println("row:col:leftIndex " + row + ":" + col + ":" + leftIndex);
         return leftIndex;
     }
 
@@ -83,7 +83,6 @@ public class Percolation {
         if (col + 1 <= n) {
             rightIndex = (row - 1) * n + col;
         }
-        //System.out.println("row:col:rightIndex " + row + ":" + col + ":" + rightIndex);
         return rightIndex;
     }
 
@@ -91,6 +90,143 @@ public class Percolation {
         return (row - 1) * n + col - 1;
     }
 
+    private void quickUnion(int p, int q) {
+        int rootp = findRoot(p);
+        int rootq = findRoot(q);
+
+        if (rootp == rootq) return;
+
+        id[rootp] = rootq;
+        return;
+    }
+
+    private void quickWeightedUnion(int p, int q) {
+        int rootp = findRoot(p);
+        int rootq = findRoot(q);
+
+        if (rootp == rootq) return;
+
+        /* compare the size of the size of the tree, and add the node to
+           the bigger tree
+         */
+        if (sz[rootp] > sz[rootq]) {
+            sz[rootp] += sz[rootq];
+            id[rootq] = rootp;
+        } else {
+            sz[rootq] += sz[rootp];
+            id[rootp] = rootq;
+        }
+    }
+
+    // generic connect method of node p connecting to node q
+    private void connect(int p, int q) {
+        //quickWeightedUnion(p, q);
+        quickUnion(p, q);
+    }
+
+    private void connect(int row, int col, boolean qwf) {
+
+        int leftRoot = -1;
+        int rightRoot = -1;
+        int topRoot = -1;
+        int belowRoot = -1;
+        int belowIndex = -1;
+        int tempIndex = -1;
+        index = getCurrentIndex(row, col);
+        leftIndex = getLeftIndex(row, col);
+        rightIndex = getRightIndex(row, col);
+        topIndex = getTopIndex(row, col);
+        belowIndex = getBelowIndex(row, col);
+
+        /*default current node is connected to itself */
+        id[index] = index;
+
+        /* first connect the elements on the horizontal axis, followed by vertical axis.
+            Connect to the tree with largest size with overriding factor is always connect
+            to the node that is connected to the top row.
+         */
+
+        /*find the roots of left, right, top and bottom open sites */
+        tempIndex = leftIndex;
+        if (tempIndex >= 0 && sites[tempIndex] == siteOpen)
+            leftRoot = findRoot(tempIndex);
+
+        tempIndex = rightIndex;
+        if (tempIndex >= 0 && sites[tempIndex] == siteOpen)
+            rightRoot = findRoot(tempIndex);
+
+        tempIndex = topIndex;
+        if (tempIndex >= 0 && sites[tempIndex] == siteOpen)
+            topRoot = findRoot(tempIndex);
+
+        tempIndex = belowIndex;
+        if (tempIndex >= 0 && sites[tempIndex] == siteOpen)
+            belowRoot = findRoot(tempIndex);
+
+
+        /************************************set the horizontal nodes ******************/
+        /* case 1, if left node is connected to top row, connect the
+         * the current node to left node*/
+        if (leftRoot >= 0 && leftRoot < n) {
+            //connect(index, leftIndex
+            connect(index, leftRoot);
+            /*now check whether we should connect the right node of current node to
+              add into this tree
+             */
+            if (rightRoot >= 0)
+                //connect(rightIndex, index) // use the below call for fast connection
+                connect(rightRoot, leftRoot);
+        }
+
+        /* case 2, if right node is connected to the top row, connect the current
+           node to the top row, its possible that the right node is already part of the
+           same tree as current node. but the connect call handles that gracefully
+         */
+        if (rightRoot >= 0 && rightRoot < n) {
+            //connect(index, rightIndex
+            connect(index, rightRoot);
+            /*now check whether we should connect the right node of current node to
+              add into this tree
+             */
+            if (leftRoot >= 0)
+                //connect(index, rightIndex) // use the below call for fast connection
+                connect(leftRoot, rightRoot);
+        }
+
+        /* case 3, top and left both are not connected to the top row, then
+            connect the current node to the left node and right node to current node
+         */
+        if (id[index] == index) {
+            if (leftRoot >= 0)
+                connect(index, leftRoot);
+
+            if (rightRoot >= 0)
+                connect(rightRoot, index);
+        }
+        /************************************horizontal is done ******************/
+
+        /************************************set the vertical nodes ******************/
+        /*read the root of the current node */
+        int currentRoot = findRoot(index);
+
+        /* if top site is open, connect the node having lowest root */
+        if (topRoot >= 0) {
+            if (currentRoot < topRoot)
+                connect(topRoot, currentRoot);
+            else
+                connect(currentRoot, topRoot);
+        }
+
+        currentRoot = findRoot(index);
+
+        /* if top site is open, connect the node having lowest root */
+        if (belowRoot >= 0) {
+            if (currentRoot < belowRoot)
+                connect(belowRoot, currentRoot);
+            else
+                connect(currentRoot, belowRoot);
+        }
+    }
 
     private void connectHorizontal(int row, int col) {
         //String nameofCurrMethod = new Exception().getStackTrace()[0]
@@ -125,8 +261,7 @@ public class Percolation {
                 root[rightRoot] = leftRoot;
             }
             root[index] = leftRoot;
-        }
-        else if (rightRoot >= 0 && rightRoot < n) {
+        } else if (rightRoot >= 0 && rightRoot < n) {
             sz[rightRoot] += 1;
             id[index] = rightIndex;
 
@@ -202,8 +337,7 @@ public class Percolation {
                 id[root2] = root1;
                 root[topIndex] = root1;
                 sz[root1] += sz[root2];
-            }
-            else if (root2 < root1) {
+            } else if (root2 < root1) {
                 id[root1] = root2;
                 root[index] = root2;
                 sz[root2] += sz[root1];
@@ -222,8 +356,7 @@ public class Percolation {
                 id[root2] = root1;
                 root[belowIndex] = root1;
                 sz[root1] += sz[root2];
-            }
-            else if (root2 < root1) {
+            } else if (root2 < root1) {
                 id[root1] = root2;
                 root[index] = root2;
                 sz[root2] += sz[root1];
@@ -249,8 +382,9 @@ public class Percolation {
             sites[index] = siteOpen;
             openSites++;
         }
-        connectHorizontal(row, col);
-        connectVertical(row, col);
+        //connectHorizontal(row, col);
+        //connectVertical(row, col);
+        connect(row, col, true);
     }
 
     /* return the site's open status */
