@@ -1,1 +1,1 @@
-general repository
+branch for open cv projects
