@@ -1,36 +1,61 @@
-import java.util.Comparator;
 import java.util.Iterator;
 
-
-public class BruteCollinearPoints implements Iterable<LineSegment> {
+public class BruteCollinearPoints {
     private Point[] points;
     private LineSegment[] lineSegments;
     private int numberOfSegments;
+    private LineSegment[] tempLineSegments;
+    private PointSlope[] pointSlopes;
 
-    BruteCollinearPoints(Point[] points) {
-        this.points = points;
-        numberOfSegments = 0;
-        lineSegments = new LineSegment[points.length * 4];
-        for (int i = 0; i < points.length - 2; ) {
-            Comparator<Point> c = points[i].slopeOrder();
-            for (int j = i + 1; j < points.length - 1; j++) {
-                if (c.compare(points[j], points[j + 1]) == c.compare(points[i], points[j])) {
-                    lineSegments[numberOfSegments++] = new LineSegment(points[i], points[j]);
-                    lineSegments[numberOfSegments++] = new LineSegment(points[j], points[j + 1]);
-                }
-                System.out.println("number of segments " + numberOfSegments);
-            }
-            i++;
+    /**
+     * create a private class to store a map of point and slope
+     */
+    private class PointSlope {
+        public double slope;
+        public Point point;
+
+        public PointSlope(Point point, Double slope) {
+            this.point = point;
+            this.slope = slope;
         }
     }
 
-    public Iterator<LineSegment> iterator() {
-        return new LineSegmentIterator();
+
+    private void Sort(PointSlope[] pointSlopes) {
+        int i = 0;
+        int j = 0;
+        for (i = 0; i < pointSlopes.length - 1; i++)
+            for (j = i + 1; i < pointSlopes.length; j++) {
+                if (pointSlopes[j].slope <= pointSlopes[i].slope) {
+                    PointSlope temp = pointSlopes[i];
+                    pointSlopes[i] = pointSlopes[j];
+                    pointSlopes[j] = temp;
+                    break;
+                }
+            }
     }
 
-    public LineSegment[] segments() {
-        return lineSegments;
+
+    BruteCollinearPoints(Point[] points) {
+        int k = 0;
+        this.points = points;
+        numberOfSegments = 0;
+        pointSlopes = new PointSlope[points.length - 1];
+        lineSegments = new LineSegment[points.length];
+        for (int i = 0; i < points.length; i++) {
+            k = 0;
+            for (int j = 0; j < points.length; j++) {
+                if (points[i].IsEqual(points[j]) == false) {
+                    pointSlopes[k] = new PointSlope(points[i], points[i].slopeTo(points[j]));
+                    k++;
+                }
+            }
+            //System.out.println("number of segments " + numberOfSegments);
+            // sort the elements in the oder
+            Sort(pointSlopes);
+        }
     }
+
 
     private class LineSegmentIterator implements Iterator<LineSegment> {
         private LineSegment[] segments = lineSegments;
@@ -43,7 +68,20 @@ public class BruteCollinearPoints implements Iterable<LineSegment> {
 
         public LineSegment next() {
             if (hasNext() == false) throw new java.util.NoSuchElementException();
-            return segments[i++];
+            return this.segments[i++];
         }
+    }
+
+
+    public Iterator<LineSegment> iterator() {
+        return new LineSegmentIterator();
+    }
+
+    public Iterable<LineSegment> segments() {
+        return new Iterable<LineSegment>() {
+            public Iterator<LineSegment> iterator() {
+                return new LineSegmentIterator();
+            }
+        };
     }
 }

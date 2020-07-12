@@ -19,6 +19,7 @@ public class Point implements Comparable<Point> {
     private final int x;     // x-coordinate of this point
     private final int y;     // y-coordinate of this point
 
+
     /**
      * Initializes a new point.
      *
@@ -51,6 +52,14 @@ public class Point implements Comparable<Point> {
     }
 
     /**
+     * comprate two points to be same
+     */
+    public boolean IsEqual(Point that) {
+        return ((this.x == that.x) && (this.y == that.y));
+    }
+
+
+    /**
      * Returns the slope between this point and the specified point.
      * Formally, if the two points are (x0, y0) and (x1, y1), then the slope
      * is (y1 - y0) / (x1 - x0). For completeness, the slope is defined to be
@@ -63,9 +72,8 @@ public class Point implements Comparable<Point> {
      */
     public double slopeTo(Point that) {
         double slope = 0.0;
-        if (this.y == that.y) slope = 0.0;
+        if (this == that) slope = Double.NEGATIVE_INFINITY;
         else if (this.x == that.x) slope = Double.POSITIVE_INFINITY;
-        else if ((this.x == this.y) && (this.x1 == that.y1)) slope = Double.NEGATIVE_INFINITY;
         else slope = (that.y - this.y) / (that.x - this.x);
         return slope;
     }
