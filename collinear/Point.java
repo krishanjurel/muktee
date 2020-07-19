@@ -10,7 +10,6 @@
 
 import edu.princeton.cs.algs4.In;
 import edu.princeton.cs.algs4.StdDraw;
-import edu.princeton.cs.algs4.StdOut;
 
 import java.util.Comparator;
 
@@ -51,13 +50,6 @@ public class Point implements Comparable<Point> {
         StdDraw.line(this.x, this.y, that.x, that.y);
     }
 
-    /**
-     * comprate two points to be same
-     */
-    public boolean IsEqual(Point that) {
-        return ((this.x == that.x) && (this.y == that.y));
-    }
-
 
     /**
      * Returns the slope between this point and the specified point.
@@ -72,11 +64,20 @@ public class Point implements Comparable<Point> {
      */
     public double slopeTo(Point that) {
         double slope = 0.0;
-        if (this == that) slope = Double.NEGATIVE_INFINITY;
+        if (that == null) throw new java.lang.NullPointerException();
+
+        if (compareTo(that) == 0) slope = Double.NEGATIVE_INFINITY;
         else if (this.x == that.x) slope = Double.POSITIVE_INFINITY;
-        else slope = (that.y - this.y) / (that.x - this.x);
+        else if (this.y == that.y) slope = 0.0;
+        else slope = (double) (that.y - this.y) / (double) (that.x - this.x);
+
+        //LineSegment segment = new LineSegment(this, that);
+
+        // StdOut.print("segment " + segment);
+        // System.out.println(" slope :" + slope);
         return slope;
     }
+
 
     /**
      * Compares two points by y-coordinate, breaking ties by x-coordinate.
@@ -91,6 +92,8 @@ public class Point implements Comparable<Point> {
      * argument point
      */
     public int compareTo(Point that) {
+        if (that == null) throw new java.lang.NullPointerException();
+
         int retVal = 0;
         if (this.y < that.y) {
             retVal = -1;
@@ -101,15 +104,24 @@ public class Point implements Comparable<Point> {
         } else if (this.y > that.y) {
             retVal = 1;
         }
+
+        //LineSegment segment = new LineSegment(this, that);
+
+        // StdOut.print("compare segment " + segment);
+        // StdOut.println(" retVal " + retVal);
         return retVal;
     }
 
     private class slopeOrderComparator implements Comparator<Point> {
         public int compare(Point a, Point b) {
+
+            if (a == null || b == null) throw new java.lang.NullPointerException();
+
             double slopeA = slopeTo(a);
             double slopeB = slopeTo(b);
-            if (slopeA == slopeB) return 0;
-            else return 1;
+            if (slopeA < slopeB) return -1;
+            else if (slopeA > slopeB) return 1;
+            else return 0;
         }
     }
 
@@ -160,11 +172,16 @@ public class Point implements Comparable<Point> {
         }
         StdDraw.show();
 
+        long startTime = System.currentTimeMillis();
         // print and draw the line segments
         //FastCollinearPoints collinear = new FastCollinearPoints(points);
-        BruteCollinearPoints collinear = new BruteCollinearPoints(points);
-        for (LineSegment segment : collinear.segments()) {
-            StdOut.println(segment);
+        FastCollinearPoints collinear = new FastCollinearPoints(points);
+        LineSegment[] segments = collinear.segments();
+        long endTime = System.currentTimeMillis();
+        System.out.println("That took " + (endTime - startTime) + " milliseconds");
+        System.out.println("number of segmenets :" + segments.length);
+        for (LineSegment segment : segments) {
+            //StdOut.println(segment);
             segment.draw();
         }
         StdDraw.show();
