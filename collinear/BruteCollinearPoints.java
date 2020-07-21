@@ -25,10 +25,6 @@ public class BruteCollinearPoints {
         public LineSegment lineSegment;
 
 
-        public PointSlope() {
-            this.slope = 0;
-        }
-
         /**
          * equilidian distance between two points
          */
@@ -47,15 +43,8 @@ public class BruteCollinearPoints {
             lineSegment = new LineSegment(point, point2);
             //this.equiDist = point.distance(point, point2);
         }
-
-        public int compare(PointSlope p1, PointSlope p2) {
-            int retCode = 0;
-            if (p1.slope > p2.slope) retCode = 1;
-            else if (p1.slope < p2.slope) retCode = -1;
-            else retCode = 0;
-            return retCode;
-        }
     }
+
 
     /**
      * return true if this segment is available in the segments.
@@ -139,29 +128,12 @@ public class BruteCollinearPoints {
         return a;
     }
 
-
     /**
      * sort the pointslopes wrt to slope.
      *
      * @param pointSlopes
      */
     private void SortPointSlope(Vector<PointSlope> pointSlopes) {
-        //System.out.println("sorting point slopes: " + pointSlopes.size());
-        int i = 0;
-        int j = 0;
-        for (i = 0; i < pointSlopes.size() - 1; i++) {
-            for (j = i + 1; j < pointSlopes.size(); j++) {
-                if (pointSlopes.get(j).slope <= pointSlopes.get(i).slope) {
-                    PointSlope temp = pointSlopes.get(i);
-                    pointSlopes.set(i, pointSlopes.get(j));
-                    pointSlopes.set(j, temp);
-                }
-            }
-        }
-    }
-
-
-    private void SortPairPointSlope(Vector<PointSlope> pointSlopes) {
         //System.out.println("sorting point slopes: " + pointSlopes.size());
         int i = 0;
         int j = 0;
@@ -255,19 +227,13 @@ public class BruteCollinearPoints {
                 if (pointSlope1.point.compareTo(pointSlope2.point) == 0 &&
                         pointSlope1.slope == pointSlope2.slope) {
                     temp.add(pointSlope2);
-                }
-                /*
-                else {
+                } else {
                     if (temp.size() >= max_slopes)
                         SelectMaxSegment(temp);
                     temp.clear();
                     break;
                 }
-                 */
             }
-            if (temp.size() >= max_slopes)
-                SelectMaxSegment(temp);
-            temp.clear();
         }
         if (temp.size() >= max_slopes)
             SelectMaxSegment(temp);
@@ -296,15 +262,11 @@ public class BruteCollinearPoints {
         PointSlope pointSlope;
         lineSegmentVector = new Vector<LineSegment>();
         for (int i = 0; i < points.length - 1; i++) {
-            if (points[i] == null) throw new java.lang.IllegalArgumentException();
             for (int j = i + 1; j < points.length; j++) {
                 if (i != j) {
-                    if (points[j] == null) throw new java.lang.IllegalArgumentException();
+                    //if (points[i] == null || points[j] == null) throw new java.lang.IllegalArgumentException();
                     if (points[i].compareTo(points[j]) == 0) throw new java.lang.IllegalArgumentException();
 
-                    //if (points[i].compareTo(points[j]) >= 0)
-                    //   pointSlope = new PointSlope(points[j], points[i], points[j].slopeTo(points[i]));
-                    //else
                     pointSlope = new PointSlope(points[i], points[j], points[i].slopeTo(points[j]));
                     /**
                      * add this new segment only if its not there
@@ -315,20 +277,16 @@ public class BruteCollinearPoints {
                 }
             }
         }
-        //System.out.println("before sorting sorted slopes");
-        //PrintSlopePoints(pointSlopes);
-
-        SortPointSlope(pointSlopes);
-        //Vector<PointSlope> slopes = sort(pointSlopes);
-        //Arrays.sort(pointSlopes, new PointSlope());
+        //SortPointSlope(pointSlopes);
         //System.out.println("Print sorted slopes");
-        //PrintSlopePoints(slopes);
+        //PrintSlopePoints(pointSlopes);
+        Vector<PointSlope> sortedPointSlopes = sort(pointSlopes);
 
         //SortPoint(pointSlopes);
         //System.out.println("Print sorted Points");
         //PrintSlopePoints(pointSlopes);
-        GroupSegments(pointSlopes);
-        //GroupSegments(slopes);
+        //GroupSegments(pointSlopes);
+        GroupSegments(sortedPointSlopes);
     }
 
 

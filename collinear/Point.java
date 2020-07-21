@@ -172,13 +172,15 @@ public class Point implements Comparable<Point> {
         }
         StdDraw.show();
 
-        long startTime = System.currentTimeMillis();
+        long start = System.currentTimeMillis();
+
         // print and draw the line segments
         //FastCollinearPoints collinear = new FastCollinearPoints(points);
         FastCollinearPoints collinear = new FastCollinearPoints(points);
+        long end = System.currentTimeMillis();
+
+        System.out.println("it took " + Long.toString(end - start) + " milliseconds");
         LineSegment[] segments = collinear.segments();
-        long endTime = System.currentTimeMillis();
-        System.out.println("That took " + (endTime - startTime) + " milliseconds");
         System.out.println("number of segmenets :" + segments.length);
         for (LineSegment segment : segments) {
             //StdOut.println(segment);
