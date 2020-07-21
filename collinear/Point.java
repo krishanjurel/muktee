@@ -10,6 +10,7 @@
 
 import edu.princeton.cs.algs4.In;
 import edu.princeton.cs.algs4.StdDraw;
+import edu.princeton.cs.algs4.StdOut;
 
 import java.util.Comparator;
 
@@ -119,6 +120,8 @@ public class Point implements Comparable<Point> {
 
             double slopeA = slopeTo(a);
             double slopeB = slopeTo(b);
+
+            //System.out.println("slopeA : slopeB " + slopeA + ":" + slopeB);
             if (slopeA < slopeB) return -1;
             else if (slopeA > slopeB) return 1;
             else return 0;
@@ -183,7 +186,7 @@ public class Point implements Comparable<Point> {
         LineSegment[] segments = collinear.segments();
         System.out.println("number of segmenets :" + segments.length);
         for (LineSegment segment : segments) {
-            //StdOut.println(segment);
+            StdOut.println(segment);
             segment.draw();
         }
         StdDraw.show();

@@ -13,6 +13,7 @@ public class BruteCollinearPoints {
     private Vector<PointSlope> pointSlopes;
     final private int max_slopes = 3;
     private Vector<LineSegment> lineSegmentVector;
+    private Vector<PointSlope> uniqueSegments;
 
     /**
      * create a private class to store a map of point and slope
@@ -111,7 +112,7 @@ public class BruteCollinearPoints {
         for (int k = lo; k <= hi; k++) {
             if (i > mid) a.set(k, aux.get(j++));
             else if (j > hi) a.set(k, aux.get(i++));
-            else if (aux.get(j).slope <= aux.get(i).slope) a.set(k, aux.get(j++));
+            else if (aux.get(j).slope < aux.get(i).slope) a.set(k, aux.get(j++));
             else a.set(k, aux.get(i++));
         }
     }
@@ -192,20 +193,31 @@ public class BruteCollinearPoints {
     }
 
     private void SelectMaxSegment(Vector<PointSlope> pointSlopes) {
-        double maxLength = 0.0;
         int maxSegment = 0;
-
+        int i = 0;
+        boolean found = false;
         Point point2 = pointSlopes.get(0).point2;
         assert (pointSlopes.size() >= max_slopes);
-        for (int i = 0; i < pointSlopes.size(); i++) {
+        for (i = 0; i < pointSlopes.size(); i++) {
             if (pointSlopes.get(i).point2.compareTo(point2) >= 0) {
                 point2 = pointSlopes.get(i).point2;
                 maxSegment = i;
             }
         }
-        //StdOut.println(pointSlopes.get(maxSegment).lineSegment);
-        lineSegmentVector.add(pointSlopes.get(maxSegment).lineSegment);
-        //System.out.println("did we come here");
+
+        PointSlope temp = pointSlopes.get(maxSegment);
+        for (i = 0; i < uniqueSegments.size(); i++) {
+            //StdOut.println(pointSlopes.get(maxSegment).lineSegment);
+            PointSlope pointSlope = uniqueSegments.get(i);
+            if (pointSlope.point.slopeOrder().compare(temp.point, temp.point2) == 0 &&
+                    pointSlope.point2.compareTo(temp.point2) == 0)
+                found = true;
+            //System.out.println("did we come here");
+        }
+        if (found == false) {
+            uniqueSegments.add(pointSlopes.get(maxSegment));
+            lineSegmentVector.add(pointSlopes.get(maxSegment).lineSegment);
+        }
     }
 
 
@@ -261,6 +273,7 @@ public class BruteCollinearPoints {
         pointSlopes = new Vector<PointSlope>();
         PointSlope pointSlope;
         lineSegmentVector = new Vector<LineSegment>();
+        uniqueSegments = new Vector<PointSlope>();
         for (int i = 0; i < points.length - 1; i++) {
             for (int j = i + 1; j < points.length; j++) {
                 if (i != j) {
@@ -284,9 +297,12 @@ public class BruteCollinearPoints {
 
         //SortPoint(pointSlopes);
         //System.out.println("Print sorted Points");
-        //PrintSlopePoints(pointSlopes);
+        //PrintSlopePoints(sortedPointSlopes);
         //GroupSegments(pointSlopes);
         GroupSegments(sortedPointSlopes);
+
+
+        //System.out.println("unique segments are " + uniqueSegments.size());
     }
 
 
