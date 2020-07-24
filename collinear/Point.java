@@ -10,9 +10,10 @@
 
 import edu.princeton.cs.algs4.In;
 import edu.princeton.cs.algs4.StdDraw;
-import edu.princeton.cs.algs4.StdOut;
 
 import java.util.Comparator;
+
+//import edu.princeton.cs.algs4.StdOut;
 
 public class Point implements Comparable<Point> {
 
@@ -186,7 +187,7 @@ public class Point implements Comparable<Point> {
         LineSegment[] segments = collinear.segments();
         System.out.println("number of segmenets :" + segments.length);
         for (LineSegment segment : segments) {
-            StdOut.println(segment);
+            //StdOut.println(segment);
             segment.draw();
         }
         StdDraw.show();

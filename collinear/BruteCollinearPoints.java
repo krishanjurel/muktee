@@ -10,7 +10,6 @@ public class BruteCollinearPoints {
     private LineSegment[] lineSegments;
     private int numberOfSegments;
     private LineSegment[] tempLineSegments;
-    private Vector<PointSlope> pointSlopes;
     final private int max_slopes = 3;
     private Vector<LineSegment> lineSegmentVector;
     private Vector<PointSlope> uniqueSegments;
@@ -18,7 +17,7 @@ public class BruteCollinearPoints {
     /**
      * create a private class to store a map of point and slope
      */
-    private class PointSlope {
+    private class PointSlope implements Comparable<PointSlope> {
         public double slope;
         public Point point;
         public Point point2;
@@ -44,25 +43,11 @@ public class BruteCollinearPoints {
             lineSegment = new LineSegment(point, point2);
             //this.equiDist = point.distance(point, point2);
         }
-    }
 
-
-    /**
-     * return true if this segment is available in the segments.
-     * two segments are equal if segment contains, both the points, order doesnt matter
-     */
-    private boolean DuplicateSegment(PointSlope pointSlope) {
-        boolean found = false;
-        for (int i = 0; i < pointSlopes.size(); i++) {
-            if ((pointSlopes.get(i).point.compareTo(pointSlope.point) == 0 ||
-                    pointSlopes.get(i).point.compareTo(pointSlope.point2) == 0) &&
-                    (pointSlopes.get(i).point2.compareTo(pointSlope.point) == 0 ||
-                            pointSlopes.get(i).point2.compareTo(pointSlope.point2) == 0)) {
-                found = true;
-                break;
-            }
+        /*compare the points based on point2 */
+        public int compareTo(PointSlope point) {
+            return this.point2.compareTo(point.point2);
         }
-        return found;
     }
 
 
@@ -119,7 +104,7 @@ public class BruteCollinearPoints {
 
     private Vector<PointSlope> sort(Vector<PointSlope> a) {
         int N = a.size();
-        Vector<PointSlope> aux = new Vector<PointSlope>(a);
+        Vector<PointSlope> aux = new Vector<PointSlope>();
         //System.out.println("aux capacity is " + aux.size());
         for (int sz = 1; sz < N; sz = sz + sz) {
             for (int lo = 0; lo < N - sz; lo += sz + sz) {
@@ -192,31 +177,88 @@ public class BruteCollinearPoints {
         }
     }
 
+    /**
+     * routine to identify the duplicate segments in a list of segments.
+     * A segment can be part of the same segment if:
+     * 1: the new segment makes the same slope with any exsiting segment.
+     * (a->b) (c->d)
+     * a.slopeOrder().compare(c, d) == 0 and a.slopeTo(b) == c.slopeTo(d)
+     * <p>
+     * 2: the new segment has same points as any of the existing segment (a->b )   (b->a)
+     * a.segment(1) == b.segment(1) or a.segment(1)==a.segment(2)
+     * 3: one point of both segments is same, while rest 2 are different
+     * (a->c ) and (a->d) or (a->c) and (d->a)
+     *
+     * @param pointSlopes
+     * @param pointSlope
+     * @return
+     */
+    private boolean DuplicateSegments(Vector<PointSlope> pointSlopes,
+                                      PointSlope pointSlope) {
+        boolean found = false;
+        for (int i = 0; i < pointSlopes.size(); i++) {
+            PointSlope temp = pointSlopes.get(i);
+            /* case 1 */
+            if (temp.point.slopeOrder().compare(pointSlope.point, pointSlope.point2) == 0 &&
+                    temp.slope == pointSlope.slope) {
+                found = true;
+                break;
+            }
+            /* case 2 */
+
+            /*either points make same angle or they are same segment */
+            if (pointSlope.point.compareTo(temp.point) == 0 &&
+                    pointSlope.point2.compareTo(temp.point2) == 0) {
+                found = true;
+                break;
+            }
+
+            if (pointSlope.point.compareTo(temp.point2) == 0 &&
+                    pointSlope.point2.compareTo(temp.point) == 0) {
+                found = true;
+                break;
+            }
+
+            /* case 3 */
+
+            /* start: new segment has the same Point */
+            if (pointSlope.point.compareTo(temp.point) == 0 &&
+                    pointSlope.point.slopeOrder().compare(pointSlope.point2, temp.point2) == 0) {
+                found = true;
+                break;
+            }
+            if (pointSlope.point.compareTo(temp.point2) == 0 &&
+                    pointSlope.point.slopeOrder().compare(pointSlope.point2, temp.point) == 0) {
+                found = true;
+                break;
+            }
+        }
+        return found;
+    }
+
     private void SelectMaxSegment(Vector<PointSlope> pointSlopes) {
         int maxSegment = 0;
         int i = 0;
         boolean found = false;
-        Point point2 = pointSlopes.get(0).point2;
-        assert (pointSlopes.size() >= max_slopes);
-        for (i = 0; i < pointSlopes.size(); i++) {
-            if (pointSlopes.get(i).point2.compareTo(point2) >= 0) {
-                point2 = pointSlopes.get(i).point2;
-                maxSegment = i;
-            }
-        }
+        PointSlope[] temp1 = pointSlopes.toArray(new PointSlope[pointSlopes.size()]);
+        Arrays.sort(temp1);
+        double slope = temp1[0].slope;
+        /* find the lowest and highest points based on y axis*/
+        Point lowest = temp1[0].point2;
+        Point highest = temp1[temp1.length - 1].point2;
 
-        PointSlope temp = pointSlopes.get(maxSegment);
-        for (i = 0; i < uniqueSegments.size(); i++) {
-            //StdOut.println(pointSlopes.get(maxSegment).lineSegment);
-            PointSlope pointSlope = uniqueSegments.get(i);
-            if (pointSlope.point.slopeOrder().compare(temp.point, temp.point2) == 0 &&
-                    pointSlope.point2.compareTo(temp.point2) == 0)
-                found = true;
-            //System.out.println("did we come here");
-        }
+        if (temp1[0].point.compareTo(lowest) < 0)
+            lowest = temp1[0].point;
+
+        if (temp1[0].point.compareTo(highest) > 0)
+            highest = temp1[0].point;
+
+        PointSlope temp = new PointSlope(lowest, highest, slope);
+
+        found = DuplicateSegments(uniqueSegments, temp);
         if (found == false) {
-            uniqueSegments.add(pointSlopes.get(maxSegment));
-            lineSegmentVector.add(pointSlopes.get(maxSegment).lineSegment);
+            uniqueSegments.add(temp);
+            lineSegmentVector.add(temp.lineSegment);
         }
     }
 
@@ -234,18 +276,18 @@ public class BruteCollinearPoints {
             PointSlope pointSlope1 = pointSlopes.get(i);
             temp.add(pointSlope1);
             for (int j = i + 1; j < pointSlopes.size(); j++) {
-                i = j;
+                //i = j;
                 PointSlope pointSlope2 = pointSlopes.get(j);
-                if (pointSlope1.point.compareTo(pointSlope2.point) == 0 &&
+                if (/*pointSlope1.point.compareTo(pointSlope2.point) == 0 &&*/
                         pointSlope1.slope == pointSlope2.slope) {
                     temp.add(pointSlope2);
-                } else {
-                    if (temp.size() >= max_slopes)
-                        SelectMaxSegment(temp);
-                    temp.clear();
-                    break;
                 }
             }
+            i++;
+            //System.out.println(" number of componets in the " + i + ":" + temp.size());
+            if (temp.size() >= max_slopes)
+                SelectMaxSegment(temp);
+            temp.clear();
         }
         if (temp.size() >= max_slopes)
             SelectMaxSegment(temp);
@@ -263,19 +305,20 @@ public class BruteCollinearPoints {
     public BruteCollinearPoints(Point[] points) {
         this.points = points;
         numberOfSegments = 0;
+        Vector<PointSlope> pointSlopes;
 
         if (points == null) throw new java.lang.IllegalArgumentException();
 
         for (int k = 0; k < points.length; k++) {
             if (points[k] == null) throw new java.lang.IllegalArgumentException();
         }
-        Arrays.sort(points);//, new Comparable<Point>());
+        //Arrays.sort(points);//, new Comparable<Point>());
         pointSlopes = new Vector<PointSlope>();
         PointSlope pointSlope;
         lineSegmentVector = new Vector<LineSegment>();
         uniqueSegments = new Vector<PointSlope>();
         for (int i = 0; i < points.length - 1; i++) {
-            for (int j = i + 1; j < points.length; j++) {
+            for (int j = 0; j < points.length; j++) {
                 if (i != j) {
                     //if (points[i] == null || points[j] == null) throw new java.lang.IllegalArgumentException();
                     if (points[i].compareTo(points[j]) == 0) throw new java.lang.IllegalArgumentException();
@@ -284,22 +327,28 @@ public class BruteCollinearPoints {
                     /**
                      * add this new segment only if its not there
                      */
-                    //if (DuplicateSegment(pointSlope) == false) {
+                    //if (DuplicateSegments(uniqueSegments, pointSlope) == false) {
                     pointSlopes.add(pointSlope);
                     //}
                 }
             }
+            Vector<PointSlope> sortedPointSlopes = sort(pointSlopes);
+            //pointSlopes.clear();
+            //System.out.println("round  " + i);
+            //PrintSlopePoints(sortedPointSlopes);
+            GroupSegments(sortedPointSlopes);
+            sortedPointSlopes.clear();
+            pointSlopes.clear();
         }
         //SortPointSlope(pointSlopes);
         //System.out.println("Print sorted slopes");
         //PrintSlopePoints(pointSlopes);
-        Vector<PointSlope> sortedPointSlopes = sort(pointSlopes);
+
 
         //SortPoint(pointSlopes);
         //System.out.println("Print sorted Points");
         //PrintSlopePoints(sortedPointSlopes);
         //GroupSegments(pointSlopes);
-        GroupSegments(sortedPointSlopes);
 
 
         //System.out.println("unique segments are " + uniqueSegments.size());
@@ -320,6 +369,7 @@ public class BruteCollinearPoints {
             i++;
             return lineSegment;
         }
+
     }
 
     public int numberOfSegments() {
