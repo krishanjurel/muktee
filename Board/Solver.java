@@ -1,7 +1,6 @@
 import edu.princeton.cs.algs4.In;
 import edu.princeton.cs.algs4.MinPQ;
 
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.Vector;
 
@@ -11,39 +10,32 @@ public class Solver {
     private int _moves = 0;
     /* initial priority queue */
     private MinPQ<BoardPriority> pq;
+    private Vector<BoardPriority> sq;
     final private int max_moves = 100000000;
+
 
     private class BoardPriority implements Comparable<BoardPriority> {
         private Board board;
         private int moves;
-        private int prio;
+        private int dist;
         private int hamdist;
+        private BoardPriority prev;
 
 
         BoardPriority(Board board, int moves) {
             this.board = board;
-            this.prio = board.manhattan() + moves;
+            this.dist = board.manhattan();
             this.moves = moves;
             this.hamdist = board.hamming();
-
+            this.prev = null;
         }
 
-        public Comparator<BoardPriority> boardPriorityComparator() {
-            return new Comparator<BoardPriority>() {
-                @java.lang.Override
-                public int compare(BoardPriority b1, BoardPriority b2) {
-                    int ret;
-                    int prio1 = b1.prio, prio2 = b2.prio;
-                    if (prio1 == prio2) {
-                        prio1 = b1.prio - b1.moves;
-                        prio2 = b2.prio - b2.moves;
-                        //System.out.println("least moves b1:b2 " + prio1 + ":" + prio2);
-                    }
-                    ret = Integer.compare(prio1, prio2);
-                    //System.out.println("comp prio b1:b2 " + prio1 + ":" + prio2 + " " + ret);
-                    return ret;
-                }
-            };
+        BoardPriority(Board board, int moves, BoardPriority prev) {
+            this.board = board;
+            this.dist = board.manhattan();
+            this.moves = moves;
+            this.hamdist = board.hamming();
+            this.prev = prev;
         }
 
         public Iterable<Board> neighbors() {
@@ -54,30 +46,28 @@ public class Solver {
             return moves;
         }
 
+        public int getDist() {
+            return dist;
+        }
+
         public Board getBoard() {
             return board;
         }
 
         public int getPrio() {
-            return prio;
-        }
-
-        public Comparator<BoardPriority> comparator() {
-            return boardPriorityComparator();
+            return dist + moves;
         }
 
         public int compareTo(BoardPriority b2) {
-            int prio1 = this.prio, prio2 = b2.prio;
+            int ret;
+            int prio1 = this.getPrio(), prio2 = b2.getPrio();
             if (prio1 == prio2) {
-                prio1 = this.prio - this.moves;
-                prio2 = b2.prio - b2.moves;
+                prio1 = this.dist;
+                prio2 = b2.dist;
             }
-            /*second attempt to break-tie*/
-            if (prio1 == prio2) {
-                prio1 = this.hamdist;
-                prio2 = b2.hamdist;
-            }
-            return Integer.compare(prio1, prio2);
+            ret = Integer.compare(prio1, prio2);
+            //System.out.println("compTo dist/moves b1:b2  ret " + this.dist + "/" + this.moves + ":" + b2.dist + "/" + b2.moves + " " + ret);
+            return ret;
         }
     }
 
@@ -85,7 +75,6 @@ public class Solver {
      * final solution queue, keep add elements in it
      * the ones that have been removed/
      */
-    private Vector<Board> sq;
 
     /* implement the Astar algo */
     private void AStar() {
@@ -93,51 +82,33 @@ public class Solver {
         /*delete the lowest priority queue */
         while (_moves < max_moves) {
             BoardPriority boardPriority = pq.delMin();
-            // System.out.println("******************************************");
-            //System.out.println("dequed board priority " + board.manhattan());
-            //System.out.println("dequed board priority " + boardPriority.getPrio());
-            // System.out.println("Dequed board man-dist: moves " + boardPriority.board.manhattan() + ":" + boardPriority.moves);
+            //System.out.println("Dequed board dist/moves " + boardPriority.dist + "/" + boardPriority.moves);
             /* if we find the goal */
-            sq.add(boardPriority.getBoard());
-            _moves++;
-
-            // System.out.println("sq size " + sq.size());
+            sq.add(boardPriority);
 
             if (boardPriority.getBoard().isGoal() == true)
                 break;
+
+            _moves = boardPriority.moves + 1;
             Iterable<Board> neighs = boardPriority.neighbors();
             //System.out.println("******************************************");
             for (Board _board : neighs) {
                 boolean dup = false;
-                Iterator<Board> itr = sq.iterator();
-                Iterator<BoardPriority> bpitr = pq.iterator();
+                Iterator<BoardPriority> itr = sq.iterator();
                 /* check out if _board is in the solution queue */
                 /* if the next node is previously searche node */
                 while (itr.hasNext() == true) {
-                    Board _brd = itr.next();
-                    //System.out.println("deque board man-dist: moves " + _brd.manhattan() + ":" + _moves);
+                    Board _brd = itr.next().getBoard();
                     if (_brd.equals(_board) == true) {
-                        dup = true;
-                        break;
-                    }
-                }
-
-                /* duplicate search node */
-                while (dup == false && bpitr.hasNext() == true) {
-                    Board _brd = bpitr.next().getBoard();
-                    if (_brd.equals(_board) == true) {
-                        //System.out.println("duplicate board man-dist: moves " + _board.hamming() + ":" + _moves);
                         dup = true;
                         break;
                     }
                 }
 
                 if (!dup) {
-                    boardPriority = new BoardPriority(_board, _moves);
-                    pq.insert(boardPriority);
-                    //System.out.println("Astar Enqued board prio: moves " + boardPriority.getPrio() + ":" + boardPriority.getMoves());
-
-
+                    BoardPriority boardPriority_ = new BoardPriority(_board, _moves, boardPriority);
+                    pq.insert(boardPriority_);
+                    //System.out.println("Astar Enqued board dist/moves " + boardPriority.dist + "/" + boardPriority.moves);
                 }
             }
         }
@@ -149,27 +120,27 @@ public class Solver {
     public Solver(Board initial) {
         _moves = 0;
 
-        BoardPriority boardPriority = new BoardPriority(initial, _moves);
+        BoardPriority boardPriority = new BoardPriority(initial, _moves, null);
         pq = new MinPQ<BoardPriority>();
-        sq = new Vector<Board>();
+        sq = new Vector<BoardPriority>();
         /*insert the first element in the queue*/
         Iterable<Board> neighs = initial.neighbors();
-        sq.add(initial);
+        sq.add(boardPriority);
         _moves++;
         //pq.insert(new BoardPriority(initial, _moves));
         //System.out.println("******************************************");
         for (Board board : neighs) {
             //System.out.println("Enqued board man-dist: moves " + board.hamming() + ":" + _moves);
-            boardPriority = new BoardPriority(board, _moves);
-            pq.insert(boardPriority);
-            //System.out.println("Solver Enqued board prio: moves " + boardPriority.getPrio() + ":" + boardPriority.getMoves());
+            BoardPriority boardPriority_ = new BoardPriority(board, _moves, boardPriority);
+            pq.insert(boardPriority_);
+            //System.out.println("Solver Enqued board dist/moves " + boardPriority.getDist() + "/" + boardPriority.getMoves());
         }
         AStar();
     }
 
     // is the initial board solvable? (see below)
     public boolean isSolvable() {
-        return sq.size() < max_moves;
+        return false;
     }
 
     // min number of moves to solve initial board; -1 if unsolvable
@@ -178,24 +149,32 @@ public class Solver {
     }
 
     private class SolverIterator implements Iterator<Board> {
-        private int totalN = sq.size();
+        private int totalN = _moves;
         private int _current = 0;
-        private Iterator<Board> itr;
+        private BoardPriority lastParent;
+        private Board _brd;
 
         private SolverIterator() {
-            System.out.println(" totalN " + totalN);
-            itr = sq.iterator();
+            //System.out.println(" totalN " + totalN);
+            lastParent = sq.lastElement();
 
         }
 
         public boolean hasNext() {
-            return itr.hasNext();
+            return lastParent != null;
         }
 
         public Board next() {
             if (hasNext() == false) throw new java.util.NoSuchElementException();
-            return itr.next();
+            _brd = lastParent.getBoard();
+            lastParent = lastParent.prev;
+            _current++;
+            return _brd;
         }
+    }
+
+    private Iterator<Board> iteratr() {
+        return new SolverIterator();
     }
 
 
@@ -207,12 +186,6 @@ public class Solver {
             }
         };
     }
-
-
-    public Iterator<Board> iteratr() {
-        return sq.iterator();
-    }
-
 
     // test client (see below)
     public static void main(String[] args) {
@@ -235,13 +208,10 @@ public class Solver {
 
         System.out.println("total moves " + solver.moves());
 
-        /*
         Iterator<Board> itr = solver.iteratr();
         while (itr.hasNext() == true) {
             Board _board = itr.next();
             System.out.println(_board.toString());
         }
-
-         */
     }
 }

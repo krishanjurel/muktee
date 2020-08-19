@@ -36,7 +36,7 @@ public class Board {
         return string;
     }
 
-    public Board(int size) {
+    private Board(int size) {
         int row = 0, col = 0;
         tiles = new int[size][size];
         for (row = 0; row < size; row++) {
@@ -245,7 +245,7 @@ public class Board {
         }
     }
 
-    public Comparator<Board> comparator() {
+    private Comparator<Board> comparator() {
         return new BoardComparator();
     }
 
