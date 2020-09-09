@@ -1,6 +1,5 @@
 import edu.princeton.cs.algs4.Point2D;
 import edu.princeton.cs.algs4.RectHV;
-import edu.princeton.cs.algs4.StdOut;
 
 import java.util.Iterator;
 import java.util.NavigableSet;
@@ -65,24 +64,24 @@ public class PointSET {
     public Point2D nearest(Point2D p)             // a nearest neighbor in the set to point p; null if the set is empty
     {
         Point2D point = null;
+        Point2D nearest = p;
+        double mindist = 0.0;
+        double dist = 0.0;
         if (treeSet.isEmpty()) throw new java.lang.IllegalArgumentException();
-        /* hack, find the floor and ceiling, and return whichever is smaller */
-        Point2D floor = treeSet.floor(p);
-        Point2D ceiling = treeSet.ceiling(p);
-        if (floor != null && ceiling != null) {
-            point = ceiling;
-            if (floor.compareTo(ceiling) < 0)
-                point = floor;
 
-            StdOut.println("Floor" + floor.toString());
-            StdOut.println("Ceiling" + ceiling.toString());
-        } else if (floor == null) point = ceiling;
-        else if (ceiling == null) point = floor;
-
+        Iterator<Point2D> itr = treeSet.iterator();
+        while (itr.hasNext() == true) {
+            point = itr.next();
+            dist = p.distanceTo(point);
+            /* first initilization */
+            if (mindist == 0.0) mindist = dist;
+            if (mindist > dist) {
+                mindist = dist;
+                nearest = point;
+            }
+        }
         if (point == null) throw new java.lang.IllegalArgumentException();
-
-        StdOut.println("Point" + point.toString());
-        return point;
+        return nearest;
     }
 
     public static void main(String[] args)                  // unit testing of the methods (optional)
