@@ -32,9 +32,20 @@ public class NearestNeighborVisualizer {
             brute.insert(p);
         }
 
+
         // process nearest neighbor queries
         StdDraw.enableDoubleBuffering();
+
+        StdDraw.clear();
+        StdDraw.setPenColor(StdDraw.BLACK);
+        StdDraw.setPenRadius(0.01);
+        kdtree.draw();
+        StdDraw.show();
+
+
         while (true) {
+
+            /*
 
             // the location (x, y) of the mouse
             double x = StdDraw.mouseX();
@@ -48,7 +59,8 @@ public class NearestNeighborVisualizer {
             StdDraw.clear();
             StdDraw.setPenColor(StdDraw.BLACK);
             StdDraw.setPenRadius(0.01);
-            brute.draw();
+            kdtree.draw();
+            //brute.draw();
 
             // draw in red the nearest neighbor (using brute-force algorithm)
             StdDraw.setPenRadius(0.03);
@@ -56,11 +68,13 @@ public class NearestNeighborVisualizer {
             brute.nearest(query).draw();
             StdDraw.setPenRadius(0.02);
             // draw in blue the nearest neighbor (using kd-tree algorithm)
-            /*
             StdDraw.setPenColor(StdDraw.BLUE);
             kdtree.nearest(query).draw();
-            */
             StdDraw.show();
+            StdDraw.pause(40);
+
+             */
+
             StdDraw.pause(40);
         }
     }

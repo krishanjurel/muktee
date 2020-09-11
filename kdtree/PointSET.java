@@ -1,5 +1,6 @@
 import edu.princeton.cs.algs4.Point2D;
 import edu.princeton.cs.algs4.RectHV;
+import edu.princeton.cs.algs4.StdOut;
 
 import java.util.Iterator;
 import java.util.NavigableSet;
@@ -74,13 +75,17 @@ public class PointSET {
             point = itr.next();
             dist = p.distanceTo(point);
             /* first initilization */
-            if (mindist == 0.0) mindist = dist;
+            if (mindist == 0.0) {
+                mindist = dist;
+                nearest = point;
+            }
             if (mindist > dist) {
                 mindist = dist;
                 nearest = point;
             }
         }
         if (point == null) throw new java.lang.IllegalArgumentException();
+        StdOut.println("treeset nearest " + point.toString());
         return nearest;
     }
 
