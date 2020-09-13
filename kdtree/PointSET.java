@@ -1,9 +1,8 @@
 import edu.princeton.cs.algs4.Point2D;
 import edu.princeton.cs.algs4.RectHV;
-import edu.princeton.cs.algs4.StdOut;
 
+import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.NavigableSet;
 import java.util.TreeSet;
 
 public class PointSET {
@@ -19,7 +18,7 @@ public class PointSET {
 
     public boolean isEmpty()                      // is the set empty?
     {
-        return treeSet.size() == 0;
+        return treeSet.isEmpty();
     }
 
     public int size()                         // number of points in the set
@@ -27,9 +26,11 @@ public class PointSET {
         return treeSet.size();
     }
 
-    public void insert(Point2D p)              // add the point to the set (if it is not already in the set)
+    public void insert(
+            Point2D p)              // add the point to the set (if it is not already in the set)
     {
         if (p == null) throw new java.lang.IllegalArgumentException();
+        ++num;
 
         if (contains(p) == false)
             treeSet.add(p);
@@ -43,7 +44,6 @@ public class PointSET {
 
     public void draw()                         // draw all points to standard draw
     {
-        if (treeSet.size() == 0) throw new java.lang.IllegalArgumentException();
 
         Iterator<Point2D> itr = treeSet.iterator();
         while (itr.hasNext() == true) {
@@ -52,30 +52,43 @@ public class PointSET {
         }
     }
 
-    public Iterable<Point2D> range(RectHV rect)             // all points that are inside the rectangle (or on the boundary)
-    {
-        NavigableSet<Point2D> navigableSet = treeSet.subSet(new Point2D(rect.xmin(), rect.ymin()), true, new Point2D(rect.xmax(), rect.ymax()), true);
-        return new Iterable<Point2D>() {
-            public Iterator<Point2D> iterator() {
-                return navigableSet.iterator();
-            }
-        };
+    // all points that are inside the rectangle (or on the boundary)
+    public Iterable<Point2D> range(RectHV rect) {
+        if (rect == null) throw new java.lang.IllegalArgumentException();
+        double reflowx = rect.xmin();
+        double reflowy = rect.ymin();
+        double refhix = rect.xmax();
+        double refhiy = rect.ymax();
+        double x;
+        double y;
+        Point2D point;
+
+        ArrayList<Point2D> vec = new ArrayList<Point2D>();
+        Iterator<Point2D> itr = treeSet.iterator();
+        while (itr.hasNext() == true) {
+            point = itr.next();
+            x = point.x();
+            y = point.y();
+            if (x >= reflowx && x <= refhix && y >= reflowy && y <= refhiy) vec.add(point);
+        }
+        return vec;
     }
 
-    public Point2D nearest(Point2D p)             // a nearest neighbor in the set to point p; null if the set is empty
+    public Point2D nearest(
+            Point2D p)             // a nearest neighbor in the set to point p; null if the set is empty
     {
         Point2D point = null;
-        Point2D nearest = p;
-        double mindist = 0.0;
+        Point2D nearest = null;
+        double mindist = -1;
         double dist = 0.0;
-        if (treeSet.isEmpty()) throw new java.lang.IllegalArgumentException();
+        if (p == null) throw new java.lang.IllegalArgumentException();
 
         Iterator<Point2D> itr = treeSet.iterator();
         while (itr.hasNext() == true) {
             point = itr.next();
-            dist = p.distanceTo(point);
+            dist = p.distanceSquaredTo(point);
             /* first initilization */
-            if (mindist == 0.0) {
+            if (mindist == -1) {
                 mindist = dist;
                 nearest = point;
             }
@@ -84,12 +97,13 @@ public class PointSET {
                 nearest = point;
             }
         }
-        if (point == null) throw new java.lang.IllegalArgumentException();
-        StdOut.println("treeset nearest " + point.toString());
+        //if (point == null) throw new java.lang.IllegalArgumentException();
+        //StdOut.println("treeset nearest " + point.toString());
         return nearest;
     }
 
-    public static void main(String[] args)                  // unit testing of the methods (optional)
+    public static void main(
+            String[] args)                  // unit testing of the methods (optional)
     {
 
     }

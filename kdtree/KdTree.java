@@ -1,45 +1,36 @@
 import edu.princeton.cs.algs4.Point2D;
 import edu.princeton.cs.algs4.RectHV;
-import edu.princeton.cs.algs4.StdOut;
 
-import java.util.Vector;
+import java.util.ArrayList;
+import java.util.Iterator;
+
 
 public class KdTree {
 
     private Node root;
+    private final static int HORIZONTAL = 0;
+    private final static int VERTICAL = 1;
 
 
     private class Node {
-        private double x;
-        private double y;
-        private double maxy;
-        private Point2D point;
+        private final double x;
+        private final double y;
         private Node left, right;
         private int count;
-        private double key;
+        private int h; /* 0:horizontal (x) or 1: verticatl (y) */
 
-        private Node(Point2D point) {
+
+        private Node(Point2D point, int h) {
             left = null;
             right = null;
-            this.point = point;
             x = point.x();
             y = point.y();
-            maxy = y;
-            count = 0;
-            key = x;
+            count = (root == null) ? 1 : 0;
+            /* this would be the alterate of the previous */
+            this.h = h;
         }
 
 
-        private Node(Point2D point, double key) {
-            left = null;
-            right = null;
-            this.point = point;
-            x = point.x();
-            y = point.y();
-            maxy = y;
-            count = 0;
-            this.key = key;
-        }
     }
 
     public KdTree()                               // construct an empty set of points
@@ -71,114 +62,149 @@ public class KdTree {
         return ret;
     }
 
-    private Node put(Node node, Point2D p) {
-        double x;
-        if (node == null) return new Node(p);
+    private Node put(Node node, Point2D p, int h) {
+        if (node == null) return new Node(p, h);
 
-        /* update the maxy of every parent along the way */
-        if (node.maxy < p.y())
-            node.maxy = p.y();
-
-        int cmp = compareTo(p.x(), node.point.x());//p.compareTo(node.point);
-        int cmpy = compareTo(p.y(), node.point.y());
-        if (cmp < 0) node.left = put(node.left, p);
-        else if (cmp > 0) node.right = put(node.right, p);
-        else {
-            if (cmpy < 0) node.left = put(node.left, p);
-            if (cmpy > 0) node.right = put(node.right, p);
-            else node.point = p;
-        }
-        node.count = 1 + size(node.left) + size(node.right);
+        double refkey, ptkey;
+        /* the keys will be alternating */
+        refkey = (node.h == HORIZONTAL) ? node.x : node.y;
+        ptkey = (node.h == HORIZONTAL) ? p.x() : p.y();
+        h = (node.h == HORIZONTAL) ? VERTICAL : HORIZONTAL;
+        int cmp = compareTo(ptkey, refkey);
+        if (cmp <= 0) node.left = put(node.left, p, h);
+        else node.right = put(node.right, p, h);
+        //if (cmp > 0) node.right = put(node.right, p, h);
+        //else node.point = p;
+        node.count += 1;
         return node;
     }
 
 
-    public void insert(Point2D p)              // add the point to the set (if it is not already in the set)
+    public void insert(
+            Point2D p)              // add the point to the set (if it is not already in the set)
     {
-        if (p == null) throw new java.lang.IllegalArgumentException();
-        root = put(root, p);
+        if (p == null) throw new IllegalArgumentException();
+        if (contains(p) == false)
+            root = put(root, p, HORIZONTAL);
     }
 
 
     public boolean contains(Point2D p)            // does the set contain point p?
     {
-        if (p == null) throw new java.lang.IllegalArgumentException();
+        if (p == null) throw new IllegalArgumentException();
         Node node = root;
         int cmp = 0;
-        while (node != null) {
-            cmp = compareTo(p.x(), node.point.x());//p.compareTo(node.point);
-            if (cmp < 0) node = node.left;
-            else if (cmp > 0) node = node.right;
-            else return true;
+        double refkey, ptkey;
+        boolean found = false;
+        int h = HORIZONTAL;
+
+        while (node != null && found == false) {
+            /* the keys will be alternating */
+            refkey = (node.h == HORIZONTAL) ? node.x : node.y;
+            ptkey = (node.h == HORIZONTAL) ? p.x() : p.y();
+            h = (node.h == HORIZONTAL) ? VERTICAL : HORIZONTAL;
+            cmp = compareTo(ptkey, refkey);
+            if (cmp <= 0) {
+                if (p.compareTo(new Point2D(node.x, node.y)) == 0) {
+                    found = true;
+                }
+                node = node.left;
+            }
+            else if (cmp > 0) {
+                if (p.compareTo(new Point2D(node.x, node.y)) == 0) {
+                    found = true;
+                }
+                node = node.right;
+            }
+            else found = true;
         }
-        return false;
+        return found;
     }
 
     public void draw()                         // draw all points to standard draw
     {
-        Vector<Point2D> q = new Vector<Point2D>();
-        if (root == null) throw new java.lang.IllegalArgumentException();
+        ArrayList<Point2D> q = new ArrayList<Point2D>();
         inorder(root, q);
-        Iterable<Point2D> itr = q; //q.toArray(new Point2D[q.size()]);
-        for (Point2D pt : itr) {
-            StdOut.println("draw " + pt.toString());
-            pt.draw();
+        Iterator<Point2D> itr = q.iterator();
+        while (itr.hasNext() == true) {
+            Point2D pt1 = itr.next();
+            pt1.draw();
+            if (itr.hasNext() == true) {
+                Point2D pt2 = itr.next();
+                pt1.drawTo(pt2);
+            }
         }
     }
 
-    private void inorder(Node node, Vector<Point2D> q) {
+    private void inorder(Node node, ArrayList<Point2D> q) {
         if (node == null) return;
         inorder(node.left, q);
-        q.add(node.point);
+        q.add(new Point2D(node.x, node.y));
         inorder(node.right, q);
     }
 
 
-    private void range_traversal(Point2D low, Point2D hi, Node node, Vector<Point2D> vec) {
+    private void range_traversal(double reflowx, double reflowy,
+                                 double refhix, double refhiy,
+                                 Node node, ArrayList<Point2D> vec) {
         if (node == null) return;
-        double reflowx = low.x();
-        double reflowy = low.y();
-        double refhix = hi.x();
-        double refhiy = hi.y();
         double x = node.x;
-        double y = node.maxy;
-        int cmplo = compareTo(x, reflowx);
-        int cmphi = compareTo(x, refhix);
+        double y = node.y;
 
-        if (cmplo < 0 || cmphi > 0) return;
-        range_traversal(low, hi, node.left, vec);
-        if (node.y <= refhiy) vec.add(node.point);
-        range_traversal(low, hi, node.right, vec);
+
+        //if (x < reflowx || x > refhix || y < reflowy || y > refhiy) return;
+        range_traversal(reflowx, reflowy, refhix, refhiy, node.left, vec);
+        if (x >= reflowx && x <= refhix && y >= reflowy && y <= refhiy)
+            vec.add(new Point2D(node.x, node.y));
+        range_traversal(reflowx, reflowy, refhix, refhiy, node.right, vec);
     }
 
 
-    public Iterable<Point2D> range(RectHV rect)             // all points that are inside the rectangle (or on the boundary)
+    public Iterable<Point2D> range(
+            RectHV rect)             // all points that are inside the rectangle (or on the boundary)
     {
-        if (root == null || rect == null) throw new java.lang.IllegalArgumentException();
-        Vector<Point2D> q = new Vector<Point2D>();
-        Point2D rightLimit = new Point2D(rect.xmax(), rect.ymax());
-        Point2D leftLimit = new Point2D(rect.xmin(), rect.ymin());
-        range_traversal(leftLimit, rightLimit, root, q);
+        if (rect == null) throw new IllegalArgumentException();
+        ArrayList<Point2D> q = new ArrayList<Point2D>();
+
+        double lowx = Math.min(rect.xmin(), rect.xmax());
+        double lowy = Math.min(rect.ymin(), rect.ymax());
+        double hix = Math.max(rect.xmin(), rect.xmax());
+        double hiy = Math.max(rect.ymin(), rect.ymax());
+
+        /** check if we have to search on the left of right
+         * 1. if rect is on the left, check left only
+         * 2. if rect is on the right , check right only
+         * 3. if root is in the rect, search both
+         * */
+        /* case 3 */
+        if (root != null) {
+            if (root.x >= lowx && root.x <= hix) {
+                range_traversal(lowx, lowy, hix, hiy, root, q);
+            }
+            else if (root.x > rect.xmax()) {
+                range_traversal(lowx, lowy, hix, hiy, root.left, q);
+            }
+            else {
+                range_traversal(lowx, lowy, hix, hiy, root.right, q);
+            }
+        }
         return q;
     }
 
-    public Point2D nearest(Point2D p)             // a nearest neighbor in the set to point p; null if the set is empty
+    public Point2D nearest(
+            Point2D p)             // a nearest neighbor in the set to point p; null if the set is empty
     {
         Point2D point = null;
-        Node node = root;
-        int cmp = 0;
         double dist = 0.0;
-        double mindist = 0.0;
-        if (root == null) throw new java.lang.IllegalArgumentException();
-
-        Vector<Point2D> q = new Vector<Point2D>();
-        if (root == null) throw new java.lang.IllegalArgumentException();
+        double mindist = -1;
+        if (p == null) throw new IllegalArgumentException();
+        ArrayList<Point2D> q = new ArrayList<Point2D>();
         inorder(root, q);
         Iterable<Point2D> itr = q;
 
         for (Point2D pt : itr) {
-            dist = p.distanceTo(pt);
-            if (mindist == 0.0) {
+            dist = p.distanceSquaredTo(pt);
+            if (mindist == -1) {
                 point = pt;
                 mindist = dist;
             }
@@ -188,12 +214,13 @@ public class KdTree {
                 point = pt;
             }
         }
-        if (point == null) throw new java.lang.IllegalArgumentException();
-        StdOut.println("kd nearest " + point.toString());
+        //if (point == null) throw new java.lang.IllegalArgumentException();
+        //StdOut.println("kd nearest " + point.toString());
         return point;
     }
 
-    public static void main(String[] args)                  // unit testing of the methods (optional)
+    public static void main(
+            String[] args)                  // unit testing of the methods (optional)
     {
 
     }

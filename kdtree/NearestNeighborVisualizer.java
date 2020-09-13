@@ -29,8 +29,14 @@ public class NearestNeighborVisualizer {
             double y = in.readDouble();
             Point2D p = new Point2D(x, y);
             kdtree.insert(p);
+            System.out.println("kd size " + kdtree.size());
             brute.insert(p);
+            System.out.println("brute size " + brute.size());
         }
+
+
+        Point2D p = brute.nearest(new Point2D(0.25, 0.25));
+        System.out.println("nearest " + p.toString());
 
 
         // process nearest neighbor queries
@@ -45,7 +51,7 @@ public class NearestNeighborVisualizer {
 
         while (true) {
 
-            /*
+             /*
 
             // the location (x, y) of the mouse
             double x = StdDraw.mouseX();
@@ -73,7 +79,7 @@ public class NearestNeighborVisualizer {
             StdDraw.show();
             StdDraw.pause(40);
 
-             */
+              */
 
             StdDraw.pause(40);
         }
