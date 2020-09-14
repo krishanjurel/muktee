@@ -51,7 +51,7 @@ public class NearestNeighborVisualizer {
 
         while (true) {
 
-             /*
+            ///*
 
             // the location (x, y) of the mouse
             double x = StdDraw.mouseX();
@@ -79,7 +79,7 @@ public class NearestNeighborVisualizer {
             StdDraw.show();
             StdDraw.pause(40);
 
-              */
+            // */
 
             StdDraw.pause(40);
         }

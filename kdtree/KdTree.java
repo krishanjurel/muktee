@@ -131,7 +131,7 @@ public class KdTree {
             pt1.draw();
             if (itr.hasNext() == true) {
                 Point2D pt2 = itr.next();
-                pt1.drawTo(pt2);
+                pt2.draw();
             }
         }
     }
@@ -153,9 +153,9 @@ public class KdTree {
 
 
         //if (x < reflowx || x > refhix || y < reflowy || y > refhiy) return;
-        range_traversal(reflowx, reflowy, refhix, refhiy, node.left, vec);
         if (x >= reflowx && x <= refhix && y >= reflowy && y <= refhiy)
             vec.add(new Point2D(node.x, node.y));
+        range_traversal(reflowx, reflowy, refhix, refhiy, node.left, vec);
         range_traversal(reflowx, reflowy, refhix, refhiy, node.right, vec);
     }
 
@@ -191,31 +191,37 @@ public class KdTree {
         return q;
     }
 
+
+    private void range_traversal(Point2D pt, Node node, ArrayList<Point2D> vec) {
+        if (node == null) return;
+
+        if (vec.isEmpty()) {
+            vec.add(0, new Point2D(node.x, node.y));
+        }
+
+        Point2D p = vec.get(0);
+
+        double dist = pt.distanceSquaredTo(new Point2D(node.x, node.y));
+        double refDist = pt.distanceSquaredTo(p);
+        /*update the minimum */
+        if (refDist > dist) {
+            vec.add(0, new Point2D(node.x, node.y));
+        }
+        range_traversal(pt, node.left, vec);
+        range_traversal(pt, node.right, vec);
+    }
+
     public Point2D nearest(
             Point2D p)             // a nearest neighbor in the set to point p; null if the set is empty
     {
         Point2D point = null;
-        double dist = 0.0;
-        double mindist = -1;
-        if (p == null) throw new IllegalArgumentException();
         ArrayList<Point2D> q = new ArrayList<Point2D>();
-        inorder(root, q);
-        Iterable<Point2D> itr = q;
-
-        for (Point2D pt : itr) {
-            dist = p.distanceSquaredTo(pt);
-            if (mindist == -1) {
-                point = pt;
-                mindist = dist;
-            }
-
-            if (mindist > dist) {
-                mindist = dist;
-                point = pt;
-            }
-        }
-        //if (point == null) throw new java.lang.IllegalArgumentException();
-        //StdOut.println("kd nearest " + point.toString());
+        if (p == null) throw new IllegalArgumentException();
+        range_traversal(p, root, q);
+        if (q.isEmpty())
+            point = null;
+        else
+            point = q.get(0);
         return point;
     }
 
