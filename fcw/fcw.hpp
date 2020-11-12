@@ -8,13 +8,15 @@ namespace v2x
 {
 
 const int MAX_V2X_EE = 10;
+const int MAX_PQ_SIZE=5;
 
 /* define a entity with dimentions and weight */
 struct ee_spd
 {
     /* speed along the x axis, and y axis, z axis (even though we are not flying yet) */
     double x, y, z;
-    ee_spd():x(0.0),y(0.0),z(0.0){}
+    //ee_spd():x(0.0),y(0.0),z(0.0){}
+    //ee_spd(double x_, double y_, doub)
     ee_spd& operator=(ee_spd &that)
     {
         this->x = that.x;
@@ -22,12 +24,16 @@ struct ee_spd
         this->z = that.z;
         return *this;
     }
+    friend std::ostream& operator<<(std::ostream& os, const ee_spd& spd) 
+    {
+        return os << "speed x/y/z " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
+    }
 };
 struct ee_pos
 {
     /* current position */
     double lat, lng, alt;
-    ee_pos():lat(0.0),lng(0.0),alt(0.0){}
+    //ee_pos():lat(0.0),lng(0.0),alt(0.0){}
     ee_pos& operator=(ee_pos &that)
     {
         this->alt = that.alt;
@@ -35,19 +41,23 @@ struct ee_pos
         this->alt = that.alt;
         return *this;
     }
+    std::ostream& operator<< (std::ostream& os)
+    {
+        return os << "pos lat/long/alt " << lat << "/" << lng << "/" << alt << std::endl;
+    }
 };
 
 struct ee
 {
     private:
-        double mass;            key[N--] = nullptr;
-
+        double mass;
         /* speed and position */
         ee_spd spd;
         ee_pos pos;
         double length, width;
         const double INIFINITY = double(-1.0);
         int id;
+        int color; /* green,yellow,red*/
 
     public:
         ee():mass(0.0),length(300.0), width(400.0){ }
@@ -121,6 +131,14 @@ struct ee
         }
 
         int getId(){ return id;}
+        void setId(int id){ this->id = id;}
+        /* move this element, by the time*/
+        void move(double dt)
+        {
+            return;
+        }
+
+
 
 
 };
@@ -133,6 +151,7 @@ class Event
     int countA, countB; /* number of collisions for these two ees */
 
     public:
+        Event():t(0.0),a(),b(){};
         Event(double t_, ee a_, ee b_)
         {
             t = t_;
@@ -152,6 +171,7 @@ class Event
             return ret;
         }
         bool isValid() { return true;}
+        double timeToEvent(){return t;}
 };
 
 
@@ -164,14 +184,14 @@ class Event
 template <typename T>
 class MinPQ 
 {
-    const int MAX_PQ_SIZE=5;
+    typedef std::shared_ptr<T> sharedT;
     std::shared_ptr<T> key[MAX_PQ_SIZE];
     int N;
 
 
     void exch(int k1, int k2)
     {
-        T temp = key[k2];
+        sharedT temp = key[k2];
         key[k2] = key[k1];
         key[k1] = temp;
     }
@@ -199,7 +219,7 @@ class MinPQ
     bool greater (int k1, int k2)
     {
         bool _greater = false;
-        int ret = key[k1]->compareTo(key[k2]);
+        int ret = key[k1]->compareTo(*key[k2]);
         if(ret > 1)  _greater = true;
         return _greater;
     }
@@ -209,9 +229,9 @@ class MinPQ
         { 
             N = 0;
             for (int i=0; i < N; i++)
-                Key[i] = nullptr;
+                key[i] = nullptr;
         }
-        MinPQ(T[] key_, int N_)
+        MinPQ(T key_[], int N_)
         {
             N = 0;
             for (int i=0; i < N_; i++)
@@ -221,7 +241,7 @@ class MinPQ
             }
         }
 
-        void insert(std::shared_ptr<T> key)
+        void insert(std::shared_ptr<T> key_)
         {
             bool _insert = false;
             if (N  < MAX_PQ_SIZE )
@@ -230,7 +250,7 @@ class MinPQ
             }
             if(_insert == false && 
                 N >= MAX_PQ_SIZE && 
-                greater(key, key[N]))
+                key[N]->compareTo(*key_) > 1)
             {
                 delMax();
                 _insert = true;
@@ -238,7 +258,7 @@ class MinPQ
 
             if(_insert == true)
             {
-                this->key[N] = key;
+                this->key[N] = key_;
                 swim(N++);
             }
             return;
@@ -246,7 +266,7 @@ class MinPQ
         }
         T delMin() 
         {
-            T key_ = key[0];
+            sharedT key_ = key[0];
             exch(0, N--);
             sink(0);
             key[N+1] = nullptr;
@@ -255,15 +275,15 @@ class MinPQ
 
         T delMax()
         {
-            T key_ = key[N--];
+            sharedT key_ = key[N--];
             key[N+1] = nullptr;
-            return key_;
+            return *(key_.get());
         }
 
 
         bool isEmpty() { return N == 0;}
-        T max() { return key[N];}
-        T min() { return key[0];}
+        sharedT max() { return key[N];}
+        sharedT min() { return key[0];}
         int size() { return N;}
 };
 
