@@ -9,10 +9,13 @@ namespace v2x
 {
 class fcw; /* forward declaration */
 static void collision_thread(std::shared_ptr<fcw> obj);
-
+#if 0
 static std::default_random_engine gen;
 static std::uniform_real_distribution<> pos_dist(-15.0, 15.0);
 static std::uniform_real_distribution<> spd_dist(-15.0, 15.0);
+#endif
+const static double MAX_TIME_DELTA=500;
+const static double MIN_TIME_DELTA=100;
 
 class fcw
 {
@@ -21,6 +24,7 @@ class fcw
     ee ees[MAX_V2X_EE]; /* this is others */
     ee e; /* this is us */
     std::thread _thread;
+    Event *event;
     
     public:
         fcw() {
@@ -31,20 +35,17 @@ class fcw
             pos << std::cout;
             for (int i = 0; i < MAX_V2X_EE; i++)
             {
-                ees[i].setSpeed(spd);
-                ees[i].setPosition(pos);
+                //ees[i].setSpeed(spd);
+                //ees[i].setPosition(pos);
+                ees[i].init();
                 ees[i].setId(i+1);
             }
 
-            e.setSpeed(spd);
-            e.setPosition(pos);
+            //e.setSpeed(spd);
+            //e.setPosition(pos);
+            e.init();
             e.setId(0);
         }
-
-
-
-
-
 
 
         int init(){
@@ -52,14 +53,19 @@ class fcw
         }
         std::thread start(std::shared_ptr<fcw> obj)
         {
+            std::cout << "thread start" << std::endl;
             std::thread _thread(collision_thread, obj);
             return _thread;
         }
 
-        void newAdd(ee _ee)
+        void add(ee _ee)
         {
             double dt = e.timeToCollide(_ee);
-            std::shared_ptr<Event> event (new Event(dt,e, _ee),[](Event *p){delete p;});
+            std::cout << "add ee id " << _ee.getId() << std::endl;
+            event = new Event(dt, e, _ee);
+            //std::shared_ptr<Event> event (new Event(dt,e, _ee),[](Event *p){delete p;});
+            std::cout << "add_ ee id " << _ee.getId() << std::endl;
+            //pq->insert(std::shared_ptr<Event>(new Event(dt,e, _ee),[](Event *p){delete p;}));
             pq->insert(event);
         }
 
@@ -70,15 +76,43 @@ class fcw
             int count = 0; 
             std::condition_variable cv;
             std::mutex mtx;
-            std::shared_ptr<Event> evt;
+            //std::shared_ptr<Event> evt;
+            Event *evt;
+            double dt = MAX_TIME_DELTA;
+            int sz;
+            
             while(true)
             {
-                /* this will be our next event */
-                evt = pq->min();
+                sz = pq->size();
                 std::unique_lock<std::mutex> lck(mtx);
-                cv.wait_for(lck, std::chrono::milliseconds(1000));
-
-
+                cv.wait_for(lck, std::chrono::milliseconds(int(dt)));
+                if (sz)
+                {
+                    dt = evt->timeToEvent();
+                }
+                if (dt > MAX_TIME_DELTA)
+                    dt = MAX_TIME_DELTA;
+                if (dt <= MIN_TIME_DELTA)
+                    dt = MIN_TIME_DELTA;
+                e.move(dt);
+                e.draw();
+                count = 0;
+                while(count < sz)
+                {
+                    /* this will be our next event */
+                    evt = pq->min();
+                    ee b = evt->eeGetB();
+                    b.move(dt);
+                    b.draw();
+                    ++count;
+                }
+                count = 0;
+                while(count < MAX_V2X_EE)
+                {
+                    std::cout << "count " << count << std::endl;
+                    add (ees[count]);
+                    ++count;
+                }
             }
 
 

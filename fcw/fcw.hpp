@@ -3,12 +3,24 @@
 #include <iostream>
 #include <math.h>
 #include <memory>
+#include <random>
 
 namespace v2x
 {
 
 const int MAX_V2X_EE = 10;
-const int MAX_PQ_SIZE=5;
+const int MAX_PQ_SIZE=MAX_V2X_EE;
+const double X_LOW_LIMIT=100.0;
+const double Y_LOW_LIMIT = 100.0;
+
+const double X_HIGH_LIMIT=1000.0;
+const double Y_HIGH_LIMIT=1000.0;
+static std::default_random_engine gen;
+static std::uniform_real_distribution<> pos_dist(X_LOW_LIMIT, X_HIGH_LIMIT);
+static std::uniform_real_distribution<> spd_dist(-15.0, 15.0);
+
+
+
 
 /* define a entity with dimentions and weight */
 struct ee_spd
@@ -32,18 +44,18 @@ struct ee_spd
 struct ee_pos
 {
     /* current position */
-    double lat, lng, alt;
+    double x, y, z;
     //ee_pos():lat(0.0),lng(0.0),alt(0.0){}
     ee_pos& operator=(ee_pos &that)
     {
-        this->alt = that.alt;
-        this->lng = that.lng;
-        this->alt = that.alt;
+        this->z = that.z;
+        this->y = that.y;
+        this->z = that.z;
         return *this;
     }
     std::ostream& operator<< (std::ostream& os)
     {
-        return os << "pos lat/long/alt " << lat << "/" << lng << "/" << alt << std::endl;
+        return os << "pos lat/long/alt " << x << "/" << y << "/" << z << std::endl;
     }
 };
 
@@ -58,6 +70,7 @@ struct ee
         const double INIFINITY = double(-1.0);
         int id;
         int color; /* green,yellow,red*/
+        double dt;
 
     public:
         ee():mass(0.0),length(300.0), width(400.0){ }
@@ -68,6 +81,8 @@ struct ee
             pos = that.pos;
             length = that.length;
             width = that.width;
+            dt=that.dt;
+            id = that.id;
         }
 
 
@@ -91,23 +106,33 @@ struct ee
         }
 
 
-        double timeToCollide(ee &that)
+        double timeToCollide(ee& that)
         {
+            std::cout << "that id is " << that.id << std::endl;
             if(*this == that) return INIFINITY;
-            double dx = that.pos.lat - pos.lat;
-            double dy = that.pos.lng - pos.lng;
+            double dx = that.pos.x - pos.x;
+            double dy = that.pos.y - pos.y;
             double dvx = that.spd.x - spd.x;
             double dvy = that.spd.y -  spd.y;
 
             double dvdr = dx * dvx +  dy * dvy;
-            if(dvdr > 0) return INIFINITY;
+            if(dvdr > 0) 
+            {
+                dt=INIFINITY;
+                return dt;
+            }
 
             double dvdv  = pow(dvx, 2) + pow(dvy, 2);
             double drdr = pow(dx, 2) + pow(dy, 2);
             double sigma = radius() + radius(that);
             double d = (dvdr * dvdr) - dvdv * (drdr -  pow(sigma, 2));
-            if ( d < 0.0) return INIFINITY;
-            return -(dvdr + sqrt(d))/dvdv;
+            if ( d < 0.0) 
+            {
+                dt = INFINITY;
+                return dt;
+            }
+            dt =  -(dvdr + sqrt(d))/dvdv;
+            return dt;
         }
         double timeToHitTheVertWall() {return 0.0;}
         double timeToHitTheHorizWall() {return 0.0;}
@@ -127,20 +152,48 @@ struct ee
             pos = that.pos;
             length = that.length;
             width = that.width;
+            id=that.id;
             return *this;
         }
 
+        void init()
+        {
+            pos.x = pos_dist(gen);
+            pos.y = pos_dist(gen);
+            spd.x = spd_dist(gen);
+            spd.y = spd_dist(gen);
+        }
+
         int getId(){ return id;}
-        void setId(int id){ this->id = id;}
+        void setId(int id){ 
+            this->id = id;
+            std::cout << " the id " << this->id << ":" << id << std::endl; 
+            }
         /* move this element, by the time*/
         void move(double dt)
         {
-            return;
+            pos.x = pos.x + spd.x * dt/1000;
+            pos.y = pos.y + spd.y * dt/1000;
+            pos.z = pos.z + spd.z * dt/1000;
+            if(this->dt <= dt)
+            {
+                std::cout << "collision occured " << id << std::endl;
+            }
+            
+            if (pos.x <= X_LOW_LIMIT || 
+                pos.x >= X_HIGH_LIMIT || 
+                pos.y <= Y_LOW_LIMIT || 
+                pos.y >= Y_HIGH_LIMIT)
+                {
+                    init();
+                }
         }
-
-
-
-
+        void draw()
+        {
+            /*draw the ball*/
+            std::cout << "id: " << id << " pos " << pos.x << "/" << pos.y << "/" << pos.z;
+            std::cout << " spd " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
+        }
 };
 
 /* collision event between two end entities*/
@@ -172,6 +225,8 @@ class Event
         }
         bool isValid() { return true;}
         double timeToEvent(){return t;}
+        ee& eeGetA() {return a;};
+        ee& eeGetB() { return b;}
 };
 
 
@@ -184,16 +239,17 @@ class Event
 template <typename T>
 class MinPQ 
 {
-    typedef std::shared_ptr<T> sharedT;
-    std::shared_ptr<T> key[MAX_PQ_SIZE];
+    typedef Event* sharedT;
+    sharedT key[MAX_PQ_SIZE];
     int N;
+    
 
 
     void exch(int k1, int k2)
     {
-        sharedT temp = key[k2];
-        key[k2] = key[k1];
-        key[k1] = temp;
+        sharedT temp = sharedT(key[k2]);
+        key[k2] = sharedT(key[k1]);
+        key[k1] = sharedT(temp);
     }
 
     void swim(int k)
@@ -241,9 +297,12 @@ class MinPQ
             }
         }
 
-        void insert(std::shared_ptr<T> key_)
+        //void insert(std::shared_ptr<T> ky_)
+        void insert(T *ky_)
         {
             bool _insert = false;
+            sharedT key_ = sharedT(ky_);
+            //std::cout << "use count " << key_.use_count() << ":" << std::endl;
             if (N  < MAX_PQ_SIZE )
             {
                 _insert = true;
@@ -252,12 +311,15 @@ class MinPQ
                 N >= MAX_PQ_SIZE && 
                 key[N]->compareTo(*key_) > 1)
             {
+                std::cout << "delete max " << N << std::endl;
                 delMax();
                 _insert = true;
+          
             }
 
             if(_insert == true)
             {
+                std::cout << "insert " << N << std::endl;
                 this->key[N] = key_;
                 swim(N++);
             }
@@ -276,8 +338,10 @@ class MinPQ
         T delMax()
         {
             sharedT key_ = key[N--];
+            std::cout << "delete " << N << std::endl;
             key[N+1] = nullptr;
-            return *(key_.get());
+            //return *(key_.get());
+            return *key_;
         }
 
 
