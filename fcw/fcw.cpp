@@ -24,7 +24,7 @@ class fcw
     ee ees[MAX_V2X_EE]; /* this is others */
     ee e; /* this is us */
     std::thread _thread;
-    Event *event;
+    //Event *event;
     
     public:
         fcw() {
@@ -61,10 +61,10 @@ class fcw
         void add(ee _ee)
         {
             double dt = e.timeToCollide(_ee);
-            std::cout << "add ee id " << _ee.getId() << std::endl;
-            event = new Event(dt, e, _ee);
-            //std::shared_ptr<Event> event (new Event(dt,e, _ee),[](Event *p){delete p;});
-            std::cout << "add_ ee id " << _ee.getId() << std::endl;
+            std::cout << "time to collide:id1:id2 " << dt << ":" <<  e.getId() << ":" << _ee.getId() <<  std::endl;
+            //event = new Event(dt, e, _ee);
+            std::shared_ptr<Event> event (new Event(dt,e, _ee),[](Event *p){delete p;});
+            //std::cout << "event: " <<std::hex << event << " id: "<< _ee.getId() << std::endl;
             //pq->insert(std::shared_ptr<Event>(new Event(dt,e, _ee),[](Event *p){delete p;}));
             pq->insert(event);
         }
@@ -76,14 +76,15 @@ class fcw
             int count = 0; 
             std::condition_variable cv;
             std::mutex mtx;
-            //std::shared_ptr<Event> evt;
-            Event *evt;
+            std::shared_ptr<Event> evt;
+            //Event *evt;
             double dt = MAX_TIME_DELTA;
             int sz;
             
             while(true)
             {
                 sz = pq->size();
+                evt = pq->delMin();
                 std::unique_lock<std::mutex> lck(mtx);
                 cv.wait_for(lck, std::chrono::milliseconds(int(dt)));
                 if (sz)
@@ -97,13 +98,14 @@ class fcw
                 e.move(dt);
                 e.draw();
                 count = 0;
-                while(count < sz)
+                std::cout << "number of elements " << sz << std::endl;
+                while(evt != nullptr)
                 {
-                    /* this will be our next event */
-                    evt = pq->min();
                     ee b = evt->eeGetB();
                     b.move(dt);
                     b.draw();
+                    /* this will be our next event */
+                    evt = pq->delMin();
                     ++count;
                 }
                 count = 0;
@@ -113,6 +115,8 @@ class fcw
                     add (ees[count]);
                     ++count;
                 }
+                pq->print();
+
             }
 
 

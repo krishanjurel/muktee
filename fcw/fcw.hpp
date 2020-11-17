@@ -4,6 +4,7 @@
 #include <math.h>
 #include <memory>
 #include <random>
+#include <cassert>
 
 namespace v2x
 {
@@ -17,7 +18,7 @@ const double X_HIGH_LIMIT=1000.0;
 const double Y_HIGH_LIMIT=1000.0;
 static std::default_random_engine gen;
 static std::uniform_real_distribution<> pos_dist(X_LOW_LIMIT, X_HIGH_LIMIT);
-static std::uniform_real_distribution<> spd_dist(-15.0, 15.0);
+static std::uniform_real_distribution<> spd_dist(2, 15.0);
 
 
 
@@ -48,7 +49,7 @@ struct ee_pos
     //ee_pos():lat(0.0),lng(0.0),alt(0.0){}
     ee_pos& operator=(ee_pos &that)
     {
-        this->z = that.z;
+        this->x = that.x;
         this->y = that.y;
         this->z = that.z;
         return *this;
@@ -86,12 +87,12 @@ struct ee
         }
 
 
-        void setSpeed(ee_spd &spd)
+        void setSpeed(ee_spd& spd)
         {
             this->spd = spd;
         }
 
-        void setPosition(ee_pos &pos)
+        void setPosition(ee_pos& pos)
         {
             this->pos = pos;
         }
@@ -108,8 +109,11 @@ struct ee
 
         double timeToCollide(ee& that)
         {
-            std::cout << "that id is " << that.id << std::endl;
             if(*this == that) return INIFINITY;
+
+            pos << std::cout;
+            that.pos << std::cout;
+
             double dx = that.pos.x - pos.x;
             double dy = that.pos.y - pos.y;
             double dvx = that.spd.x - spd.x;
@@ -145,7 +149,7 @@ struct ee
             return this->id == that.id;
         }
 
-        ee& operator=(ee &that)
+        ee& operator=(ee& that)
         {
             mass = that.mass;
             spd = that.spd;
@@ -191,7 +195,7 @@ struct ee
         void draw()
         {
             /*draw the ball*/
-            std::cout << "id: " << id << " pos " << pos.x << "/" << pos.y << "/" << pos.z;
+            std::cout << "draw id: " << id << " pos " << pos.x << "/" << pos.y << "/" << pos.z;
             std::cout << " spd " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
         }
 };
@@ -216,10 +220,11 @@ class Event
             std::cout << "event " << b.getId() << " is destroyed " << std::endl;
         }
 
-        int compareTo(Event that) {
+        int compareTo(Event& that) {
+            std::cout << "t:that" << t << ":" << that.t << std::endl;
             int ret = 0;
-            if (that.t < t) ret = -1;
-            else if (that.t > t) ret = 1;
+            if (t > that.t) ret = 1;
+            else if (t < that.t) ret = -1;
             else ret = 0;
             return ret;
         }
@@ -239,7 +244,7 @@ class Event
 template <typename T>
 class MinPQ 
 {
-    typedef Event* sharedT;
+    typedef std::shared_ptr<Event> sharedT;
     sharedT key[MAX_PQ_SIZE];
     int N;
     
@@ -247,14 +252,19 @@ class MinPQ
 
     void exch(int k1, int k2)
     {
-        sharedT temp = sharedT(key[k2]);
-        key[k2] = sharedT(key[k1]);
-        key[k1] = sharedT(temp);
+        std::cout << "exch k1:k2 " << k1 <<":" << k2 << std::endl;
+        assert((k1 >= 1) && (k2 >= 1));
+        sharedT temp = sharedT(key[k2-1]);
+        key[k2-1] = sharedT(key[k1-1]);
+        key[k1-1] = sharedT(temp);
     }
 
     void swim(int k)
     {
-        while(k > 1 && greater(k/2, k))
+        /* the indexing is zero index based, while tree is 1 index-based*/
+        k += 1;
+        std::cout << "swimming " << k << std::endl;
+        while(k > 1 && greater(k/2, k)==true)
         {
             exch(k, k/2);
             k = k/2;
@@ -262,11 +272,14 @@ class MinPQ
     }
     void sink(int k)
     {
+        /* the indexing is zero index based, while tree is 1 index-based*/
+        k += 1;
+        std::cout << "sinking " << k << std::endl;
         while(2*k <= N)
         {
             int j = 2*k;
-            if (j < N && greater(j, j+1)) j++;
-            if(!greater(k, j)) break;
+            if (j < N && greater(j+1, j)==true) j++;
+            if(greater(k, j) == false) break;
             exch(k, j);
             k = j;
         }
@@ -275,8 +288,15 @@ class MinPQ
     bool greater (int k1, int k2)
     {
         bool _greater = false;
+        /* the tree is based on 1 index, but array is 0 indexed */
+        assert(((k1 >= 1) && (k2 >= 1)));
+        std::cout << "greater k1:k2 " << k1 <<":" << k2 << std::endl;
+        k1 -= 1;
+        k2 -= 1;
         int ret = key[k1]->compareTo(*key[k2]);
-        if(ret > 1)  _greater = true;
+        if(ret >= 1)  _greater = true;
+
+        std::cout << "_greater " << _greater << std::endl;
         return _greater;
     }
 
@@ -298,7 +318,7 @@ class MinPQ
         }
 
         //void insert(std::shared_ptr<T> ky_)
-        void insert(T *ky_)
+        void insert(sharedT ky_)
         {
             bool _insert = false;
             sharedT key_ = sharedT(ky_);
@@ -308,8 +328,7 @@ class MinPQ
                 _insert = true;
             }
             if(_insert == false && 
-                N >= MAX_PQ_SIZE && 
-                key[N]->compareTo(*key_) > 1)
+                N >= MAX_PQ_SIZE)
             {
                 std::cout << "delete max " << N << std::endl;
                 delMax();
@@ -319,36 +338,58 @@ class MinPQ
 
             if(_insert == true)
             {
-                std::cout << "insert " << N << std::endl;
                 this->key[N] = key_;
-                swim(N++);
+                swim(N);
+                N++;
             }
             return;
 
         }
-        T delMin() 
+        sharedT delMin() 
         {
-            sharedT key_ = key[0];
-            exch(0, N--);
-            sink(0);
-            key[N+1] = nullptr;
+            sharedT key_ = nullptr;
+            int k = 1;
+            if(isEmpty() == false)
+            {
+                key_ = key[0];
+                {
+                    exch(k, N);
+                    N--;
+                    sink(0);
+                }
+                key[N] = nullptr;
+            }
             return key_;
         }
 
-        T delMax()
+        sharedT delMax()
         {
-            sharedT key_ = key[N--];
-            std::cout << "delete " << N << std::endl;
-            key[N+1] = nullptr;
-            //return *(key_.get());
-            return *key_;
+            sharedT key_ = nullptr; 
+            if(isEmpty() == false)
+            {
+                std::cout << "delete " << N << std::endl;
+                key_ = key[--N];
+                key[N] = nullptr;
+            }
+            return key_;
         }
 
 
         bool isEmpty() { return N == 0;}
-        sharedT max() { return key[N];}
+        sharedT max() { return key[N-1];}
         sharedT min() { return key[0];}
         int size() { return N;}
+
+        void print()
+        {
+            std::cout << "priority queue elemnets " <<std::endl;
+            for (int i = 0; i < N; i ++)
+            {
+                std::cout << "id:col " << key[i]->eeGetB().getId() <<":"<< key[i]->timeToEvent() << std::endl;
+
+            }
+        }
+
 };
 
 } /* end of namespace v2x */
