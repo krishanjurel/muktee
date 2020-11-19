@@ -60,6 +60,7 @@ class fcw
 
         void add(ee _ee)
         {
+            _ee.init();
             double dt = e.timeToCollide(_ee);
             std::cout << "time to collide:id1:id2 " << dt << ":" <<  e.getId() << ":" << _ee.getId() <<  std::endl;
             //event = new Event(dt, e, _ee);

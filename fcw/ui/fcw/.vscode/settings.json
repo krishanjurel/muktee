@@ -1,0 +1,14 @@
+{
+    "C_Cpp.default.cppStandard": "c++11",
+    "C_Cpp.default.browse.path": ["C_Cpp.default.browse.path",
+                                "/home/krishan/Qt-5.15.0/include/QtWidgets",
+                                "/home/krishan/Qt-5.15.0/include"
+                            ],
+                            "files.associations": {
+                                "qapplication": "cpp",
+                                "qwidget": "cpp",
+                                "typeinfo": "cpp",
+                                "*.tcc": "cpp",
+                                "random": "cpp"
+                            }
+}
