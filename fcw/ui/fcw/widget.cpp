@@ -39,8 +39,9 @@ void Widget::operator()()
 
     v2x::MinPQ<v2x::Event> *pq;
     std::shared_ptr<v2x::fcw> fcw;
+    std::vector<v2x::ee*> ees;
 
-    std::vector<QPushButton*> pButtons;
+    std::vector<QPushButton*> buttons;
 
     fcw = fcw_init();
     
@@ -52,20 +53,17 @@ void Widget::operator()()
     std::string name("button");
     setUpdatesEnabled(true);
     name += std::to_string(count);
+    buttons.clear();
     m_button = new QPushButton(name.c_str(), w);
     m_button1 = new QPushButton(name.c_str(), w);
+    buttons.push_back(m_button);
+    buttons.push_back(m_button1);
     
     while (true)
     {
         /*get the updated priority queue*/
-        pq = fcw->pqGet();
+       // pq = fcw->pqGet();
         buttons.clear();
-        
-
-
-
-
-
 
         std::unique_lock<std::mutex> lck(mtx);
         cv.wait_for(lck, std::chrono::milliseconds(int(dt)));

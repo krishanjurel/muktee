@@ -8,23 +8,34 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <time.h>
+#include <cstdlib>
 
 namespace v2x
 {
 
+//using pow=std::pow;
+
 const int MAX_V2X_EE = 10;
 const int MAX_PQ_SIZE=MAX_V2X_EE;
 const double X_LOW_LIMIT=100.0;
-const double Y_LOW_LIMIT = 100.0;
+const double Y_LOW_LIMIT = 30.0;
 
-const double X_HIGH_LIMIT=1000.0;
-const double Y_HIGH_LIMIT=1000.0;
+const double X_HIGH_LIMIT=900.0;
+const double Y_HIGH_LIMIT=400.0;
 static std::default_random_engine gen;
 static std::uniform_real_distribution<> pos_dist(X_LOW_LIMIT, X_HIGH_LIMIT);
 static std::uniform_real_distribution<> spd_dist(2, 15.0);
+double rand_num(double start, double end);
 
 
 
+
+enum ee_color {
+    green,
+    yellow,
+    red
+};
 
 /* define a entity with dimentions and weight */
 struct ee_spd
@@ -71,9 +82,9 @@ struct ee
         ee_spd spd;
         ee_pos pos;
         double length, width;
-        const double INIFINITY = double(100000.0);
+        const double INIFINITY = 1000000.0;
         int id;
-        int color; /* green,yellow,red*/
+        ee_color color; /* green,yellow,red*/
         double dt;
 
     public:
@@ -87,6 +98,7 @@ struct ee
             width = that.width;
             dt=that.dt;
             id = that.id;
+            color = green;
         }
 
 
@@ -114,8 +126,8 @@ struct ee
         {
             if(*this == that) return INIFINITY;
 
-            //pos << std::cout;
-            //that.pos << std::cout;
+            pos << std::cout;
+            that.pos << std::cout;
 
             double dx = that.pos.x - pos.x;
             double dy = that.pos.y - pos.y;
@@ -131,13 +143,14 @@ struct ee
 
             double dvdv  = pow(dvx, 2) + pow(dvy, 2);
             double drdr = pow(dx, 2) + pow(dy, 2);
-            double sigma = radius() + radius(that);
+            double sigma = radius() + that.radius();
             double d = (dvdr * dvdr) - dvdv * (drdr -  pow(sigma, 2));
             if ( d < 0.0) 
             {
                 dt = INFINITY;
                 return dt;
             }
+
             dt =  -(dvdr + sqrt(d))/dvdv;
             return dt;
         }
@@ -145,6 +158,7 @@ struct ee
         double timeToHitTheHorizWall() {return 0.0;}
 
         double bounceOff(ee &that) { return 0.0;}
+
         double bounceOffVertWall() {return 0.0;}
         double bounceOffHorizWall() {return 0.0;}
         bool operator==(ee &that)
@@ -165,10 +179,11 @@ struct ee
 
         void init()
         {
-            pos.x = pos_dist(gen);
-            pos.y = pos_dist(gen);
-            spd.x = spd_dist(gen);
-            spd.y = spd_dist(gen);
+            std::cout << "Init position and speed " << std::endl;
+            pos.x = rand_num(X_LOW_LIMIT, Y_HIGH_LIMIT);
+            pos.y = rand_num(Y_LOW_LIMIT,Y_HIGH_LIMIT);
+            spd.x = rand_num(50,150);
+            spd.y = rand_num(50,150);
         }
 
         int getId(){ return id;}
@@ -179,13 +194,11 @@ struct ee
         /* move this element, by the time*/
         void move(double dt)
         {
+            std::cout << "moving ee " << id << std::endl;
             pos.x = pos.x + spd.x * dt/1000;
             pos.y = pos.y + spd.y * dt/1000;
             pos.z = pos.z + spd.z * dt/1000;
-            if(this->dt <= dt)
-            {
-                std::cout << "collision occured " << id << std::endl;
-            }
+
             this->dt -= dt;
             
             if (pos.x <= X_LOW_LIMIT || 
@@ -202,6 +215,10 @@ struct ee
             //std::cout << "draw id: " << id << " pos " << pos.x << "/" << pos.y << "/" << pos.z;
             //std::cout << " spd " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
         }
+
+        ee_color colorGet(){ return color;}
+        ee_spd& speedGet() { return spd;}
+        ee_pos& posGet() { return pos;}
 };
 
 /* collision event between two end entities*/
@@ -408,6 +425,7 @@ class fcw
     ee ees[MAX_V2X_EE]; /* this is others */
     ee e; /* this is us */
     std::thread _thread;
+    std::mutex _mtex;
     //Event *event;
     
     public:
@@ -439,15 +457,17 @@ class fcw
         {
             std::cout << "thread start" << std::endl;
             std::thread _thread(collision_thread, obj);
+            _thread.detach();
             return _thread;
         }
 
         MinPQ<Event> *pqGet() {
             return pq;
         }
-        void add(ee _ee)
+        void add(ee& _ee)
         {
-            _ee.init();
+            //e.init();
+            //_ee.init();
             double dt = e.timeToCollide(_ee);
             std::cout << "time to collide:id1:id2 " << dt << ":" <<  e.getId() << ":" << _ee.getId() <<  std::endl;
             //event = new Event(dt, e, _ee);
@@ -455,6 +475,22 @@ class fcw
             //std::cout << "event: " <<std::hex << event << " id: "<< _ee.getId() << std::endl;
             //pq->insert(std::shared_ptr<Event>(new Event(dt,e, _ee),[](Event *p){delete p;}));
             pq->insert(event);
+        }
+
+        std::vector<ee*>& eesGet() 
+        {
+            std::vector<ee*> *eeVector = new std::vector<ee*>();
+            std::lock_guard<std::mutex> lck(_mtex);
+            {
+                for (int i = 0; i < MAX_V2X_EE; i++)
+                {
+                    ee *pEe = new ee(ees[i]);
+                    eeVector->push_back(pEe);
+                }
+                /* also push the current object */
+                eeVector->push_back(new ee(e));
+            }
+            return *eeVector;
         }
 
 
@@ -468,8 +504,9 @@ class fcw
             //Event *evt;
             double dt = MAX_TIME_DELTA;
             int sz;
+            int testCount = 0;
             
-            while(true)
+            while(testCount++ < 5)
             {
                 sz = pq->size();
                 evt = pq->delMin();
@@ -490,8 +527,8 @@ class fcw
                 while(evt != nullptr)
                 {
                     ee b = evt->eeGetB();
-                    b.move(dt);
-                    b.draw();
+                    ees[b.getId()-1].move(dt);
+                    ees[b.getId()-1].draw();
                     /* this will be our next event */
                     evt = pq->delMin();
                     ++count;
@@ -499,9 +536,13 @@ class fcw
                 count = 0;
                 while(count < MAX_V2X_EE)
                 {
-                    std::cout << "count " << count << std::endl;
-                    add (ees[count]);
-                    ++count;
+                    /* update the positions */
+                    std::lock_guard<std::mutex> lck(_mtex);
+                    {
+                        std::cout << "count " << count << std::endl;
+                        add (ees[count]);
+                        ++count;
+                    }
                 }
                 pq->print();
             }
