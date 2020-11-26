@@ -4,6 +4,7 @@
 #include <random>
 #include <chrono>
 #include <condition_variable>
+#include <chrono>
 
 namespace v2x
 {
@@ -51,12 +52,6 @@ class fcw
         int init(){
             return 0;
         }
-        std::thread start(std::shared_ptr<fcw> obj)
-        {
-            std::cout << "thread start" << std::endl;
-            std::thread _thread(collision_thread, obj);
-            return _thread;
-        }
 
         void add(ee _ee)
         {
@@ -71,8 +66,16 @@ class fcw
         }
 
 
+        void thread_handler()
+        {
+            std::cout << " this is thread " << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        }
+
+
         /* function call operator overloaded */
-        int operator()(int i)
+        void operator()()
         {
             int count = 0; 
             std::condition_variable cv;
@@ -81,6 +84,9 @@ class fcw
             //Event *evt;
             double dt = MAX_TIME_DELTA;
             int sz;
+
+            std::cout << " this is thread " << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
             
             while(true)
             {
@@ -136,16 +142,29 @@ class fcw
                 std::this_thread::sleep_for<int, std::milli>(std::chrono::duration<int, std::milli>(1000));
             }
             #endif
-            return 0;
+            return;
         }
+
+        void start(std::shared_ptr<fcw> obj)
+        {
+            std::cout << "thread start" << std::endl;
+            _thread = std::thread(&fcw::operator(), obj);
+            return;
+        }
+        void wait_for_completion()
+        {
+            _thread.join();
+        }
+
 
 };
 
 static void collision_thread(std::shared_ptr<fcw> obj)
 {
     /* call the overloaded function call operator */
-    fcw *pObj = obj.get();
-    pObj->operator()(0);
+    //fcw *pObj = obj.get();
+    //pObj->operator()(0);
+    //sobj->operator()(0);
 
 }
 
@@ -155,12 +174,15 @@ static void collision_thread(std::shared_ptr<fcw> obj)
 
 int main()
 {
-    std::shared_ptr<v2x::fcw> fcw(new v2x::fcw());
-    std::thread fcwThread;
 
-    fcw->init();
-    fcwThread = fcw->start(fcw);
+    std::shared_ptr<v2x::fcw> fw = std::make_shared<v2x::fcw>();
+    //std::thread fcwThread;
+
+    fw->init();
+    fw->start(fw);
+    fw->wait_for_completion();
    // int i = fcw->operator()(0);
-    fcwThread.join();
+    //fcwThread.join();
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     return 0;
 }

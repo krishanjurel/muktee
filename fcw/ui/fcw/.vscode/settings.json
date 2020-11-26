@@ -9,6 +9,8 @@
                                 "qwidget": "cpp",
                                 "typeinfo": "cpp",
                                 "*.tcc": "cpp",
-                                "random": "cpp"
+                                "random": "cpp",
+                                "new": "cpp",
+                                "string": "cpp"
                             }
 }

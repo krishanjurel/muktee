@@ -11,7 +11,7 @@ void collision_thread(std::shared_ptr<v2x::fcw> obj)
     /* call the overloaded function call operator */
     //v2x::fcw *pObj = obj.get();
     std::cout << "coliision thread has started" <<std::endl;
-    obj->operator()(0);
+    obj->operator()();
     return;
 }
 
@@ -32,10 +32,8 @@ double rand_num(double start, double end)
  std::shared_ptr<v2x::fcw> fcw_init()
 {
     std::thread m_thread;
-    std::shared_ptr<v2x::fcw> fcw(new v2x::fcw());
+    std::shared_ptr<v2x::fcw> fcw = std::make_shared<v2x::fcw>();
     fcw->init();
-    m_thread = fcw->start(fcw);
-    //m_thread.join();
-    //std::this_thread::sleep_for(std::chrono::seconds(1));
+    fcw->start(fcw);
     return fcw;
 }

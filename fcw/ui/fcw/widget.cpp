@@ -33,15 +33,16 @@ void Widget::operator()()
 {
     std::mutex mtx;
     std::condition_variable cv;
-    double dt = 1000;
+    double dt = 100;
     QPushButton *m_button, *m_button1;
     int x, y; 
 
     v2x::MinPQ<v2x::Event> *pq;
     std::shared_ptr<v2x::fcw> fcw;
-    std::vector<v2x::ee*> ees;
+    using sharedEE = std::shared_ptr<v2x::ee>;
 
     std::vector<QPushButton*> buttons;
+    std::vector<sharedEE>  ees;
 
     fcw = fcw_init();
     
@@ -59,38 +60,25 @@ void Widget::operator()()
     buttons.push_back(m_button);
     buttons.push_back(m_button1);
     
-    while (true)
+    while (count < 10)
     {
         /*get the updated priority queue*/
-       // pq = fcw->pqGet();
+        // pq = fcw->pqGet();
         buttons.clear();
 
         std::unique_lock<std::mutex> lck(mtx);
         cv.wait_for(lck, std::chrono::milliseconds(int(dt)));
-        m_button->setText(name.c_str());
-        m_button->windowTitleChanged(name.c_str());
-        srand(time(NULL));
-        x = rand()% 9 + 1; // between 1 and 9 */
-        y = rand()% 40 + 3; //3->40
-        x *= 100; /* scale it by 100, 100->900 */
-        y *= 10; /* scale it by 10, 30 and 400 */
-        m_button->setGeometry(x,y, 80, 30);
-        //m_button->updateGeometry();
-
-       // m_button1->updateGeometry();
-        x = rand()% 9 + 1; // between 1 and 9 */
-        y = rand()% 40 + 3; //3->40
-        x *= 100; /* scale it by 100, 100->900 */
-        y *= 10; /* scale it by 10, 30 and 400 */
-        m_button1->setText(name.c_str());
-        m_button1->windowTitleChanged(name.c_str());
-        m_button1->setGeometry(x,y,80, 30);
+        ees = fcw->eesGet();
+        std::vector<sharedEE>::iterator it;
+        for(it = ees.begin(); it != ees.end(); ++it)
+        {
+            sharedEE _ee = *it;
+            std::cout << "endpoint id " << _ee->getId() << std::endl;
+            _ee->posGet() << std::cout;
+        }
 
 
-        name += std::to_string(count);
 
-        std::cout << "new name is " << name << std::endl;
-        count++;
         w->repaint();
         w->show();
     }
