@@ -224,22 +224,21 @@ struct ee
 /* collision event between two end entities*/
 class Event
 {
-    typedef std::shared_ptr<ee> sharedEE;
     double t; /* time to the collision */
-    sharedEE a, b;     /* the two ee thats going to collide */
+    ee a, b;     /* the two ee thats going to collide */
     int countA, countB; /* number of collisions for these two ees */
 
     public:
-        Event()=delete;
-        Event(double t_, sharedEE aa, sharedEE bb)
+        Event():t(0.0),a(),b(){};
+        Event(double t_, ee a_, ee b_)
         {
             t = t_;
-            a = aa;
-            b = bb;
+            a = a_;
+            b = b_;
         }
 
         ~Event(){
-            std::cout << "event " << b->getId() << " is destroyed " << std::endl;
+            std::cout << "event " << b.getId() << " is destroyed " << std::endl;
         }
 
         int compareTo(Event& that) {
@@ -252,8 +251,8 @@ class Event
         }
         bool isValid() { return true;}
         double timeToEvent(){return t;}
-        sharedEE eeGetA() {return a;};
-        sharedEE eeGetB() { return b;}
+        ee& eeGetA() {return a;};
+        ee& eeGetB() { return b;}
 };
 
 
@@ -404,7 +403,7 @@ class MinPQ
             std::cout << "priority queue elemnets " <<std::endl;
             for (int i = 0; i < N; i ++)
             {
-                std::cout << "id:col " << key[i]->eeGetB()->getId() <<":"<< key[i]->timeToEvent() << std::endl;
+                std::cout << "id:col " << key[i]->eeGetB().getId() <<":"<< key[i]->timeToEvent() << std::endl;
 
             }
         }
@@ -421,14 +420,12 @@ void collision_thread(std::shared_ptr<fcw> obj);
 
 class fcw
 {
-    typedef std::shared_ptr<ee> sharedEE;
     MinPQ<Event> *pq; /* priority queue */
     double t;  /* simulation clock time */
-    sharedEE ees[MAX_V2X_EE]; /* this is others */
-    sharedEE e; /* this is us */
+    ee ees[MAX_V2X_EE]; /* this is others */
+    ee e; /* this is us */
     std::thread _thread;
     std::mutex _mtex;
-    std::vector<sharedEE> *eeVector;
     //Event *event;
     
     public:
@@ -438,41 +435,41 @@ class fcw
             ee_pos pos{2.0, 5.0, 0.0};
             std::cout << spd;
             pos << std::cout;
-            eeVector = new std::vector<sharedEE>();
             for (int i = 0; i < MAX_V2X_EE; i++)
             {
-                sharedEE _ee(new ee());
-                ees[i] = _ee;
-                ees[i]->init();
-                ees[i]->setId(i+1);
+                //ees[i].setSpeed(spd);
+                //ees[i].setPosition(pos);
+                ees[i].init();
+                ees[i].setId(i+1);
             }
-            sharedEE _ee(new ee());
-            e = _ee;
-            e->init();
-            e->setId(0);
+
+            //e.setSpeed(spd);
+            //e.setPosition(pos);
+            e.init();
+            e.setId(0);
         }
 
 
         int init(){
             return 0;
         }
-        void start(std::shared_ptr<fcw> obj)
+        std::thread start(std::shared_ptr<fcw> obj)
         {
             std::cout << "thread start" << std::endl;
-            _thread = std::thread(&fcw::operator(), obj);
+            std::thread _thread(collision_thread, obj);
             _thread.detach();
-            return;
+            return _thread;
         }
 
         MinPQ<Event> *pqGet() {
             return pq;
         }
-        void add(sharedEE _ee)
+        void add(ee& _ee)
         {
             //e.init();
             //_ee.init();
-            double dt = e->timeToCollide(*_ee);
-            std::cout << "time to collide:id1:id2 " << dt << ":" <<  e->getId() << ":" << _ee->getId() <<  std::endl;
+            double dt = e.timeToCollide(_ee);
+            std::cout << "time to collide:id1:id2 " << dt << ":" <<  e.getId() << ":" << _ee.getId() <<  std::endl;
             //event = new Event(dt, e, _ee);
             std::shared_ptr<Event> event (new Event(dt,e, _ee),[](Event *p){delete p;});
             //std::cout << "event: " <<std::hex << event << " id: "<< _ee.getId() << std::endl;
@@ -480,24 +477,25 @@ class fcw
             pq->insert(event);
         }
 
-        std::vector<sharedEE>& eesGet() 
+        std::vector<ee*>& eesGet() 
         {
-            eeVector->clear();
+            std::vector<ee*> *eeVector = new std::vector<ee*>();
             std::lock_guard<std::mutex> lck(_mtex);
             {
                 for (int i = 0; i < MAX_V2X_EE; i++)
                 {
-                    eeVector->push_back(ees[i]);
+                    ee *pEe = new ee(ees[i]);
+                    eeVector->push_back(pEe);
                 }
                 /* also push the current object */
-                eeVector->push_back(e);
+                eeVector->push_back(new ee(e));
             }
             return *eeVector;
         }
 
 
         /* function call operator overloaded */
-        void operator()()
+        int operator()(int i)
         {
             int count = 0; 
             std::condition_variable cv;
@@ -508,7 +506,7 @@ class fcw
             int sz;
             int testCount = 0;
             
-            while(true)
+            while(testCount++ < 5)
             {
                 sz = pq->size();
                 evt = pq->delMin();
@@ -522,23 +520,24 @@ class fcw
                     dt = MAX_TIME_DELTA;
                 if (dt <= MIN_TIME_DELTA)
                     dt = MIN_TIME_DELTA;
-                e->move(dt);
-                e->draw();
+                e.move(dt);
+                e.draw();
                 count = 0;
                 std::cout << "number of elements " << sz << std::endl;
                 while(evt != nullptr)
                 {
-                    sharedEE b = evt->eeGetB();
-                    b->move(dt);
-                    b->draw();
+                    ee b = evt->eeGetB();
+                    ees[b.getId()-1].move(dt);
+                    ees[b.getId()-1].draw();
+                    /* this will be our next event */
                     evt = pq->delMin();
                     ++count;
                 }
                 count = 0;
-                /* update the positions */
-                std::lock_guard<std::mutex> _lck(_mtex);
+                while(count < MAX_V2X_EE)
                 {
-                    while(count < MAX_V2X_EE)
+                    /* update the positions */
+                    std::lock_guard<std::mutex> lck(_mtex);
                     {
                         std::cout << "count " << count << std::endl;
                         add (ees[count]);
@@ -564,7 +563,7 @@ class fcw
                 std::this_thread::sleep_for<int, std::milli>(std::chrono::duration<int, std::milli>(1000));
             }
             #endif
-            return;
+            return 0;
         }
 
 };
