@@ -58,6 +58,7 @@ void Widget::operator()()
     m_button1 = new QPushButton(name.c_str(), w);
     buttons.push_back(m_button);
     buttons.push_back(m_button1);
+    w->show();
     
     while (true)
     {
@@ -74,7 +75,8 @@ void Widget::operator()()
         y = rand()% 40 + 3; //3->40
         x *= 100; /* scale it by 100, 100->900 */
         y *= 10; /* scale it by 10, 30 and 400 */
-        m_button->setGeometry(x,y, 80, 30);
+        //m_button->setGeometry(x,y, 80, 30);
+        m_button->move(x,y);
         //m_button->updateGeometry();
 
        // m_button1->updateGeometry();
@@ -84,15 +86,16 @@ void Widget::operator()()
         y *= 10; /* scale it by 10, 30 and 400 */
         m_button1->setText(name.c_str());
         m_button1->windowTitleChanged(name.c_str());
-        m_button1->setGeometry(x,y,80, 30);
+        //m_button1->setGeometry(x,y,80, 30);
+        m_button1->move(x,y);
 
 
-        name += std::to_string(count);
+        //name += std::to_string(count);
 
         std::cout << "new name is " << name << std::endl;
         count++;
         w->repaint();
-        w->show();
+        
     }
     w->show();
     return;

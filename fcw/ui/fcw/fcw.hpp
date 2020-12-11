@@ -10,6 +10,7 @@
 #include <condition_variable>
 #include <time.h>
 #include <cstdlib>
+#include <algorithm>
 
 namespace v2x
 {
@@ -44,7 +45,7 @@ struct ee_spd
     double x, y, z;
     //ee_spd():x(0.0),y(0.0),z(0.0){}
     //ee_spd(double x_, double y_, doub)
-    ee_spd& operator=(ee_spd &that)
+    ee_spd& operator=(const ee_spd &that)
     {
         this->x = that.x;
         this->y = that.y;
@@ -61,7 +62,7 @@ struct ee_pos
     /* current position */
     double x, y, z;
     //ee_pos():lat(0.0),lng(0.0),alt(0.0){}
-    ee_pos& operator=(ee_pos &that)
+    ee_pos& operator=(const ee_pos &that)
     {
         this->x = that.x;
         this->y = that.y;
@@ -73,6 +74,7 @@ struct ee_pos
         return os << "pos lat/long/alt " << x << "/" << y << "/" << z << std::endl;
     }
 };
+
 
 struct ee
 {
@@ -90,7 +92,7 @@ struct ee
     public:
         ee():mass(0.0),length(300.0), width(400.0){ }
         /* copy constructor */
-        ee(ee &that){
+        ee(const ee &that){
             mass = that.mass;
             spd = that.spd;
             pos = that.pos;
@@ -154,6 +156,7 @@ struct ee
             dt =  -(dvdr + sqrt(d))/dvdv;
             return dt;
         }
+        double timeToEvent(){return dt;}
         double timeToHitTheVertWall() {return 0.0;}
         double timeToHitTheHorizWall() {return 0.0;}
 
@@ -166,7 +169,7 @@ struct ee
             return this->id == that.id;
         }
 
-        ee& operator=(ee& that)
+        ee& operator=(const ee& that)
         {
             mass = that.mass;
             spd = that.spd;
@@ -219,18 +222,27 @@ struct ee
         ee_color colorGet(){ return color;}
         ee_spd& speedGet() { return spd;}
         ee_pos& posGet() { return pos;}
+
+
+        bool operator<(const ee& that)
+        {
+            return dt < that.dt;
+        }
 };
+
+using sharedEE = std::shared_ptr<ee>;
 
 /* collision event between two end entities*/
 class Event
 {
+    
     double t; /* time to the collision */
-    ee a, b;     /* the two ee thats going to collide */
+    sharedEE a, b;     /* the two ee thats going to collide */
     int countA, countB; /* number of collisions for these two ees */
 
     public:
         Event():t(0.0),a(),b(){};
-        Event(double t_, ee a_, ee b_)
+        Event(double t_, sharedEE a_, sharedEE b_)
         {
             t = t_;
             a = a_;
@@ -238,7 +250,7 @@ class Event
         }
 
         ~Event(){
-            std::cout << "event " << b.getId() << " is destroyed " << std::endl;
+            std::cout << "event " << b->getId() << " is destroyed " << std::endl;
         }
 
         int compareTo(Event& that) {
@@ -251,8 +263,18 @@ class Event
         }
         bool isValid() { return true;}
         double timeToEvent(){return t;}
-        ee& eeGetA() {return a;};
-        ee& eeGetB() { return b;}
+        ee& eeGetA() {return *a.get();};
+        ee& eeGetB() { return *b.get();}
+};
+
+
+template<typename T>
+struct customLess
+{
+    bool operator() (T a, T b)
+    {
+        return a < b;
+    }
 };
 
 
@@ -265,139 +287,98 @@ class Event
 template <typename T>
 class MinPQ 
 {
-    typedef std::shared_ptr<Event> sharedT;
-    sharedT key[MAX_PQ_SIZE];
+    int firstEl, lastEl;
     int N;
-    
+    std::vector<T> events;
 
-
-    void exch(int k1, int k2)
+    void sort()
     {
-        //std::cout << "exch k1:k2 " << k1 <<":" << k2 << std::endl;
-        assert((k1 >= 1) && (k2 >= 1));
-        sharedT temp = sharedT(key[k2-1]);
-        key[k2-1] = sharedT(key[k1-1]);
-        key[k1-1] = sharedT(temp);
-    }
-
-    void swim(int k)
-    {
-        /* the indexing is zero index based, while tree is 1 index-based*/
-        k += 1;
-        //std::cout << "swimming " << k << std::endl;
-        while(k > 1 && greater(k/2, k)==true)
-        {
-            exch(k, k/2);
-            k = k/2;
-        }
-    }
-    void sink(int k)
-    {
-        /* the indexing is zero index based, while tree is 1 index-based*/
-        k += 1;
-        //std::cout << "sinking " << k << std::endl;
-        while(2*k <= N)
-        {
-            int j = 2*k;
-            if (j < N && greater(j+1, j)==false) j++;
-            if(greater(k, j) == false) break;
-            exch(k, j);
-            k = j;
-        }
-    }
-
-    bool greater (int k1, int k2)
-    {
-        bool _greater = false;
-        /* the tree is based on 1 index, but array is 0 indexed */
-        assert(((k1 >= 1) && (k2 >= 1)));
-        k1 -= 1;
-        k2 -= 1;
-        int ret = key[k1]->compareTo(*key[k2]);
-        if(ret >= 1)  _greater = true;
-        return _greater;
+        customLess<T> eventCompare;
+        std::sort(events.begin(), events.end(), eventCompare);
+        return ;
     }
 
     public:
         MinPQ() 
         { 
+            firstEl = 0;
+            lastEl = 0;
+            events.clear();
             N = 0;
-            for (int i=0; i < N; i++)
-                key[i] = nullptr;
         }
         MinPQ(T key_[], int N_)
         {
+            firstEl = 0;
+            lastEl = 0;
+            events.clear();
             N = 0;
-            for (int i=0; i < N_; i++)
-            {
-                key[N++] = key_[i];
-                swim(i);
-            }
         }
 
         //void insert(std::shared_ptr<T> ky_)
-        void insert(sharedT ky_)
+        void insert(T& ky_)
         {
             bool _insert = false;
-            sharedT key_ = sharedT(ky_);
-            //std::cout << "use count " << key_.use_count() << ":" << std::endl;
-            if (N  < MAX_PQ_SIZE )
+            //T atlast = events.back();
+
+            if(events.size() <= MAX_PQ_SIZE)
             {
                 _insert = true;
             }
-            if(_insert == false && 
-                N >= MAX_PQ_SIZE)
+
+
+            if(events.size() >= MAX_PQ_SIZE)
             {
-                std::cout << "delete max " << N << std::endl;
-                delMax();
+                --N;
+                events.pop_back();
                 _insert = true;
-          
             }
 
             if(_insert == true)
             {
-                this->key[N] = key_;
-                swim(N);
-                N++;
+                ++N;
+                events.push_back(ky_);
+                sort();
             }
             return;
 
         }
-        sharedT delMin() 
+        T delMin() 
         {
-            sharedT key_ = nullptr;
-            int k = 1;
-            if(isEmpty() == false)
+            T temp;
+            if(firstEl != N)
             {
-                key_ = key[0];
-                {
-                    exch(k, N);
-                    N--;
-                    sink(0);
-                }
-                key[N] = nullptr;
+                
+                temp = events[firstEl];
+                firstEl ++;
+            }else{
+                firstEl = 0;
+                N = 0;;
             }
-            return key_;
+            return temp;
+            
         }
 
-        sharedT delMax()
+        T delMax()
         {
-            sharedT key_ = nullptr; 
-            if(isEmpty() == false)
+            T temp;
+            if (N != 0)
             {
-                std::cout << "delete " << N << std::endl;
-                key_ = key[--N];
-                key[N] = nullptr;
+                temp = events[--N];
+            }else{
+                firstEl = 0;
+                N = 0;
             }
-            return key_;
+            return temp;
         }
 
 
-        bool isEmpty() { return N == 0;}
-        sharedT max() { return key[N-1];}
-        sharedT min() { return key[0];}
+        bool isEmpty() { return firstEl==N;}
+        T max() { return events[N-1];}
+        T min() { return events[firstEl];}
         int size() { return N;}
 
+
+        #if 0
         void print()
         {
             std::cout << "priority queue elemnets " <<std::endl;
@@ -407,6 +388,7 @@ class MinPQ
 
             }
         }
+        #endif
 
 };
 
@@ -420,7 +402,7 @@ void collision_thread(std::shared_ptr<fcw> obj);
 
 class fcw
 {
-    MinPQ<Event> *pq; /* priority queue */
+    MinPQ<ee> *pq; /* priority queue */
     double t;  /* simulation clock time */
     ee ees[MAX_V2X_EE]; /* this is others */
     ee e; /* this is us */
@@ -430,21 +412,12 @@ class fcw
     
     public:
         fcw() {
-            pq = new MinPQ<Event>();
-            ee_spd spd{2.0,5.0,0.0};
-            ee_pos pos{2.0, 5.0, 0.0};
-            std::cout << spd;
-            pos << std::cout;
+            pq = new MinPQ<ee>();
             for (int i = 0; i < MAX_V2X_EE; i++)
             {
-                //ees[i].setSpeed(spd);
-                //ees[i].setPosition(pos);
                 ees[i].init();
                 ees[i].setId(i+1);
             }
-
-            //e.setSpeed(spd);
-            //e.setPosition(pos);
             e.init();
             e.setId(0);
         }
@@ -461,36 +434,25 @@ class fcw
             return _thread;
         }
 
-        MinPQ<Event> *pqGet() {
-            return pq;
-        }
         void add(ee& _ee)
         {
-            //e.init();
-            //_ee.init();
             double dt = e.timeToCollide(_ee);
             std::cout << "time to collide:id1:id2 " << dt << ":" <<  e.getId() << ":" << _ee.getId() <<  std::endl;
-            //event = new Event(dt, e, _ee);
-            std::shared_ptr<Event> event (new Event(dt,e, _ee),[](Event *p){delete p;});
-            //std::cout << "event: " <<std::hex << event << " id: "<< _ee.getId() << std::endl;
-            //pq->insert(std::shared_ptr<Event>(new Event(dt,e, _ee),[](Event *p){delete p;}));
-            pq->insert(event);
+            pq->insert(_ee);
         }
 
-        std::vector<ee*>& eesGet() 
+        std::vector<ee>& eesGet(std::vector<ee>& eeVector) 
         {
-            std::vector<ee*> *eeVector = new std::vector<ee*>();
             std::lock_guard<std::mutex> lck(_mtex);
             {
                 for (int i = 0; i < MAX_V2X_EE; i++)
                 {
-                    ee *pEe = new ee(ees[i]);
-                    eeVector->push_back(pEe);
+                    eeVector.push_back(ees[i]);
                 }
                 /* also push the current object */
-                eeVector->push_back(new ee(e));
+                eeVector.push_back(e);
             }
-            return *eeVector;
+            return eeVector;
         }
 
 
@@ -500,21 +462,21 @@ class fcw
             int count = 0; 
             std::condition_variable cv;
             std::mutex mtx;
-            std::shared_ptr<Event> evt;
             //Event *evt;
             double dt = MAX_TIME_DELTA;
             int sz;
             int testCount = 0;
+            //ee tempEE;
             
-            while(testCount++ < 5)
+            while(Count++ < 5)
             {
                 sz = pq->size();
-                evt = pq->delMin();
+                ee tempEE = pq->delMin();
                 std::unique_lock<std::mutex> lck(mtx);
                 cv.wait_for(lck, std::chrono::milliseconds(int(dt)));
                 if (sz)
                 {
-                    dt = evt->timeToEvent();
+                    dt = tempEE.timeToEvent();
                 }
                 if (dt > MAX_TIME_DELTA)
                     dt = MAX_TIME_DELTA;
@@ -524,13 +486,12 @@ class fcw
                 e.draw();
                 count = 0;
                 std::cout << "number of elements " << sz << std::endl;
-                while(evt != nullptr)
+                while(count < sz)
                 {
-                    ee b = evt->eeGetB();
-                    ees[b.getId()-1].move(dt);
-                    ees[b.getId()-1].draw();
-                    /* this will be our next event */
-                    evt = pq->delMin();
+
+                    
+                    ees[count].move(dt);
+                    ees[count].draw();
                     ++count;
                 }
                 count = 0;
@@ -544,7 +505,6 @@ class fcw
                         ++count;
                     }
                 }
-                pq->print();
             }
 
 
