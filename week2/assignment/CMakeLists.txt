@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8.12)
 PROJECT(submission)
 SET(CMAKE_CXX_STANDARD 11)
 
-SET(OpenCV_DIR /home/krishan/installation/opencv/lib/cmake/opencv4)
+SET(OpenCV_DIR /home/krishan/installation/OpenCV/lib/cmake/opencv4)
 
 ######################## EDIT IF REQUIRED ####################
 # ###Uncomment the line below and specify the path to OpenCV directory i.e. the path to the OpenCVConfig.cmake file. Check the examples given below.
