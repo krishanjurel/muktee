@@ -1,0 +1,3 @@
+/home/krishan/muktee/funcptr/CMakeFiles/rebuild_cache.dir
+/home/krishan/muktee/funcptr/CMakeFiles/edit_cache.dir
+/home/krishan/muktee/funcptr/CMakeFiles/funcptr.dir

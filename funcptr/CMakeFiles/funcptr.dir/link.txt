@@ -1,0 +1,1 @@
+/usr/bin/c++    -rdynamic CMakeFiles/funcptr.dir/funcptr.cpp.o  -o funcptr 
