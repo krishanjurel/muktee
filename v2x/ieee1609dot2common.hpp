@@ -36,4 +36,51 @@ typedef enum
     HashAlgorithmTypeSha256
 }HashAlgorithmType;
 
+
+/* 6.3.23 */
+typedef enum 
+{
+    EccP256CurvPointXOnly,
+    EccP256CurvPointFill,
+    EccP256CurvPointCompressedy0,
+    EccP256CurvPointCompressedy1,
+    EccP256CurvPointUncompressed
+}EccP256CurvPointType;
+
+union EccP256CurvPoint
+{
+    HashedData32 xonly;
+    HashedData32 fill; /* figure it out */
+    HashedData32 compressedy0;
+    HashedData32 compressedy1;
+    struct {
+        HashedData32 x;
+        HashedData32 y;
+    }uncompressed;
+};
+typedef union EccP256CurvPoint EccP256CurvPoint;
+
+/*6.3.29*/
+struct EcdsaP256Signature
+{
+    EccP256CurvPoint r;
+    HashedData32 s;
+};
+typedef struct EcdsaP256Signature EcdsaP256Signature;
+
+/*6.3.28 */
+typedef enum 
+{
+    ecdsaNistP256Signature,
+    ecdsaBrainpoolP256r1Signature,
+}SignatureType;
+
+union Signature
+{
+    EcdsaP256Signature ecdsaNistP256Signature;
+    EcdsaP256Signature ecdsaBrainpoolP256r1Signature;
+};
+typedef union Signature Signature;
+
+
 #endif //__IEEE_1609DOT2COMMON_HPP__

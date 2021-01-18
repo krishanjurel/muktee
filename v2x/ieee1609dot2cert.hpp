@@ -130,6 +130,7 @@ struct certificateBase
 };
 typedef struct certificateBase CertificateBase;
 
+
 /*6.4.2*/
 struct SequenceOfCertificate
 {
@@ -137,6 +138,26 @@ struct SequenceOfCertificate
     CertificateBase certs[0];
 };
 typedef struct SequenceOfCertificate SequenceOfCertificate;
+
+
+/* 6.3.24 */
+typedef enum 
+{
+    SignerIdentifierTypeDigest,
+    SignerIdentifierTypeCert,
+    SignerIdentifierTypeSelf
+}SignerIdentifierType;
+
+union SignerIdentifier
+{
+    HashedId8 digest;
+    SequenceOfCertificate certificate;
+    int self;
+};
+typedef union SignerIdentifier SignerIdentifier;
+
+
+
 
 #ifdef _cplusplus
 }

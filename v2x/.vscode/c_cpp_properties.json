@@ -5,6 +5,10 @@
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c11",
             "cppStandard": "c++14",
+            "includePath": [
+                "${workspaceFolder}",
+                "/usr/include"
+            ],
             "intelliSenseMode": "gcc-x64"
         }
     ],
