@@ -57,6 +57,8 @@ union EccP256CurvPoint
         HashedData32 x;
         HashedData32 y;
     }uncompressed;
+#define  uncompressedx   uncompressed.x 
+#define  uncompressedy   uncompressed.y
 };
 typedef union EccP256CurvPoint EccP256CurvPoint;
 

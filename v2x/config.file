@@ -1,0 +1,27 @@
+app:
+{
+    /* keep track of components */
+    version="1.0.0";
+    /* lists the components */
+    components:
+    {
+        /* for now it only contains the psid */
+        psid=[0x20, 0x21];
+        /*sign curves, and curve point info */
+        sign:
+        {
+            /* NIST P-256 and brainpool P-256 r1 */
+            curve=["nistp256","brainpoolp256r1"];
+            /* uncompressed */
+            curvepoint=4;
+        };
+        /* curvepoint config */
+        signature:
+        {
+            /* x-only */
+            curvepoint=0;
+        };
+        /*24 hours [always specify in hours] */
+        duration=24; 
+    };
+};

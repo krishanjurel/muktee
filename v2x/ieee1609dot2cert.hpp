@@ -2,6 +2,10 @@
 #define __IEEE_1609DOT2CERT_HPP__
 #include <iostream>
 #include "ieee1609dot2common.hpp"
+#include "openssl/ec.h"
+#include "openssl/ecdsa.h"
+#include "openssl/obj_mac.h"
+#include <openssl/bn.h>
 
 #ifdef _cplusplus
 extern "C"
@@ -13,11 +17,21 @@ typedef enum {
     CertTypeImplicit
 }CertType;
 
+
+
 /* certifiicate issuer */
 /* 6.4.7 */
+
+typedef enum
+{
+    IssuerIdentifierTypeHashId,
+    IssuerIdentifierTypeHashAlgo,
+}IssuerIdentifierType;
+
 typedef union 
 {
     HashedId8 hashId;
+    HashAlgorithmType algo;
 }IssuerIdentifier;
 
 /* 6.4.13 */
@@ -26,6 +40,16 @@ typedef struct
     uint8_t length;
     char *name;
 }HostName;
+
+/* 6.4.16 */
+typedef enum{
+    DurationTypeMicroSeconds,
+    DurationTypeMilliSeconds,
+    DurationTypeSeconds,
+    DurationTypeMinutes,
+    DurationTypeSixtyHours,
+    DurationTypeYears
+}DurationType;
 
 union duration
 {
@@ -37,13 +61,14 @@ union duration
     uint16_t sixtyHours;
     uint16_t years;   
 };
+#define DURATION_HOURS      duration.hours
+#define DURATION_MINUTES    duration.minutes
 typedef union duration Duration;
-
 
 /* 6.4.14 */
 struct validityPeriod
 {
-    uint32_t start;
+    time_t start;
     Duration duration;
 };
 typedef struct validityPeriod ValidityPeriod;
@@ -58,13 +83,21 @@ struct linkageData
 typedef struct linkageData LinkageData;
 
 /* 6.4.9 */
+typedef enum
+{
+    CertificateIdTypeLinkageData,
+    CertificateIdTypeName,
+    CertificateIdTypeBinaryId,
+    CertificateIdTypeNone
+}CertificateIdType;
+
 union certificateId
 {
     LinkageData linkageData;
     HostName hostName;
+    OctetString binaryId;
 };
 typedef union certificateId CertificateId;
-
 /*6.4.35 */
 typedef enum
 {
@@ -109,13 +142,15 @@ typedef struct SequenceOfPsidSsp SequenceOfPsidSsp;
 /* 6.4.8 */
 struct ToBeSignedCertificate
 {
+    CertificateIdType certificateIdType;
+    DurationType durationType;
+    VerificationKeyIndicatorType verificationKeyIndicatorType;
     CertificateId id;
     HashedId3 cracaId;
     uint16_t crlSeries;
     ValidityPeriod validityPeriod;
     SequenceOfPsidSsp appPermisions;
     PublicVerificationKeyType publicVerificationKeyType;
-    VerificationKeyIndicatorType verifyKeyIndicatorType;
     VerificationKeyIndicator verifyKeyIndicator;
 };
 typedef struct ToBeSignedCertificate ToBeSignedCertificate;
@@ -125,6 +160,7 @@ struct certificateBase
 {
     uint8_t   version;
     CertType   certType;
+    IssuerIdentifierType issuerType;
     IssuerIdentifier issuer;
     ToBeSignedCertificate toBeSignedCertificate;
 };
@@ -156,12 +192,42 @@ union SignerIdentifier
 };
 typedef union SignerIdentifier SignerIdentifier;
 
-
-
-
 #ifdef _cplusplus
 }
 #endif
+
+namespace ctp
+{
+    /* cert class */
+    class cert
+    {
+        std::vector<SequenceOfCertificate *> certs;
+        EC_KEY *ecKey;
+        public:
+            void create();
+
+            //void encode();
+            //void decode();
+
+            explicit cert();
+            /* no copy constructure */
+            cert(const cert&) = delete;
+            /* no copy assignment */
+            const cert& operator=(const cert&) = delete;
+            /* no move constructor */
+            cert(const cert&&) = delete;
+            ~cert();
+
+    };
+
+} /* namespace ctp */
+
+
+
+
+
+
+
 
 
 #endif // __IEEE_1609DOT2CERT_HPP__

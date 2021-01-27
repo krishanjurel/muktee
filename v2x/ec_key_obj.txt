@@ -1,0 +1,16 @@
+Private-Key: (256 bit)
+priv:
+    48:0a:df:16:66:d3:91:95:7f:e7:c9:89:c8:e8:22:
+    8a:ab:28:74:e9:71:2b:68:5f:01:a3:b0:d1:a8:5a:
+    e0:f3
+pub:
+    04:57:29:55:25:3d:7f:c7:2c:b8:31:8c:a1:80:4d:
+    ae:77:49:09:be:76:79:c1:28:c8:dd:fa:5c:38:4e:
+    a2:3f:26:23:26:79:41:9a:a2:6b:03:2c:0c:86:71:
+    4d:74:e3:fb:3a:ea:a9:98:9d:56:78:86:cd:e7:89:
+    9d:99:97:a2:b3
+ASN1 OID: prime256v1
+NIST CURVE: P-256
+    ECDSA-Parameters: (256 bit)
+    ASN1 OID: prime256v1
+    NIST CURVE: P-256
