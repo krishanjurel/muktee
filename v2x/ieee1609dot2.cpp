@@ -67,15 +67,17 @@ typedef union
 }FullByte;
 
 
-void ec_key_oct_read(const char *path)
+/* read the key from the file, copy it into the buffer key, and length into len*/
+void ec_key_oct_read(const char *path, uint8_t **key, size_t *len)
 {
     std::ifstream ifs;
     ifs.open(path, std::ifstream::in | std::ifstream::binary);
     std::stringbuf strBuf;
+    std::istringstream strStream("number of characters ");
 
     if(ifs.is_open() == true)
     {
-        std::cout << "file open for reading " << std::endl;
+        LOG_INFO("file open for reading ", 1);
         /* print all the */
         while(ifs.good() == true)
         {
@@ -84,9 +86,18 @@ void ec_key_oct_read(const char *path)
                 strBuf.sputc(c);
         }
     }
-    std::cout << "number of characters " << strBuf.str().size() << std::endl;
+    std::string lenEnc(std::to_string(strBuf.str().size()));
+    strBuf.sputn(strStream.str().c_str(), strStream.str().size());
+    strBuf.sputn(lenEnc.c_str(), lenEnc.size());
+
+    log_info(strBuf.str().c_str(), 1);
     ifs.close();
 }
+
+
+
+
+
 
 
 
@@ -132,6 +143,23 @@ uint8_t *ec_key_key2buf(const EC_KEY *key, point_conversion_form_t form, size_t 
 }
 
 
+// int ec_key_buf2key(EC_KEY *key, const uint8_t *buf, size_t length)
+// {
+//     uint8_t *keyBuf;
+//     int ret = EC_KEY_oct2key(key, buf, length, NULL);
+//     if(ret == 0)
+//     {
+//         std::cout << "Error: ec_key_buf2key " << std::endl;
+//         //LOG_ERR("Error: ec_key_buf2key", 1);
+//         return ret;
+//     }
+//     keyBuf = ec_key_key2buf(key, POINT_CONVERSION_UNCOMPRESSED, &length, "uncompressed-key");
+//     free(keyBuf);
+//     return ret;
+// }
+
+
+
 void ec_key_buf2key(EC_KEY *key, unsigned char *buf, size_t len)
 {
     uint8_t *keyBuf;
@@ -146,7 +174,7 @@ void ec_key_buf2key(EC_KEY *key, unsigned char *buf, size_t len)
         return;
     }
     free (buf);
-    buf = ec_key_key2buf(key, POINT_CONVERSION_COMPRESSED, &length, "x-only derived");
+    buf = ec_key_key2buf(key, POINT_CONVERSION_UNCOMPRESSED, &length, "compressed derived");
     free(buf);
     return;
 }
@@ -299,12 +327,12 @@ int main()
         std::terminate();
     }
 
-    cosmoV2XKey->key1 = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-    if (cosmoV2XKey->key1 == nullptr)
-    {
-        perror("<Main> Error associating key with a curve");
-        std::terminate();
-    }
+    // cosmoV2XKey->key1 = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+    // if (cosmoV2XKey->key1 == nullptr)
+    // {
+    //     perror("<Main> Error associating key with a curve");
+    //     std::terminate();
+    // }
 
     EC_KEY_set_conv_form(cosmoV2XKey->key, POINT_CONVERSION_UNCOMPRESSED);
     /* generate the private and associate public key */
@@ -315,12 +343,12 @@ int main()
         std::abort();
     }
 
-    if (EC_KEY_generate_key(cosmoV2XKey->key1) != 1)
-    {
-        perror("Error creating keys");
-        EC_KEY_free(cosmoV2XKey->key);        
-        std::abort();
-    }
+    // if (EC_KEY_generate_key(cosmoV2XKey->key1) != 1)
+    // {
+    //     perror("Error creating keys");
+    //     EC_KEY_free(cosmoV2XKey->key);        
+    //     std::abort();
+    // }
 
     cosmoV2XKey->privKey = EC_KEY_get0_private_key(cosmoV2XKey->key);
     if(cosmoV2XKey->privKey == nullptr)
@@ -344,19 +372,27 @@ int main()
         uint8_t *keyBuf;
         size_t keyLen = 0;
     
-        keyBuf = ec_key_key2buf(cosmoV2XKey->key1, POINT_CONVERSION_UNCOMPRESSED,&keyLen,"key1-original");
+        keyBuf = ec_key_key2buf(cosmoV2XKey->key, POINT_CONVERSION_UNCOMPRESSED,&keyLen,"key-original");
         free(keyBuf);
 
+        keyLen = 0;
 
+        keyBuf = ec_key_key2buf(cosmoV2XKey->key, POINT_CONVERSION_COMPRESSED,&keyLen,"key-compressed");
 
-        keyBuf = ec_key_key2buf(cosmoV2XKey->key, POINT_CONVERSION_UNCOMPRESSED,&keyLen,"key-original");
+        // if(keyBuf != nullptr)
+        // {
+        //     ec_key_buf2key(cosmoV2XKey->key1, keyBuf, keyLen);
+        // }
 
-        if(keyBuf != nullptr)
-        {
-            ec_key_buf2key(cosmoV2XKey->key1, keyBuf, keyLen);
-        }
+        //ec_key_oct_read("ecc_key.txt");
+        
+        //EC_KEY_free(cosmoV2XKey->key1);
+        /* recreate a new object, just to make sure we recover the key from a brand new object*/
+        cosmoV2XKey->key1 = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
 
-        ec_key_oct_read("ecc_key.txt");
+        ec_key_buf2key(cosmoV2XKey->key1, keyBuf, keyLen);
+        EC_KEY_free(cosmoV2XKey->key);
+        EC_KEY_free(cosmoV2XKey->key1);
 
     }
 
@@ -447,7 +483,5 @@ int main()
         std::abort();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    EC_KEY_free(cosmoV2XKey->key);
-    EC_KEY_free(cosmoV2XKey->key1);
     return 0;
 }

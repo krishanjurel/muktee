@@ -77,12 +77,16 @@ typedef enum
     ecdsaBrainpoolP256r1Signature,
 }SignatureType;
 
-union Signature
+struct Signature
 {
-    EcdsaP256Signature ecdsaNistP256Signature;
-    EcdsaP256Signature ecdsaBrainpoolP256r1Signature;
+    SignatureType signatureType;
+    union
+    { 
+        EcdsaP256Signature ecdsaP256Signature;
+        EcdsaP256Signature ecdsaBrainpoolP256r1Signature;
+    }signature;
 };
-typedef union Signature Signature;
+typedef struct Signature Signature;
 
 
 #endif //__IEEE_1609DOT2COMMON_HPP__

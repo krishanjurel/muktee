@@ -29,21 +29,20 @@ namespace ctp
         LOG_LVL_INFO
     }LogLvl;
 
-
-
     class log_mgr
     {
         public:
+        //log_mgr(){};
         static void log(LogLvl lvl, int mod,const std::string &msg)
         {
-            std::cout << msg << std::endl;
+            std::cout << lvl<< ":" << msg << std::endl;
         }
     };
 
-#define LOG_ERR(msg, mod) log_mgr::log(LOG_LVL_ERR,mod,msg)
-#define LOG_DBG(msg, mod) log_mgr::log(LOG_LVL_DBG,mod,msg)
-#define LOG_INFO(msg, mod) log_mgr::log(LOG_LVL_INFO,mod,msg)
-#define LOG_WARN(msg, mod) log_mgr::log(LOG_LVL_WARN,mod,msg)
+#define LOG_ERR(msg, mod) ctp::log_mgr::log(ctp::LOG_LVL_ERR,mod,msg)
+#define LOG_DBG(msg, mod) ctp::log_mgr::log(ctp::LOG_LVL_DBG,mod,msg)
+#define LOG_INFO(msg, mod) ctp::log_mgr::log(ctp::LOG_LVL_INFO,mod,msg)
+#define LOG_WARN(msg, mod) ctp::log_mgr::log(ctp::LOG_LVL_WARN,mod,msg)
 #define log_info(msg, mod) LOG_INFO(msg, mod)
 #define log_dbg(msg, mod) LOG_DBG(msg, mod)
 

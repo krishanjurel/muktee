@@ -155,6 +155,7 @@ struct ToBeSignedCertificate
 };
 typedef struct ToBeSignedCertificate ToBeSignedCertificate;
 
+
 /* 6.4.3*/
 struct certificateBase
 {
@@ -163,6 +164,7 @@ struct certificateBase
     IssuerIdentifierType issuerType;
     IssuerIdentifier issuer;
     ToBeSignedCertificate toBeSignedCertificate;
+    Signature signature;
 };
 typedef struct certificateBase CertificateBase;
 
@@ -202,7 +204,25 @@ namespace ctp
     class cert
     {
         std::vector<SequenceOfCertificate *> certs;
+        const EC_GROUP *grp;
         EC_KEY *ecKey;
+        uint8_t keyType;
+        ECDSA_SIG *sig;
+        CertificateBase *base;
+        ToBeSignedCertificate *tbs;
+        VerificationKeyIndicator *vki;
+        Signature *signature;
+        SequenceOfCertificate *crt;
+
+
+
+        int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_UNCOMPRESSED);
+        int private_key_get();
+        int sign (SignatureType type = ecdsaNistP256Signature);
+        /* encode the certificate */
+        int encode(); 
+
+
         public:
             void create();
 
