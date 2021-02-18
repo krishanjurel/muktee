@@ -2,40 +2,54 @@
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
+#include <iostream>
+#include <fstream>
 
-namespace ctp
-{
+
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-     /* function returns the number of seconds from V2X start epoch
-       till the give time
-    */         
-    time_t start_time(struct tm *tm)
-    {
-        struct tm epoch = {
-            .tm_sec = 0,
-            .tm_min=0,
-            .tm_hour = 0,
-            .tm_mday=1,
-            .tm_mon = 0,
-            .tm_year = 2004,
-            .tm_isdst = 0
-        };
-        time_t t1 = mktime(&epoch);
-        time_t t2 = mktime(tm);
+    /* function returns the number of seconds from V2X start epoch
+    till the give time
+*/         
+time_t start_time(struct tm *tm)
+{
+    struct tm epoch = {
+        .tm_sec = 0,
+        .tm_min=0,
+        .tm_hour = 0,
+        .tm_mday=1,
+        .tm_mon = 0,
+        .tm_year = 2004,
+        .tm_isdst = 0
+    };
+    time_t t1 = mktime(&epoch);
+    time_t t2 = mktime(tm);
 
-        if(t1 < 0 || t2 < 0)
-        {
-            perror("start_time:mktime");
-            t1  = -1;
-        }else
-        {
-            t1 = t2-t1;
-        }
-        return t1;
+    if(t1 < 0 || t2 < 0)
+    {
+        perror("start_time:mktime");
+        t1  = -1;
+    }else
+    {
+        t1 = t2-t1;
     }
+    return t1;
+}
+void *buf_alloc(size_t len)
+{
+    return malloc(len);
+}
+void *buf_realloc(void *ptr, size_t len)
+{
+    return realloc(ptr, len);
+}
+
+void *buf_calloc(size_t num, size_t size)
+{
+    return calloc(num,size);
+}
 #ifdef __cplusplus
 }
 #endif
@@ -43,6 +57,9 @@ extern "C"
 
 
 
+
+namespace ctp
+{
 
 
     void TP::cert_mgr()
@@ -114,15 +131,16 @@ extern "C"
             EC_KEY_free(ecKey);
             std::terminate();
         }
-
-        grp = EC_KEY_get0_group(ecKey);
+        ecGroup = EC_KEY_get0_group(ecKey);
 
         /* allocate the memory for one cert first */
-        crt = (SequenceOfCertificate *)malloc(sizeof(int) +  sizeof(certificateBase));
-        /* add the cert into the queue */
-        certs.push_back(crt);
+        seqOfCert = (SequenceOfCertificate *)malloc(sizeof(int) +  sizeof(certificateBase));
+        
         /* initialize all the pointers */
-        base = (CertificateBase *)((uint8_t *)crt + sizeof(int));
+        base = (CertificateBase *)((uint8_t *)seqOfCert + sizeof(int));
+        /* add the cert into the queue */
+        certs.push_back(base);
+        issuer = &base->issuer;
         tbs = &base->toBeSignedCertificate;
         vki = &tbs->verifyKeyIndicator;
         /*pointer to the signature structure*/
@@ -130,10 +148,8 @@ extern "C"
     }
 
     /* sign the certificate */
-    int cert::sign(SignatureType type)
+    int cert::sign(const uint8_t *buf, size_t len, SignatureType type)
     {
-        uint8_t *dgst = static_cast<uint8_t *>((void *)tbs);
-        size_t dgstlen = sizeof(ToBeSignedCertificate);
         int ret = 0;
         const BIGNUM *r;
         const BIGNUM *s;
@@ -151,7 +167,7 @@ extern "C"
         //     std::cerr << e.what() << '\n';
         //     std::terminate();
         // }
-        sig = ECDSA_do_sign(dgst, dgstlen, ecKey);
+        sig = ECDSA_do_sign(buf,len,ecKey);
         if (sig == nullptr)
         {
             LOG_ERR("cert::sign : Error signing the message", 1);
@@ -172,11 +188,12 @@ extern "C"
         //     EC_POINT_free(point);
         //     sig = nullptr;
         // }
-
-        sign_r = (uint8_t *)&signature->signature.ecdsaP256Signature.r.xonly.x[0];
+        /* signature r value for FIPS 186-4 takes only x-only */
+        signature->signature.ecdsaP256Signature.r.type= EccP256CurvPointXOnly;
+        sign_r = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.xonly.x;
         sign_s = (uint8_t *)&signature->signature.ecdsaP256Signature.s.x[0];
         /* set the signature type */
-        signature->signatureType = type;
+        signature->type = type;
 
         /* convert the point to the buf for encoding */
         //EC_POINT_point2oct(grp, point, POINT_CONVERSION_COMPRESSED,xonly_r, sizeof(HashedData32), nullptr);
@@ -205,13 +222,257 @@ extern "C"
             }
         return ret;
     }
-    /* encode the certificate */
+
+    /*        */
+    int cert::encode_certid()
+    {
+        int len = 1;
+        uint8_t choice = 0x80 | (uint8_t)(tbs->id.type);
+        uint8_t *buf;
+
+        switch(tbs->id.type)
+        {
+            case CertificateIdTypeName:
+                len += tbs->id.id.hostName.length;
+                buf = (uint8_t *)tbs->id.id.hostName.name;
+                len += 1;
+                break;
+            default:
+                LOG_ERR("cert::encode_certid: unsupported cert id", 1);
+                break;
+        }
+
+        std::cout << "cert::encodecertid " << len << std::endl;
+
+        encBuf = (uint8_t *)realloc(encBuf, len);
+        encBuf[encLen++] = choice;
+        len --;
+        /* encode the length */
+        encBuf[encLen++] = tbs->id.id.hostName.length;
+        len --;
+        /* copy the remainder of buffer into the encoded buffer */
+        while(len > 0)
+        {
+            encBuf[encLen++] = *buf++;
+            len--;
+        }
+        std::cout << "cert::encodecertid " << encLen << std::endl;
+        /* return the length */
+        return encLen;
+    }
+
+    int cert::encode_hashid3()
+    {
+        int len = encLen + 3;
+        /* just fill it with the hard coded a,b,c */
+        encBuf = (uint8_t *)realloc(encBuf, len);
+        if(issuer->type == IssuerIdentifierTypeSelf)
+        {
+            encBuf[encLen++] = 0x00;
+            encBuf[encLen++] = 0x00;
+            encBuf[encLen++] = 0x00;
+        }
+        std::cout << "cert::encode_hashid3 " << encLen << std::endl;
+        return encLen;
+    }
+
+    int cert::encode_crlseries()
+    {
+        /* its two bytes */
+        int len = encLen + 2;
+        encBuf = (uint8_t *)realloc(encBuf, len);
+
+        uint8_t *buf = (uint8_t *)&tbs->crlSeries;
+        /* copy in the network byte order */
+        encBuf[encLen++] = buf[1];
+        encBuf[encLen++] = *buf;
+        std::cout << "cert::encode_crlseries " << encLen << std::endl;
+        return encLen;
+    }
+
+    int cert::encode_validityperiod()
+    {
+        /* validity period consists of start time of 4 bytes */
+        int len = 4;
+        /* 1 byte for choice of duration */
+        len += 1;
+        /* and two bytes of duration */
+        len += 2;
+
+        /* update the length */
+        len += encLen; 
+
+        /* allocate the buffer for duration*/
+        encBuf = (uint8_t *)realloc(encBuf, len);
+        if(encBuf == nullptr)
+        {
+            throw std::bad_alloc();
+        }
+
+        /* copy the duration in the network byte order */
+        uint8_t *buf = (uint8_t *)&tbs->validityPeriod.start;
+        encBuf[encLen++] = buf[3];
+        encBuf[encLen++] = buf[2];
+        encBuf[encLen++] = buf[1];
+        encBuf[encLen++] = buf[0];
+        len -= 4;
+
+        /* initialize the choice */
+        uint8_t choice = 0x80 | (uint8_t)(tbs->validityPeriod.duration.type);
+        len -= 1;
+        encBuf[encLen++] = choice;
+        buf = (uint8_t *)&tbs->validityPeriod.duration.duration.minutes;
+        /* copy in the network byte order */
+        encBuf[encLen++] = buf[1];
+        encBuf[encLen++] = buf[0]; 
+        len -= 2;
+        std::cout << "cert::encode_validityperiod " << encLen << std::endl;
+        return encLen;
+    }
+    /* this is encoding the sequence of psids */
+    int cert::encode_sequenceofpsid()
+    {
+        /* FIXME, only one psid with no ssp */
+        /* length octet is one */
+        int len = 1;
+        /* there is only 1 sequence */
+        len += 1;
+        /* need one byte to encode sequence */
+        len += 1;
+        /* 1 byte for psid length encoding and 1 bytes for bsm psid (0x20) */
+        len += 2;
+
+        len += encLen;
+
+        encBuf = (uint8_t *)realloc(encBuf, len);
+        if(encBuf == nullptr)
+        {
+            throw std::bad_alloc();
+        }
+
+        /* encode number of sequences */
+        encBuf[encLen++] = 1; /* number of bytes to represent one sequence, 1 */
+        len -= 1;
+        encBuf[encLen++] = 1; /* number of sequences */
+        len -= 1;
+        encBuf[encLen++]  = 0x00; /* sequence with no optional ssp */
+        len -= 1;
+        encBuf[encLen++] = 1; /* number of bytes in the psid */
+        len -= 1;
+        encBuf[encLen++] = 0x20; /*FIXME, define this somewhere BSM psid */
+        len -= 1;
+         if (len != 0)
+         {
+             LOG_ERR("cert::encode_sequenceofpsid(): rem length not zero", 1);
+             //throw new std::logic_error("cert::encode_sequenceofpsid(): rem length not zero ");
+         }
+         std::cout << "cert::encode_sequenceofpsid " << encLen << std::endl;
+         return encLen;
+    }
+
+    /* encode the verification key identifier */
+    int cert::encode_vki()
+    {
+        /* for hashing purposes, all the ecc points of toBeSigned data structure
+           are used in the compressed form, i.e. compressed-[y0,y1]
+        */
+        /*FIXME, this is using the self-signed, we need to get the compressed form of 
+          all our ecc points in the verification key identifier 
+        */
+        int len = 1; /* for choice indicator */
+        /* next another choice public verification type */
+        len += 1;
+        /* next another choise of point type, which is compressed */
+        len += 1;
+        /* folllowed by 32 bytes of compressed point */
+        len += 32;
+
+        /* update the total encoding length */
+        //len += encLen;
+
+        /* reallocate the buffer */
+        encBuf = (uint8_t *)buf_realloc(encBuf, (len + encLen));
+        uint8_t choice = 0x80 | (uint8_t) (vki->type);
+        encBuf[encLen++] = choice;
+        len -= 1;
+        /* choice of public verification */
+        choice = (0x80) | (uint8_t)(vki->indicator.verificationKey.type);
+        encBuf[encLen++] = choice;
+        len -= 1;
+        /*choice of curve point-type*/
+        choice = (0x80) | (uint8_t)(keyType & 0x01);
+        encBuf[encLen++] = choice;
+        len -= 1;
+        /* just take the y 0*/
+        const uint8_t *key = (uint8_t *)vki->indicator.verificationKey.key.ecdsaNistP256S.point.compressedy0.x;
+        while(len > 0)
+        {
+            encBuf[encLen++] = *key++;
+            len -= 1;
+        }
+
+        std::cout << "cert::encode_vki " << encLen << std::endl;
+
+        return encLen;
+    }
+
+
+    /* encode the toBeSigned field of the explicit certicate*/
     int cert:: encode()
     {
+        /* reset the encoded buffer and length */
+        encBuf = nullptr;
+        encLen = 0;
+        try
+        {
+            encode_certid();
+            encode_hashid3();
+            encode_crlseries();
+            encode_validityperiod();
+            encode_sequenceofpsid();
+            encode_vki();
+        }
+        catch(const std::exception& e)
+        {
+            std::cout << e.what() << '\n';
+        }
+        catch (std::logic_error& e)
+        {
+            std::cout << e.what() << '\n';
 
+        }
+        return 0;
+    }
 
-
-
+    /* print the certificate into the file */
+    int cert::print()
+    {
+        int i = 0;
+        log_info("cert::print", 1);
+        /* open the file in text mode */
+        std::ofstream ofs("cert.txt");
+        //std::stringbuf strbuf(encBuf);
+        //std::string strng((const char *)encBuf, encLen);
+        //std::istringstream istram(strng);
+        std::streambuf *sbf = ofs.rdbuf();
+        std::ostream os(sbf);
+        std::cout << "the length of the encoded bffer" << encLen << std::endl;
+        
+        for(i=0; i < encLen; i++)
+        {
+           // char c[2];
+           // istram >> c[0] >> c[1];
+            int c;// = atoi(c);
+            snprintf((char *)&c, sizeof(int), "%c", encBuf[i]);
+            os << std::hex << (c&0xFF) ; 
+            os << ':';
+            if(i != 0 && i % 16 ==0)
+            {
+                os << std::endl;
+            }
+        }
+        std::cout << std::endl;
+        ofs.close();
         return 0;
     }
 
@@ -222,6 +483,7 @@ extern "C"
         int i = 0;
         uint8_t *keyBuf = nullptr;
         size_t keylen = EC_KEY_key2buf(ecKey, conv, &keyBuf, nullptr);
+        EccP256CurvPoint *point = &vki->indicator.verificationKey.key.ecdsaNistP256S;
         if(keylen == 0)
         {
             perror("cert::public_key_get()");
@@ -229,8 +491,9 @@ extern "C"
             std::terminate();
             return keylen;
         }
-        char *xPtr = &vki->verificationKey.ecdsaNistP256S.uncompressedx.x[0];
-        char *yPtr = &vki->verificationKey.ecdsaNistP256S.uncompressedy.x[0];
+        point->type = EccP256CurvPointUncompressed;
+        char *xPtr = point->point.uncompressedx.x;
+        char *yPtr = point->point.uncompressedy.x;
 
         /* there will always be x-component, so lets copy that */
         for (i = 0; i < sizeof(HashedData32);)
@@ -251,22 +514,24 @@ extern "C"
     void cert::create()
     {   
         /* one cert */
-        crt->length = 1;
+        seqOfCert->length = 1;
         base->version = 3;
         base->certType = CertTypeExplicit;
-        base->issuerType = IssuerIdentifierTypeHashAlgo;
-        base->issuer.algo = HashAlgorithmTypeSha256;
-        tbs->certificateIdType = CertificateIdTypeName;
-        tbs->id.hostName.name = "Get the Host Name from Config File";
-        tbs->id.hostName.length = strlen(tbs->id.hostName.name);
+        issuer->type = IssuerIdentifierTypeSelf;
+        issuer->issuer.algo = HashAlgorithmTypeSha256; 
+        tbs->id.type = CertificateIdTypeName;
+        std::string *name = new std::string("Get the Host Name from Config File");
+        tbs->id.id.hostName.name = (char *)name->c_str();
+        tbs->id.id.hostName.length = name->size();
         /*FIXME, this is hard coded */
         tbs->crlSeries = 0x1234;
         time_t t = time(nullptr);
         struct tm *tm = localtime((const time_t *)&t);
         tbs->validityPeriod.start = start_time(tm);
-        tbs->durationType = DurationTypeMinutes; /* fixeme , read this also from the config file */
-        tbs->validityPeriod.DURATION_MINUTES = (7*24*60);/* for one week, read it form the config file */
-        tbs->verificationKeyIndicatorType = VerificationKeyIndicatorTypeKey;
+        tbs->validityPeriod.duration.type = DurationTypeMinutes;
+        tbs->validityPeriod.duration.duration.minutes = (7*24*60);/* for one week, read it form the config file */
+        /* set the verification key indicator type */
+        vki->type = VerificationKeyIndicatorTypeKey;
         /* default is uncompressed */
         public_key_get();
 
@@ -275,11 +540,8 @@ extern "C"
         */
         /* define and call the below API */ 
         encode();
-
-
-
-
-        sign(ecdsaNistP256Signature);
+        sign(encBuf, encLen,ecdsaNistP256Signature);
+        print();
     }
 } //namespace ctp
 

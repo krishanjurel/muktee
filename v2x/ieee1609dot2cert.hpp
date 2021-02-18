@@ -25,7 +25,7 @@ typedef enum {
 typedef enum
 {
     IssuerIdentifierTypeHashId,
-    IssuerIdentifierTypeHashAlgo,
+    IssuerIdentifierTypeSelf,
 }IssuerIdentifierType;
 
 typedef union 
@@ -33,6 +33,12 @@ typedef union
     HashedId8 hashId;
     HashAlgorithmType algo;
 }IssuerIdentifier;
+
+/* structure encpasulating the isuer identifier */
+typedef struct {
+    IssuerIdentifierType type;
+    IssuerIdentifier issuer;
+}Issuer;
 
 /* 6.4.13 */
 typedef struct 
@@ -51,19 +57,23 @@ typedef enum{
     DurationTypeYears
 }DurationType;
 
-union duration
+typedef struct 
 {
-    uint16_t microSeconds;
-    uint16_t milliseconds;
-    uint16_t seconds;
-    uint16_t minutes;
-    uint16_t hours;
-    uint16_t sixtyHours;
-    uint16_t years;   
-};
+    DurationType type;
+    union
+    {
+        uint16_t microSeconds;
+        uint16_t milliseconds;
+        uint16_t seconds;
+        uint16_t minutes;
+        uint16_t hours;
+        uint16_t sixtyHours;
+        uint16_t years;
+    }duration;
 #define DURATION_HOURS      duration.hours
 #define DURATION_MINUTES    duration.minutes
-typedef union duration Duration;
+}Duration;
+
 
 /* 6.4.14 */
 struct validityPeriod
@@ -97,13 +107,16 @@ union certificateId
     HostName hostName;
     OctetString binaryId;
 };
-typedef union certificateId CertificateId;
-/*6.4.35 */
-typedef enum
-{
-    VerificationKeyIndicatorTypeKey, /* key , */
-    VerificationKeyIndicatorTypeRecValue /* reconstruction value */
-}VerificationKeyIndicatorType;
+typedef union certificateId CertId;
+
+
+typedef struct {
+    CertificateIdType type;
+    CertId id;
+}CertificateId;
+
+
+
 
 /* 6..4.36 */
 typedef enum
@@ -112,16 +125,35 @@ typedef enum
     PublicVerificationKeyTypeEcdsaBrainpoolP256r1
 }PublicVerificationKeyType;
 
-typedef union {
-    EccP256CurvPoint ecdsaNistP256S;
-    EccP256CurvPoint ecdsaBrainpoolP256r1;
+
+
+typedef struct 
+{
+    PublicVerificationKeyType type;
+
+    union {
+        EccP256CurvPoint ecdsaNistP256S;
+        EccP256CurvPoint ecdsaBrainpoolP256r1;
+    }key;
 }PublicVerificationKey;
 
-typedef union
+/*6.4.35 */
+typedef enum
 {
-    PublicVerificationKey verificationKey;
-    EccP256CurvPoint recValue;
+    VerificationKeyIndicatorTypeKey, /* key , */
+    VerificationKeyIndicatorTypeRecValue /* reconstruction value */
+}VerificationKeyIndicatorType;
+
+typedef struct 
+{
+    VerificationKeyIndicatorType type;
+    union
+    {
+        PublicVerificationKey verificationKey;
+        EccP256CurvPoint recValue;
+    }indicator;
 }VerificationKeyIndicator;
+
 
 /*6.4.28 */
 struct PsidSsp
@@ -136,21 +168,17 @@ struct SequenceOfPsidSsp
     int length;
     PsidSsp psidSsp[0];
 };
-
 typedef struct SequenceOfPsidSsp SequenceOfPsidSsp;
 
 /* 6.4.8 */
 struct ToBeSignedCertificate
 {
-    CertificateIdType certificateIdType;
-    DurationType durationType;
-    VerificationKeyIndicatorType verificationKeyIndicatorType;
     CertificateId id;
     HashedId3 cracaId;
     uint16_t crlSeries;
+    Duration duration;
     ValidityPeriod validityPeriod;
     SequenceOfPsidSsp appPermisions;
-    PublicVerificationKeyType publicVerificationKeyType;
     VerificationKeyIndicator verifyKeyIndicator;
 };
 typedef struct ToBeSignedCertificate ToBeSignedCertificate;
@@ -161,8 +189,7 @@ struct certificateBase
 {
     uint8_t   version;
     CertType   certType;
-    IssuerIdentifierType issuerType;
-    IssuerIdentifier issuer;
+    Issuer issuer;
     ToBeSignedCertificate toBeSignedCertificate;
     Signature signature;
 };
@@ -203,25 +230,37 @@ namespace ctp
     /* cert class */
     class cert
     {
-        std::vector<SequenceOfCertificate *> certs;
-        const EC_GROUP *grp;
+        std::vector<CertificateBase *> certs;
+        const EC_GROUP *ecGroup;
         EC_KEY *ecKey;
         uint8_t keyType;
         ECDSA_SIG *sig;
         CertificateBase *base;
+        Issuer *issuer;
         ToBeSignedCertificate *tbs;
         VerificationKeyIndicator *vki;
         Signature *signature;
-        SequenceOfCertificate *crt;
-
-
-
+        SequenceOfCertificate *seqOfCert;
         int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_UNCOMPRESSED);
         int private_key_get();
-        int sign (SignatureType type = ecdsaNistP256Signature);
+        //int sign (SignatureType type = ecdsaNistP256Signature);
+        int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
+        
         /* encode the certificate */
-        int encode(); 
+        uint8_t *encBuf, *encBuf1; 
+        int encLen;
 
+
+        int encode();
+        int encode_certid();
+        int encode_hashid3();
+        int encode_crlseries();
+        int encode_validityperiod();
+        int encode_sequenceofpsid();
+        /* encode verificattion key indicator */
+        int encode_vki();
+        /* print to stdout or store in a file */
+        int print();
 
         public:
             void create();
@@ -236,8 +275,7 @@ namespace ctp
             const cert& operator=(const cert&) = delete;
             /* no move constructor */
             cert(const cert&&) = delete;
-            ~cert();
-
+            ~cert(){delete encBuf;}
     };
 
 } /* namespace ctp */

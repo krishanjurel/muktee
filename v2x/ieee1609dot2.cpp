@@ -292,9 +292,6 @@ namespace ctp
 
 int main()
 {
-    CosmoV2XKey *cosmoV2XKey = &cosmoV2XKey_g;
-    /* create an instance of the trusted platform */
-    ctp::TP_PTR tpObj = ctp::TP::instance_get();
     
     struct sigaction sigAct = {
         .sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT,
@@ -317,7 +314,11 @@ int main()
     sigaction(SIGSEGV, &sigAct, NULL);
 
     std::set_terminate(terminate_handler);
-   
+   #if 0
+    CosmoV2XKey *cosmoV2XKey = &cosmoV2XKey_g;
+    /* create an instance of the trusted platform */
+    ctp::TP_PTR tpObj = ctp::TP::instance_get();
+
     /* create the key */
     /* associate a curve name with the key */
     cosmoV2XKey->key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
@@ -403,6 +404,7 @@ int main()
         ECParameters_print_fp(fp, cosmoV2XKey->key);
     }
     fclose(fp);
+#endif    
     
 #if 0
   /* create a memory map file  to contain the semaphore to be shared between two processes 
@@ -477,11 +479,14 @@ int main()
     shm_unlink(sync_file);
     munmap(addr, sizeof(sem_t));
 #endif
+ctp::cert *pcert = new ctp::cert();
+pcert->create();
     while(0)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::abort();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+    delete pcert;
     return 0;
 }

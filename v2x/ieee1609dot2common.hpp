@@ -2,6 +2,22 @@
 #define __IEEE_1609DOT2COMMON_HPP__
 #include <iostream>
 
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+extern void *buf_alloc(size_t len);
+extern void *buf_realloc(void *ptr, size_t len);
+extern void *buf_calloc(size_t num, size_t size);
+#ifdef __cplusplus
+}
+#endif
+
+
+
+
+
 /* 
     All data type is represented in upper camel case, with no underscores.
     All variables are declared in lower camel case, with no underscores.
@@ -47,20 +63,29 @@ typedef enum
     EccP256CurvPointUncompressed
 }EccP256CurvPointType;
 
-union EccP256CurvPoint
+
+typedef struct 
 {
-    HashedData32 xonly;
-    HashedData32 fill; /* figure it out */
-    HashedData32 compressedy0;
-    HashedData32 compressedy1;
-    struct {
-        HashedData32 x;
-        HashedData32 y;
-    }uncompressed;
+    EccP256CurvPointType type;
+    union 
+    {
+        HashedData32 xonly;
+        HashedData32 fill; /* figure it out */
+        HashedData32 compressedy0;
+        HashedData32 compressedy1;
+        struct {
+            HashedData32 x;
+            HashedData32 y;
+        }uncompressed;
 #define  uncompressedx   uncompressed.x 
 #define  uncompressedy   uncompressed.y
-};
-typedef union EccP256CurvPoint EccP256CurvPoint;
+    }point;
+}EccP256CurvPoint;
+
+
+
+
+
 
 /*6.3.29*/
 struct EcdsaP256Signature
@@ -79,7 +104,7 @@ typedef enum
 
 struct Signature
 {
-    SignatureType signatureType;
+    SignatureType type;
     union
     { 
         EcdsaP256Signature ecdsaP256Signature;
