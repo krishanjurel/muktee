@@ -110,7 +110,7 @@ uint8_t *ec_key_key2buf(const EC_KEY *key, point_conversion_form_t form, size_t 
     size_t count = 0;
     uint8_t *keyBuf = nullptr;
     size_t keyBufSize = 0;
-    keyBufSize = EC_KEY_key2buf(key,form, &keyBuf, nullptr);
+    //keyBufSize = EC_KEY_key2buf(key,form, &keyBuf, nullptr);
     if(keyBufSize ==  0)
     {
         std::cout << "Error: EC_KEY_key2buf " << std::endl;
@@ -165,7 +165,7 @@ void ec_key_buf2key(EC_KEY *key, unsigned char *buf, size_t len)
     uint8_t *keyBuf;
     size_t length;
     std::cout << "size of the enc key buffer " << len << std::endl;
-    int ret = EC_KEY_oct2key(key,buf,len, nullptr);
+    int ret = 0;//EC_KEY_oct2key(key,buf,len, nullptr);
     if(ret == 0)
     {
         std::cout << "Error: ec_key_buf2key " << std::endl;
@@ -184,12 +184,12 @@ void ec_key_buf2key(EC_KEY *key, unsigned char *buf, size_t len)
 void privkey_to_octet(CosmoV2XKey *cosmoV2XKey)
 {
     uint8_t *octBuf = nullptr;
-    size_t octKeyLen;
+    size_t octKeyLen = 0;
     FullByte fullByte;
     char decodedByte[4];
     
 
-    octKeyLen = EC_KEY_priv2oct(cosmoV2XKey->key, octBuf, octKeyLen);
+    //octKeyLen = EC_KEY_priv2oct(cosmoV2XKey->key, octBuf, octKeyLen);
     if(octKeyLen != 0)
     {
         std::cout << "private key length " << octKeyLen << std::endl;
@@ -197,7 +197,7 @@ void privkey_to_octet(CosmoV2XKey *cosmoV2XKey)
         {
             octBuf = new uint8_t[octKeyLen];
 
-            octKeyLen = EC_KEY_priv2oct(cosmoV2XKey->key, octBuf, octKeyLen);
+            //octKeyLen = EC_KEY_priv2oct(cosmoV2XKey->key, octBuf, octKeyLen);
             if(octKeyLen == 0)
             {
                 std::cout << "EC_KEY_priv2oct: failed" << std::endl;
@@ -293,10 +293,14 @@ namespace ctp
 int main()
 {
     
-    struct sigaction sigAct = {
-        .sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT,
-        .sa_restorer = nullptr,
-    };
+    struct sigaction sigAct;
+    //  = {
+    //     .sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT,
+    //     .sa_restorer = nullptr,
+    // };
+    sigAct.sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT;
+    sigAct.sa_restorer = nullptr;
+
     sigAct.sa_handler = signal_handler;
     sigemptyset(&sigAct.sa_mask);
 

@@ -15,15 +15,16 @@ extern "C"
 */         
 time_t start_time(struct tm *tm)
 {
-    struct tm epoch = {
-        .tm_sec = 0,
-        .tm_min=0,
-        .tm_hour = 0,
-        .tm_mday=1,
-        .tm_mon = 0,
-        .tm_year = 2004,
-        .tm_isdst = 0
-    };
+    struct tm epoch;
+    // struct tm epoch = {
+    //     .tm_sec = 0,
+    //     .tm_min=0,
+    //     .tm_hour = 0,
+    //     .tm_mday=1,
+    //     .tm_mon = 0,
+    //     .tm_year = 2004,
+    //     .tm_isdst = 0
+    // };
     time_t t1 = mktime(&epoch);
     time_t t2 = mktime(tm);
 
@@ -176,9 +177,10 @@ namespace ctp
             goto done;
         }
 
-
-        r = ECDSA_SIG_get0_r(sig);
-        s = ECDSA_SIG_get0_s(sig);
+        r = sig->r;
+        s = sig->s;
+        // r = ECDSA_SIG_get0_r(sig);
+        // s = ECDSA_SIG_get0_s(sig);
         //EC_POINT *point = EC_POINT_new(grp);
 
         // if(EC_POINT_bn2point(grp, r, point, nullptr) != point)
@@ -416,6 +418,77 @@ namespace ctp
         return encLen;
     }
 
+    int cert::encode_sign()
+    {
+        int len = 1; /* for signature choice */
+        uint8_t choice = (0x80) | (signature->type);
+        len += 1; /* choice of curve point type */
+
+        len += 64; /* 64 maximum buffer for curve point, r of the signature */
+        len += 32; /* 32 bytes for the s */
+
+        try
+        {
+            encBuf = (uint8_t*)buf_realloc(encBuf, (encLen +  len));
+        }catch (const std::bad_alloc& e)
+        {
+            LOG_ERR("cert::encode_sig::buf_realloc error allocation buffer ", 1);
+            throw new std::runtime_error("cert::encode_sig::buf_realloc error allocation buffer ");
+        }
+
+        /* start encoding */
+        encBuf[encLen++] = choice;
+        len --;
+        /* choice of curve point type */
+        choice = (0x80) | (signature->signature.ecdsaP256Signature.r.type);
+        encBuf[encLen++] = choice;
+        len --;
+
+        choice  = signature->signature.ecdsaP256Signature.r.type;
+
+        uint8_t *pointBuf = nullptr;
+        size_t pointLen = 0;
+        if(choice == EccP256CurvPointXOnly){
+            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.xonly.x;
+            pointLen = 32;
+        }else if (choice == EccP256CurvPointCompressedy0)
+        {
+            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.compressedy0.x;
+            pointLen = 32;
+        }else if (choice == EccP256CurvPointCompressedy1)
+        {
+            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.compressedy1.x;
+            pointLen = 32;
+        }else if (choice == EccP256CurvPointUncompressed){
+            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.uncompressed.x.x;
+            pointLen = 64;
+        }
+
+
+        /*encode the r points */
+        while(pointLen)
+        {
+            encBuf[encLen++] = *pointBuf++;
+            pointLen--;
+            len --;
+        }
+        /* encode the s point */
+        pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.s.x;
+        pointLen = sizeof(signature->signature.ecdsaP256Signature.s.x);
+
+        while(pointLen)
+        {
+            encBuf[encLen++] = *pointBuf++;
+            pointLen--;
+            len --;
+        }
+        //static_assert((len >= 0));
+        log_info("cert::encode_sig", 1);
+        std::cout << "cert::encode_sig remaining length (exp >= 0) "  << len << std::endl;
+        std::cout << "cert::encode_sig encoded lenght (exp >= 0) "  << encLen << std::endl;
+        return encLen;
+    }
+
 
     /* encode the toBeSigned field of the explicit certicate*/
     int cert:: encode()
@@ -482,15 +555,43 @@ namespace ctp
     {
         int i = 0;
         uint8_t *keyBuf = nullptr;
-        size_t keylen = EC_KEY_key2buf(ecKey, conv, &keyBuf, nullptr);
-        EccP256CurvPoint *point = &vki->indicator.verificationKey.key.ecdsaNistP256S;
+        size_t keylen = 0;//EC_KEY_key2buf(ecKey, conv, &keyBuf, nullptr);
+        const EC_POINT *ecPoint = EC_KEY_get0_public_key(ecKey);
+
+        /* get the x, y points from ecPoint */
+        keylen = EC_POINT_point2oct(ecGroup, ecPoint, conv,nullptr,  keylen, nullptr);
         if(keylen == 0)
         {
-            perror("cert::public_key_get()");
-            LOG_ERR("cert::public_key_get", 1);
+            perror("cert::public_key_get()::EC_POINT_point2oct");
+            LOG_ERR("cert::public_key_get::EC_POINT_point2oct", 1);
             std::terminate();
             return keylen;
         }
+
+        std::cout << "public key length " << keylen << std::endl;
+
+        try
+        {
+            keyBuf = (uint8_t *)buf_alloc(keylen);
+        }
+        catch(const std::bad_alloc &e)
+        {
+            std::cerr << e.what() << '\n';
+            throw new std::runtime_error("error allocating buffer");
+        }
+
+        /* get the x, y points from ecPoint */
+        keylen = EC_POINT_point2oct(ecGroup, ecPoint, conv,keyBuf,  keylen, nullptr);
+        if(keylen == 0)
+        {
+            perror("cert::public_key_get()::EC_POINT_point2oct");
+            LOG_ERR("cert::public_key_get::EC_POINT_point2oct", 1);
+            std::terminate();
+            return keylen;
+        }
+        EccP256CurvPoint *point = &vki->indicator.verificationKey.key.ecdsaNistP256S;
+
+
         point->type = EccP256CurvPointUncompressed;
         char *xPtr = point->point.uncompressedx.x;
         char *yPtr = point->point.uncompressedy.x;
@@ -541,6 +642,7 @@ namespace ctp
         /* define and call the below API */ 
         encode();
         sign(encBuf, encLen,ecdsaNistP256Signature);
+        encode_sign();
         print();
     }
 } //namespace ctp

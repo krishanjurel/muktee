@@ -259,6 +259,8 @@ namespace ctp
         int encode_sequenceofpsid();
         /* encode verificattion key indicator */
         int encode_vki();
+        /* encode the signature */
+        int encode_sign();
         /* print to stdout or store in a file */
         int print();
 
