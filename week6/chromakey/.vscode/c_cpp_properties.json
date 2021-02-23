@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "name":"windows",
+            "includePath": [
+                "${workspaceFolder}/**", 
+                "C:\\Users\\krishan.s\\opencv-4.5.0\\Installation\\include"
+            ],
+            "intelliSenseMode": "msvc-x64",
+            "compilerArgs": [],
+            "cppStandard": "c++14",
+            "cStandard": "${default}"
+        }
+    ],
+    "version": 4
+}
