@@ -26,8 +26,11 @@ SET(OpenCV_DIR C:\\Users\\krishan.s\\opencv-4.5.0\\Installation\\x64\\vc16\\stat
 ###################   ***DO NOT EDIT***  #####################
 
 #############  Common Instructions for all Users  ############
-# SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MTd")
-add_compile_options(/MTd)
+if (MSVC)
+  SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MTd")
+  add_compile_options(/MTd)
+endif()
+
 
 find_package( OpenCV REQUIRED )
 
