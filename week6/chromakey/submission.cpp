@@ -12,8 +12,10 @@ using namespace cv;
 
 /*draw a rect and return that as roi of the target image */
 /* declare two global points, top and bottom */
-Point gFrom, gTo;
-bool gValidMouseEvent = false;
+static Point gFrom, gTo;
+static bool gValidMouseEvent = false;
+static int gColorFactor = 10;
+static int gMaxColorValue = 20;
 
 /* rearrange points point where from is always smaller than  to */
 void pointRearrange(Point& from, Point& to)
@@ -35,17 +37,6 @@ void pointRearrange(Point& from, Point& to)
     }  
 }
 
-/* create a function that returns a ROI of the rectangle specified
- by top and bottom points
-*/ 
-void roiImage(std::string filename, Mat& image, Point from, Point to)
-{
-    /*store the roi into the given filename */
-    pointRearrange(from, to);
-    //std::cout << "image size is " << image.size() << std::endl;
-    imwrite(filename, image(Range(from.y, to.y), Range(from.x, to.x)));
-    return;
-}  
 
 
 // function to capture mouse events and trigger roiImage */
@@ -56,47 +47,118 @@ void mouseEvent(int action, int x, int y, int flags, void *userdata)
   {
       gValidMouseEvent = false;
       gFrom = Point(x,y);
-    // std::cout << "top " << gFrom << std::endl;
   }
   // Action to be taken when left mouse button is released
   else if( action == EVENT_LBUTTONUP)
   {
     gTo = Point(x,y);
-    // Mat *image = static_cast<Mat *>(userdata);
-    // std::string filename = "cropped-";
-    // filename += std::to_string(gTo.x) + "x" + std::to_string(gTo.y);
-    // filename += ".jpg";
-    // Mat dup = (*image).clone();
-    // // std::cout << "bottom " << gTo << std::endl;
-    // /* save the part of the image between top and bottom pooints */
-    // roiImage(filename, std::ref(*image), gFrom, gTo);
-    // rectangle(dup, Rect(gFrom, gTo), Scalar(255,0,0), 2, LINE_AA);
-    // imshow("Window", dup);
     gValidMouseEvent = true;
   }
 }
+/* the method to perform Chorma key */
+int chormakey(Mat &frontImage, Mat &backImage)
+{
+    Mat channels[3];
+    split(frontImage, channels);
+    static double prevColorThresholdvalue = 0.0;
+    
+    Mat backChannels[3];
+    split(backImage, backChannels);
+
+    Mat cloneImage = frontImage.clone();
+
+    /* smoothen the edges */
+    GaussianBlur(cloneImage, frontImage, Size(5,5), 1);
+
+    Mat colorMask = Mat(frontImage, Rect(gFrom, gTo));
+    /* get the value of the green channel, default set to 120 */
+    double colorThresholdValue = 125.0;
+    if(gValidMouseEvent == true)
+    {
+      colorThresholdValue =  mean(colorMask)(1);
+      colorThresholdValue *= gColorFactor;
+      colorThresholdValue /= gMaxColorValue;
+    }
+
+    if(colorThresholdValue != prevColorThresholdvalue)
+    {
+      prevColorThresholdvalue = colorThresholdValue;
+      //std::cout << "new threshold value " << colorThresholdValue << std::endl;
+    }
+
+    Mat maskG;
+    /* get the mask of asteroid */
+    threshold(channels[1], maskG, colorThresholdValue, 255, THRESH_BINARY_INV);
+    /*FIXME, the hack to remove the edge in the final chormatized image */
+    Mat temp;
+    Mat kernel = getStructuringElement(MORPH_RECT, Size(3,3));
+    morphologyEx(maskG,temp,MORPH_DILATE, kernel,Point(-1,-1), 5);
+    morphologyEx(temp,maskG, MORPH_ERODE, kernel,Point(-1,-1), 10);
+	
+	
+	  /* get the asteroids only */
+   	bitwise_and(channels[0], maskG, channels[0]);
+   	bitwise_and(channels[1], maskG, channels[1]);
+   	bitwise_and(channels[2], maskG, channels[2]);
+
+	  /* get the mask of green screen */
+	  bitwise_not(maskG, maskG);   
+
+   	bitwise_and(backChannels[0], maskG, backChannels[0]); 
+   	bitwise_and(backChannels[1], maskG, backChannels[1]); 
+  	bitwise_and(backChannels[2], maskG, backChannels[2]);
+
+	  /* get the remaining floavors in the asteroid of Blue and red channels */
+  	bitwise_or(backChannels[0], channels[0], backChannels[0]);
+	  bitwise_or(backChannels[1], channels[1], backChannels[1]);
+	  bitwise_or(backChannels[2], channels[2], backChannels[2]);
+	  merge(backChannels, 3, frontImage);
+   	return 0;
+}
+
+void TrackbarChangeHandler(int value, void *userdata)
+{
+	/* get the color factor */
+	gColorFactor = value;
+}
+
 
 
 int main()
 {
     VideoCapture cap("./greenscreen-asteroid.mp4");
     namedWindow("Window");
+    namedWindow("Green Patch");
     Mat frame, dup;
+    Mat backgroundImage = imread("./background.jpg", IMREAD_COLOR);
+
+    /*get the frame height and width to resize the image */
+    double width, height;
+
+    width = cap.get(CAP_PROP_FRAME_WIDTH);
+    height = cap.get(CAP_PROP_FRAME_HEIGHT);
+    Mat backImage;
+    resize(backgroundImage, backImage, Size_<double>(width, height));
+	  createTrackbar( "tolerance slider","Green Patch",&gColorFactor, gMaxColorValue, TrackbarChangeHandler, nullptr );
+
     
-    while(cap.isOpened() == true)
+    while(cap.isOpened() == true && backgroundImage.empty() == false)
     {
         cap >> frame;
         if(frame.empty() != true)
         {
             dup = frame.clone();
-            setMouseCallback("Window",mouseEvent, &dup);
+            chormakey(dup, backImage);
+            setMouseCallback("Green Patch",mouseEvent, &frame);
             if(gValidMouseEvent == true)
             {
-                rectangle(dup, Rect(gFrom, gTo), Scalar(255,0,0), 2, LINE_AA);
+                pointRearrange(gFrom, gTo);
+                rectangle(frame, Rect(gFrom, gTo), Scalar(255,0,0), 2, LINE_AA);
             }
             //Mat dup = image.clone();
             imshow("Window", dup);
-            /* for 30 fps, the wait should be 1000/30=30*/
+            imshow("Green Patch", frame);
+            /* for 30 fps, the wait should be 1000/30=~30*/
             waitKey(30);
         }else
         {
