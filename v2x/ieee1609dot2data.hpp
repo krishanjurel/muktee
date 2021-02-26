@@ -3,79 +3,71 @@
 
 #include "ieee1609dot2common.hpp"
 #include "ieee1609dot2cert.hpp"
+#include "ieee1609dot2.hpp"
 
-/* contains SPDU  data structures and definitions */ 
-
-/* 
-    All data type is represented in upper camel case, with no underscores.
-    All variables are declared in lower camel case, with no underscores.
-
-    The Data Type and variable names are kept, as much as possible, as described in IEEE 1609.2-2016 spec, unless the name is of generic type.
-
-*/
-/* defined 1609.3 */
-
-/* 6.3.9 */
-struct HeaderInfo
+namespace ctp
 {
-    int psid;
-};
-typedef struct HeaderInfo HeaderInfo;
 
-/* 6.3.7 */
-struct SignedDataPayload
-{
-    /* this is the data has to be sent */
-    OctetString data;
-    HashedData32 extDataHash;
-};
-typedef struct SignedDataPayload SignedDataPayload;
+    class Ieee1609Data
+    {
+        /* create an instance of encode object */
+        Ieee1609Encode *enc;
+        /* FIXME, create an instance of decode object */
+        //decode *decode;
 
-/*6.3.6 */
-struct ToBeSignedData
-{
-    SignedDataPayload signedDataPayload;
-    HeaderInfo headerInfo;
-    
-};
-typedef struct ToBeSignedData ToBeSignedData;
+        HashAlgorithmType *hashId;
+        ToBeSignedData *tbsData;
+        const SignerIdentifier *signer;
+        const Signature *signature;
+        TP_PTR tpPtr;
+        Ieee1609Cert *certMgrPtr;
+
+        public:
+            Ieee1609Data(){
+                enc = new Ieee1609Encode();
+                tpPtr = TP::instance_get();
+                /* get the certificate manager */
+                //certMgrPtr = tpPtr->cert_mgr();
+            }
+
+            ~Ieee1609Data()
+            {
+                delete enc;
+            }
+            /* a method that can be called on recieving signed data */
+            void process(const uint8_t *data,size_t len, ...)
+            {
+                /* this function handles the incoming data */
+            }
+
+            /* this routine, creates signed data payload
+            1. create Ieee1609Dot2Data structure, with payload SignedData
+            */
+            void sign(int psid, const uint8_t *tbsData, size_t len,
+                    uint8_t **signedData, size_t *signedDataLen);
+
+            /* encode the data*/
+            void encode();
+    };
 
 
-/*6.3.4 */
-struct SignedData
-{
-    HashAlgorithmType HashAlgorithm;
-    ToBeSignedData toBeSignedData;
-    SignerIdentifierType signerType;
-    SignerIdentifier signer;
-    SignatureType signatureType;
-    Signature signature;
-};
 
-/* 6.3.3 */
-typedef enum
-{
-    Ieee1609Dot2ContentUnsecuredData,
-    Ieee1609Dot2ContentSignedData,
-    Ieee1609Dot2ContentEncrData,
-    Ieee1609Dot2ContentSignedCertReq,
-}Ieee1609Dot2ContentType;
+}/* namespace ctp */
 
-union ieee1609Dot2Content
-{
-    OctetString unsecuredData;
-    SignedData signedData;
-    /* TBD: add the types of encrypted data and signed cert request */   
-};
-typedef union ieee1609Dot2Content Ieee1609Dot2Content;
 
-struct Ieee1609Dot2Data
-{
-    uint8_t protocolVersion;
-    Ieee1609Dot2ContentType contentType;
-    Ieee1609Dot2Content content;
-};
-typedef struct Ieee1609Dot2Data Ieee1609Dot2Data;
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 #endif //__IEEE_1609DOT2DATA_HPP__

@@ -4,3 +4,7 @@ build/CMakeFiles
 build/cmake_install.cmake
 build/Makefile
 build/v2x
+*.exe
+*.out
+*.cmake
+build

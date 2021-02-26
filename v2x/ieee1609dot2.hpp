@@ -5,8 +5,6 @@
 #include <memory>
 #include <vector>
 #include "ieee1609dot2common.hpp"
-#include "ieee1609dot2data.hpp"
-#include "ieee1609dot2cert.hpp"
 #include "libconfig.h++"
 #include "openssl/ec.h"
 #include "openssl/ecdsa.h"
@@ -55,8 +53,8 @@ namespace ctp
             void cert_mgr();
             void crl_mgr();
             void report_mgr();
-            SequenceOfCertificate certs;
-            Ieee1609Dot2Data data;
+            //SequenceOfCertificate certs;
+            //Ieee1609Dot2Data data;
             //libconfig::Config config;
             std::vector<int> psids;
             TP(); /* private constructor */

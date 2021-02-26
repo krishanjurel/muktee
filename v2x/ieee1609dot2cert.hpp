@@ -2,235 +2,99 @@
 #define __IEEE_1609DOT2CERT_HPP__
 #include <iostream>
 #include "ieee1609dot2common.hpp"
+#include "ieee1609dot2.hpp"
 #include "openssl/ec.h"
 #include "openssl/ecdsa.h"
 #include "openssl/obj_mac.h"
 #include <openssl/bn.h>
-
-#ifdef _cplusplus
-extern "C"
-{
-#endif
-
-typedef enum {
-    CertTypeExplicit,
-    CertTypeImplicit
-}CertType;
+#include <map>
+#include <vector>
 
 
-
-/* certifiicate issuer */
-/* 6.4.7 */
-
-typedef enum
-{
-    IssuerIdentifierTypeHashId,
-    IssuerIdentifierTypeSelf,
-}IssuerIdentifierType;
-
-typedef union 
-{
-    HashedId8 hashId;
-    HashAlgorithmType algo;
-}IssuerIdentifier;
-
-/* structure encpasulating the isuer identifier */
-typedef struct {
-    IssuerIdentifierType type;
-    IssuerIdentifier issuer;
-}Issuer;
-
-/* 6.4.13 */
-typedef struct 
-{
-    uint8_t length;
-    char *name;
-}HostName;
-
-/* 6.4.16 */
-typedef enum{
-    DurationTypeMicroSeconds,
-    DurationTypeMilliSeconds,
-    DurationTypeSeconds,
-    DurationTypeMinutes,
-    DurationTypeSixtyHours,
-    DurationTypeYears
-}DurationType;
-
-typedef struct 
-{
-    DurationType type;
-    union
-    {
-        uint16_t microSeconds;
-        uint16_t milliseconds;
-        uint16_t seconds;
-        uint16_t minutes;
-        uint16_t hours;
-        uint16_t sixtyHours;
-        uint16_t years;
-    }duration;
-#define DURATION_HOURS      duration.hours
-#define DURATION_MINUTES    duration.minutes
-}Duration;
-
-
-/* 6.4.14 */
-struct validityPeriod
-{
-    time_t start;
-    Duration duration;
-};
-typedef struct validityPeriod ValidityPeriod;
-
-/*6.4.10 */
-typedef struct linkageValue{uint8_t x[9];}LinkageValue;
-struct linkageData
-{
-    uint16_t iCert;
-    LinkageValue linkageValue;
-};
-typedef struct linkageData LinkageData;
-
-/* 6.4.9 */
-typedef enum
-{
-    CertificateIdTypeLinkageData,
-    CertificateIdTypeName,
-    CertificateIdTypeBinaryId,
-    CertificateIdTypeNone
-}CertificateIdType;
-
-union certificateId
-{
-    LinkageData linkageData;
-    HostName hostName;
-    OctetString binaryId;
-};
-typedef union certificateId CertId;
-
-
-typedef struct {
-    CertificateIdType type;
-    CertId id;
-}CertificateId;
-
-
-
-
-/* 6..4.36 */
-typedef enum
-{
-    PublicVerificationKeyTypEecdsaNistP256S,
-    PublicVerificationKeyTypeEcdsaBrainpoolP256r1
-}PublicVerificationKeyType;
-
-
-
-typedef struct 
-{
-    PublicVerificationKeyType type;
-
-    union {
-        EccP256CurvPoint ecdsaNistP256S;
-        EccP256CurvPoint ecdsaBrainpoolP256r1;
-    }key;
-}PublicVerificationKey;
-
-/*6.4.35 */
-typedef enum
-{
-    VerificationKeyIndicatorTypeKey, /* key , */
-    VerificationKeyIndicatorTypeRecValue /* reconstruction value */
-}VerificationKeyIndicatorType;
-
-typedef struct 
-{
-    VerificationKeyIndicatorType type;
-    union
-    {
-        PublicVerificationKey verificationKey;
-        EccP256CurvPoint recValue;
-    }indicator;
-}VerificationKeyIndicator;
-
-
-/*6.4.28 */
-struct PsidSsp
-{
-    int psid;
-    OctetString ssp;
-};
-typedef struct PsidSsp PsidSsp;
-
-struct SequenceOfPsidSsp
-{
-    int length;
-    PsidSsp psidSsp[0];
-};
-typedef struct SequenceOfPsidSsp SequenceOfPsidSsp;
-
-/* 6.4.8 */
-struct ToBeSignedCertificate
-{
-    CertificateId id;
-    HashedId3 cracaId;
-    uint16_t crlSeries;
-    Duration duration;
-    ValidityPeriod validityPeriod;
-    SequenceOfPsidSsp appPermisions;
-    VerificationKeyIndicator verifyKeyIndicator;
-};
-typedef struct ToBeSignedCertificate ToBeSignedCertificate;
-
-
-/* 6.4.3*/
-struct certificateBase
-{
-    uint8_t   version;
-    CertType   certType;
-    Issuer issuer;
-    ToBeSignedCertificate toBeSignedCertificate;
-    Signature signature;
-};
-typedef struct certificateBase CertificateBase;
-
-
-/*6.4.2*/
-struct SequenceOfCertificate
-{
-    int length;     /* number of certs */
-    CertificateBase certs[0];
-};
-typedef struct SequenceOfCertificate SequenceOfCertificate;
-
-
-/* 6.3.24 */
-typedef enum 
-{
-    SignerIdentifierTypeDigest,
-    SignerIdentifierTypeCert,
-    SignerIdentifierTypeSelf
-}SignerIdentifierType;
-
-union SignerIdentifier
-{
-    HashedId8 digest;
-    SequenceOfCertificate certificate;
-    int self;
-};
-typedef union SignerIdentifier SignerIdentifier;
-
-#ifdef _cplusplus
-}
-#endif
 
 namespace ctp
 {
+
+    class Ieee1609Encode
+    {
+        uint8_t *encBuf; /*encoded buffer */
+        size_t encLen;   /* encoded length */
+        size_t len_; /* another length to encode the individual components */
+        public:
+            Ieee1609Encode():encBuf(nullptr),encLen(0){};
+            ~Ieee1609Encode()
+            {
+                free(encBuf);
+                encLen = 0;
+            }
+            /* encoding of SignerIdentifier */
+            /* encode certificate identifier */
+            int CertId(const CertificateId& id);
+            /* encode crl series */
+            int CrlSeries(const uint16_t series);
+            /* encode hashid3 */
+            int HashId3(const uint8_t* hash, size_t len);
+            /* encode the signature */
+            int Sign(const Signature& signature);
+            /* encode validity period */
+            int VP(const ValidityPeriod& validityPeriod);
+            /* encode verfication key indicator */
+            int Vki(const VerificationKeyIndicator& vki);
+
+
+
+
+            /*encoding of signed data, 6.3.4 */
+            int HashAlgo(HashAlgorithmType type);
+            int ToBesignedData_(const ToBeSignedData& tbsData);
+            int SignerIdentifier_(const SignerIdentifier& signer);
+            int Signature_(const Signature *signature);
+
+            /* int encoded buffer get */
+            int get(uint8_t **buf);
+
+
+
+    };
+
+
+    class decode
+    {
+        uint8_t *buf; /*encoded buffer */
+        size_t len;   /* encoded length */
+        public:
+            decode():buf(nullptr),len(0){};
+            ~decode()
+            {
+                delete buf;
+                len = 0;
+            }
+            /* encode certificate identifier */
+            int CertId(const CertificateId& id);
+            /* encode crl series */
+            int CrlSeries(const uint16_t series);
+            /* encode hashid3 */
+            int HashId3(const uint8_t* hash, size_t len);
+            /* encode the signature */
+            int Signature(const Signature& signature);
+            /* encode validity period */
+            int ValidityPeriod(const validityPeriod& validityPeriod);
+            /* encode verfication key indicator */
+            int Vki(const VerificationKeyIndicator& vki);
+    };
+
+
+
     /* cert class */
-    class cert
+    class Ieee1609Cert
     {
         std::vector<CertificateBase *> certs;
+        std::map<int, ctp::Ieee1609Cert*> certsPsidMap;
+        std::map<std::string, ctp::Ieee1609Cert*> certsHashIdMap;
+
+        /* encode/decode objects*/
+
+        
         const EC_GROUP *ecGroup;
         EC_KEY *ecKey;
         uint8_t keyType;
@@ -243,9 +107,7 @@ namespace ctp
         SequenceOfCertificate *seqOfCert;
         int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_UNCOMPRESSED);
         int private_key_get();
-        //int sign (SignatureType type = ecdsaNistP256Signature);
-        int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
-        
+        int _sign(const uint8_t *buf, size_t len, SignatureType type);
         /* encode the certificate */
         uint8_t *encBuf, *encBuf1; 
         int encLen;
@@ -270,24 +132,21 @@ namespace ctp
             //void encode();
             //void decode();
 
-            explicit cert();
+            explicit Ieee1609Cert();
             /* no copy constructure */
-            cert(const cert&) = delete;
+            Ieee1609Cert(const Ieee1609Cert&) = delete;
             /* no copy assignment */
-            const cert& operator=(const cert&) = delete;
+            const Ieee1609Cert& operator=(const Ieee1609Cert&) = delete;
             /* no move constructor */
-            cert(const cert&&) = delete;
-            ~cert(){delete encBuf;}
+            Ieee1609Cert(const Ieee1609Cert&&) = delete;
+            ~Ieee1609Cert(){delete encBuf;}
+            /* returns the certificate for the given psid */
+            const Ieee1609Cert* operator[](int psid);
+            //int sign (SignatureType type = ecdsaNistP256Signature);
+            int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
+            const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
     };
 
 } /* namespace ctp */
-
-
-
-
-
-
-
-
 
 #endif // __IEEE_1609DOT2CERT_HPP__

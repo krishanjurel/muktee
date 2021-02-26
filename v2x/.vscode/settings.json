@@ -3,6 +3,7 @@
         "bit": "cpp",
         "fstream": "cpp",
         "iosfwd": "cpp",
-        "sstream": "cpp"
+        "sstream": "cpp",
+        "type_traits": "cpp"
     }
 }

@@ -1,6 +1,6 @@
 /* this is the file that will do the key generataion, cert parsing, data signing and sign verification
 */
-#include "ieee1609dot2.hpp"
+
 #include <signal.h> /* for signal */
 #include "openssl/ec.h"
 #include "openssl/ecdsa.h"
@@ -27,6 +27,12 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+
+#include "ieee1609dot2common.hpp"
+#include "ieee1609dot2.hpp"
+#include "ieee1609dot2cert.hpp"
+#include "ieee1609dot2data.hpp"
+
 
 typedef struct 
 {
@@ -93,12 +99,6 @@ void ec_key_oct_read(const char *path, uint8_t **key, size_t *len)
     log_info(strBuf.str().c_str(), 1);
     ifs.close();
 }
-
-
-
-
-
-
 
 
 
@@ -234,9 +234,6 @@ namespace ctp
     TP::TP()
     {
         psids.clear();
-        /* default length */
-        certs.length = 1; 
-        data.contentType = Ieee1609Dot2ContentSignedData;
         libconfig::Config config;
         {
             FILE *fp = fopen("./config.file", "r");
@@ -483,14 +480,14 @@ int main()
     shm_unlink(sync_file);
     munmap(addr, sizeof(sem_t));
 #endif
-ctp::cert *pcert = new ctp::cert();
-pcert->create();
+    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
+    pcert->create();
     while(0)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::abort();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    delete pcert;
+    //delete pcert;
     return 0;
 }

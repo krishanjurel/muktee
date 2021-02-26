@@ -4,7 +4,7 @@ set(TARGET v2x)
 PROJECT(${TARGET})
 SET(CMAKE_CXX_STANDARD 11)
 
-add_executable(${TARGET}  ieee1609dot2.cpp ieee1609dot2cert.cpp)
+add_executable(${TARGET}  ieee1609dot2.cpp ieee1609dot2cert.cpp ieee1609dot2encdec.cpp ieee1609dot2data.cpp)
 add_compile_options(-Wall2344 -O3 -fpermissive)
 target_include_directories(${TARGET} PUBLIC ${pwd})
 target_include_directories(${TARGET} PUBLIC /usr/include)

@@ -1,4 +1,5 @@
 #include "ieee1609dot2.hpp"
+#include "ieee1609dot2cert.hpp"
 #include <stdio.h>
 #include <string.h>
 #include <algorithm>
@@ -113,10 +114,12 @@ namespace ctp
 /* cert class implementation.
    the main purpose of this class is to store and keep certs, together with hashid 
 */
-    cert::cert()
+    Ieee1609Cert::Ieee1609Cert()
     {
         /* no certs */
         certs.clear();
+        certsPsidMap.clear();
+        certsHashIdMap.clear();
         ecKey = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
         if (ecKey == nullptr)
         {
@@ -141,6 +144,8 @@ namespace ctp
         base = (CertificateBase *)((uint8_t *)seqOfCert + sizeof(int));
         /* add the cert into the queue */
         certs.push_back(base);
+        /*FIXed psid */
+        certsPsidMap.operator[](0x20) = this;
         issuer = &base->issuer;
         tbs = &base->toBeSignedCertificate;
         vki = &tbs->verifyKeyIndicator;
@@ -148,8 +153,24 @@ namespace ctp
         signature = &base->signature;
     }
 
+    int Ieee1609Cert::sign(const uint8_t *buf, size_t len, SignatureType type)
+    {
+        return _sign(buf, len, type);
+    }
+
+    const Signature* Ieee1609Cert::signEx(const uint8_t *buf, size_t len, SignatureType type)
+    {
+        int ret = _sign(buf, len, type);
+        if(ret == 1)
+        {
+            return signature;
+        }else{
+            return nullptr;
+        }
+    }
+
     /* sign the certificate */
-    int cert::sign(const uint8_t *buf, size_t len, SignatureType type)
+    int Ieee1609Cert::_sign(const uint8_t *buf, size_t len, SignatureType type)
     {
         int ret = 0;
         const BIGNUM *r;
@@ -176,11 +197,13 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
-
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
+        r = ECDSA_SIG_get0_r(sig);
+        s = ECDSA_SIG_get0_s(sig);
+#else
         r = sig->r;
         s = sig->s;
-        // r = ECDSA_SIG_get0_r(sig);
-        // s = ECDSA_SIG_get0_s(sig);
+#endif        
         //EC_POINT *point = EC_POINT_new(grp);
 
         // if(EC_POINT_bn2point(grp, r, point, nullptr) != point)
@@ -226,7 +249,7 @@ namespace ctp
     }
 
     /*        */
-    int cert::encode_certid()
+    int Ieee1609Cert::encode_certid()
     {
         int len = 1;
         uint8_t choice = 0x80 | (uint8_t)(tbs->id.type);
@@ -263,7 +286,7 @@ namespace ctp
         return encLen;
     }
 
-    int cert::encode_hashid3()
+    int Ieee1609Cert::encode_hashid3()
     {
         int len = encLen + 3;
         /* just fill it with the hard coded a,b,c */
@@ -278,7 +301,7 @@ namespace ctp
         return encLen;
     }
 
-    int cert::encode_crlseries()
+    int Ieee1609Cert::encode_crlseries()
     {
         /* its two bytes */
         int len = encLen + 2;
@@ -292,7 +315,7 @@ namespace ctp
         return encLen;
     }
 
-    int cert::encode_validityperiod()
+    int Ieee1609Cert::encode_validityperiod()
     {
         /* validity period consists of start time of 4 bytes */
         int len = 4;
@@ -332,7 +355,7 @@ namespace ctp
         return encLen;
     }
     /* this is encoding the sequence of psids */
-    int cert::encode_sequenceofpsid()
+    int Ieee1609Cert::encode_sequenceofpsid()
     {
         /* FIXME, only one psid with no ssp */
         /* length octet is one */
@@ -373,7 +396,7 @@ namespace ctp
     }
 
     /* encode the verification key identifier */
-    int cert::encode_vki()
+    int Ieee1609Cert::encode_vki()
     {
         /* for hashing purposes, all the ecc points of toBeSigned data structure
            are used in the compressed form, i.e. compressed-[y0,y1]
@@ -418,7 +441,7 @@ namespace ctp
         return encLen;
     }
 
-    int cert::encode_sign()
+    int Ieee1609Cert::encode_sign()
     {
         int len = 1; /* for signature choice */
         uint8_t choice = (0x80) | (signature->type);
@@ -491,7 +514,7 @@ namespace ctp
 
 
     /* encode the toBeSigned field of the explicit certicate*/
-    int cert:: encode()
+    int Ieee1609Cert:: encode()
     {
         /* reset the encoded buffer and length */
         encBuf = nullptr;
@@ -505,20 +528,21 @@ namespace ctp
             encode_sequenceofpsid();
             encode_vki();
         }
-        catch(const std::exception& e)
-        {
-            std::cout << e.what() << '\n';
-        }
         catch (std::logic_error& e)
         {
             std::cout << e.what() << '\n';
 
         }
+        catch(const std::exception& e)
+        {
+            std::cout << e.what() << '\n';
+        }
+        
         return 0;
     }
 
     /* print the certificate into the file */
-    int cert::print()
+    int Ieee1609Cert::print()
     {
         int i = 0;
         log_info("cert::print", 1);
@@ -551,7 +575,7 @@ namespace ctp
 
 
     /* gets the public key from the key object */
-    int cert::public_key_get(point_conversion_form_t conv)
+    int Ieee1609Cert::public_key_get(point_conversion_form_t conv)
     {
         int i = 0;
         uint8_t *keyBuf = nullptr;
@@ -612,7 +636,7 @@ namespace ctp
     }
 
     /* create a certificate */
-    void cert::create()
+    void Ieee1609Cert::create()
     {   
         /* one cert */
         seqOfCert->length = 1;
@@ -645,6 +669,13 @@ namespace ctp
         encode_sign();
         print();
     }
+
+    const Ieee1609Cert* Ieee1609Cert::operator[](int psid)
+    {
+        /* return the certificate for the given psid */
+        return certsPsidMap[psid];
+    }
+
 } //namespace ctp
 
 
