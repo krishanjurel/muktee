@@ -481,7 +481,12 @@ int main()
     munmap(addr, sizeof(sem_t));
 #endif
     ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
+    uint8_t *encBuf = nullptr;
+    size_t encLen = 0;
     pcert->create();
+    encLen = pcert->encode(&encBuf);
+    std::cout << "encoded buffer length " << encLen << std::endl;
+    pcert->print();
     while(0)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));

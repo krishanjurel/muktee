@@ -18,6 +18,10 @@ extern void *buf_calloc(size_t num, size_t size);
 
 
 
+#ifdef __cpluplus
+extern "C"
+{
+#endif
 /* 
     All data type is represented in upper camel case, with no underscores.
     All variables are declared in lower camel case, with no underscores.
@@ -32,7 +36,7 @@ extern void *buf_calloc(size_t num, size_t size);
 typedef struct 
 {
     uint8_t length;
-    uint8_t octets[0];
+    uint8_t *octets;
 }OctetString;
 
 
@@ -109,10 +113,6 @@ struct Signature
 typedef struct Signature Signature;
 
 
-
-
-
-
 /* certificate definitions */
 
 
@@ -132,17 +132,16 @@ typedef enum
     IssuerIdentifierTypeSelf,
 }IssuerIdentifierType;
 
-typedef union 
+struct IssuerIdentifier
 {
-    HashedId8 hashId;
-    HashAlgorithmType algo;
-}IssuerIdentifier;
-
-/* structure encpasulating the isuer identifier */
-typedef struct {
     IssuerIdentifierType type;
-    IssuerIdentifier issuer;
-}Issuer;
+    union 
+    {
+        HashedId8 hashId;
+        HashAlgorithmType algo;
+    }issuer;
+};
+typedef struct IssuerIdentifier IssuerIdentifier;
 
 /* 6.4.13 */
 typedef struct 
@@ -234,7 +233,6 @@ typedef enum
 typedef struct 
 {
     PublicVerificationKeyType type;
-
     union {
         EccP256CurvPoint ecdsaNistP256S;
         EccP256CurvPoint ecdsaBrainpoolP256r1;
@@ -270,13 +268,28 @@ typedef struct PsidSsp PsidSsp;
 struct SequenceOfPsidSsp
 {
     int length;
-    PsidSsp psidSsp[0];
+    PsidSsp *psidSsp;
 };
 typedef struct SequenceOfPsidSsp SequenceOfPsidSsp;
+
+#define TBS_OPTIONAL(_x_) TbsOptional ## _x_
+
+
+typedef enum
+{
+    TBS_OPTIONAL(Region),
+    TBS_OPTIONAL(AssuranceLevel),
+    TBS_OPTIONAL(AppPerm),
+    TBS_OPTIONAL(CertIssuePerm),
+    TBS_OPTIONAL(CertReqPerm),
+    TBS_OPTIONAL(CanReqRoll),
+    TBS_OPTIONAL(EncKey)
+}TbsOptionalComponnets;
 
 /* 6.4.8 */
 struct ToBeSignedCertificate
 {
+    uint8_t optionsComps;
     CertificateId id;
     HashedId3 cracaId;
     uint16_t crlSeries;
@@ -293,7 +306,7 @@ struct certificateBase
 {
     uint8_t   version;
     CertType   certType;
-    Issuer issuer;
+    IssuerIdentifier issuer;
     ToBeSignedCertificate toBeSignedCertificate;
     Signature signature;
 };
@@ -304,7 +317,7 @@ typedef struct certificateBase CertificateBase;
 struct SequenceOfCertificate
 {
     int length;     /* number of certs */
-    CertificateBase certs[0];
+    CertificateBase *certs; /* take a hit of 4 bytes */
 };
 typedef struct SequenceOfCertificate SequenceOfCertificate;
 
@@ -317,20 +330,19 @@ typedef enum
     SignerIdentifierTypeSelf
 }SignerIdentifierType;
 
-union SignerIdentifier
+struct SignerIdentifier
 {
-    HashedId8 digest;
-    SequenceOfCertificate certificate;
-    int self;
+    SignerIdentifierType type;
+    union
+    {
+        HashedId8 digest;
+        SequenceOfCertificate certificate;
+        char self[0];
+    }signer;
 };
-typedef union SignerIdentifier SignerIdentifier;
-
-
-
+typedef struct SignerIdentifier SignerIdentifier;
 
 /* data content related definitions */
-
-
 
 
 /* contains SPDU  data structures and definitions */ 
@@ -342,12 +354,16 @@ typedef union SignerIdentifier SignerIdentifier;
     The Data Type and variable names are kept, as much as possible, as described in IEEE 1609.2-2016 spec, unless the name is of generic type.
 
 */
-/* defined 1609.3 */
+
+struct Ieee1609Dot2Data; /* forward declaration */
+typedef struct Ieee1609Dot2Data Ieee1609Dot2Data;
 
 /* 6.3.9 */
 struct HeaderInfo
 {
     int psid;
+    uint64_t genTime;
+    uint64_t expTime;
 };
 typedef struct HeaderInfo HeaderInfo;
 
@@ -355,15 +371,15 @@ typedef struct HeaderInfo HeaderInfo;
 struct SignedDataPayload
 {
     /* this is the data has to be sent */
-    OctetString data;
-    HashedData32 extDataHash;
+    Ieee1609Dot2Data *data;
+    HashedData32 *extDataHash;
 };
 typedef struct SignedDataPayload SignedDataPayload;
 
 /*6.3.6 */
 struct ToBeSignedData
 {
-    SignedDataPayload signedDataPayload;
+    SignedDataPayload payload;
     HeaderInfo headerInfo;
     
 };
@@ -392,19 +408,25 @@ typedef enum
 
 union ieee1609Dot2Content
 {
+    Ieee1609Dot2ContentType type;
     OctetString unsecuredData;
     SignedData signedData;
     /* TBD: add the types of encrypted data and signed cert request */   
 };
 typedef union ieee1609Dot2Content Ieee1609Dot2Content;
 
+/* 6.3.2 */
 struct Ieee1609Dot2Data
 {
     uint8_t protocolVersion;
-    Ieee1609Dot2ContentType contentType;
     Ieee1609Dot2Content content;
 };
-typedef struct Ieee1609Dot2Data Ieee1609Dot2Data;
+//typedef struct ieee1609Dot2Data Ieee1609Dot2Data;
+
+
+#ifdef _cplusplus
+}
+#endif
 
 
 

@@ -21,11 +21,22 @@ namespace ctp
         const Signature *signature;
         TP_PTR tpPtr;
         Ieee1609Cert *certMgrPtr;
+        /* signer for this data */
+        Ieee1609Cert *cert; 
 
+        /* data member */
+        Ieee1609Dot2Data *data;
+
+
+
+        
         public:
             Ieee1609Data(){
                 enc = new Ieee1609Encode();
                 tpPtr = TP::instance_get();
+                data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+                data->protocolVersion = 0x03;
+
                 /* get the certificate manager */
                 //certMgrPtr = tpPtr->cert_mgr();
             }
@@ -48,6 +59,8 @@ namespace ctp
 
             /* encode the data*/
             void encode();
+            int encode_tbsdata();
+            int encode_signeddata();
     };
 
 

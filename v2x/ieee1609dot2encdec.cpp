@@ -9,51 +9,175 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <string>
+
+#define MODULE 1
 
 
 namespace ctp
 {
 
+
+    int Ieee1609Encode::clear()
+    {
+        /* clear whatever was in the encoded buffer */
+        if(encBuf)
+        {
+            free(encBuf);
+            encBuf = nullptr;
+        }
+        encLen = 0;
+        return encLen; 
+    }
+
     /* encode certificate identifier */
     int Ieee1609Encode::CertId(const CertificateId& id)
     {
-        return 0;
+        int len_ = 1;
+        uint8_t choice = 0x80 | (uint8_t)(id.type);
+        uint8_t *buf;
+
+        switch(id.type)
+        {
+            case CertificateIdTypeName:
+                len_ += id.id.hostName.length;
+                buf = (uint8_t *)id.id.hostName.name;
+                len_ += 1;
+                break;
+            default:
+                LOG_ERR("Ieee1609Encode::CertId: unsupported cert id", 1);
+                break;
+        }
+
+        std::cout << "Ieee1609Encode::CertId enter " << encLen << std::endl;
+
+        encBuf = (uint8_t *)buf_realloc(encBuf, len_);
+        encBuf[encLen++] = choice;
+        len_ --;
+        /* encode the length */
+        encBuf[encLen++] = id.id.hostName.length;
+        len_ --;
+        /* copy the remainder of buffer into the encoded buffer */
+        while(len_ > 0)
+        {
+            encBuf[encLen++] = *buf++;
+            len_--;
+        }
+        std::cout << "Ieee1609Encode::CertId Exit " << encLen << std::endl;
+        /* return the length */
+        return encLen;
     }
     /* encode crl series */
     int Ieee1609Encode::CrlSeries(const uint16_t series)
     {
          /* its two bytes */
         int len = encLen + 2;
-        encBuf = (uint8_t *)realloc(encBuf, len);
+         std::cout << "Ieee1609Encode::CrlSeries enter " << encLen << " " << len << std::endl;
+        encBuf = (uint8_t *)buf_realloc(encBuf, len);
 
         uint8_t *buf = (uint8_t *)&series;
         /* copy in the network byte order */
         encBuf[encLen++] = buf[1];
         encBuf[encLen++] = *buf;
-        std::cout << "Ieee1609Encode::CrlSeries " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::CrlSeries exit " << encLen << std::endl;
         return encLen;
     }
     /* encode hashid3 */
     int Ieee1609Encode::HashId3(const uint8_t* hash, size_t len)
     {
-        len_ = encLen + 3;
+        std::cout << "Ieee1609Encode::HashId3 eenter " << encLen << std::endl;
         /* just fill it with the hard coded a,b,c */
-        encBuf = (uint8_t *)realloc(encBuf, len);
+        encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+
         {
             encBuf[encLen++] = *hash++;
             encBuf[encLen++] = *hash++;
             encBuf[encLen++] = *hash++;
         }
-        std::cout << "Ieee1609Encode::HashId3 " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::HashId3 exit" << encLen << std::endl;
         return encLen;
         return 0;
     }
-    /* encode the signature */
-    int Ieee1609Encode::Sign(const Signature& signature)
+    int Ieee1609Encode::Octets_(const uint8_t* octets, size_t len)
     {
-        return 0;
+        std::cout << "Ieee1609Encode::HashId3: enter  " << encLen << std::endl;
+        len += encLen;
+        encBuf = (uint8_t *)buf_realloc(encBuf, len);
+        while(len--)
+        {
+            encBuf[encLen++] = *octets++;
+        }
+
+        std::cout << "Ieee1609Encode::HashId3: exit  " << encLen << std::endl;
+        return encLen;
+    }
+
+    int Ieee1609Encode::IssuerIdentifier_(const IssuerIdentifier& issuer)
+    {
+        std::cout << "Ieee1609Encode::IssuerIdentifier_: enter  " << encLen << std::endl;
+        int len = 1; /* choice */
+        if(issuer.type == IssuerIdentifierTypeHashId)
+        {
+            len += 8;
+        }
+        encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+        encBuf[encLen++] = (uint8_t)((0x80) | issuer.type);
+        len --;
+
+        for(int i = 0; i < len; i++)
+        {
+            encBuf[encLen++] = issuer.issuer.hashId.x[i];
+            len --;
+        }
+        std::cout << "Ieee1609Encode::IssuerIdentifier_: exit  " << encLen << std::endl;
+        return encLen;
 
     }
+
+    int Ieee1609Encode::SequenceOfPsid_(const SequenceOfPsidSsp& psid)
+    {
+
+        /* FIXME, only one psid with no ssp */
+        /* length octet is one */
+        int len = 1;
+        /* there is only 1 sequence */
+        len += 1;
+        /* need one byte to encode sequence */
+        len += 1;
+        /* 1 byte for psid length encoding and 1 bytes for bsm psid (0x20) */
+        len += 2;
+
+        //len += encLen;
+
+        encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
+        if(encBuf == nullptr)
+        {
+            throw std::bad_alloc();
+        }
+
+        std::cout << "Ieee1609Encode::SequenceOfPsid_: enter  " << encLen << std::endl;
+
+        /* encode number of sequences */
+        encBuf[encLen++] = 1; /* number of bytes to represent one sequence, 1 */
+        len -= 1;
+        encBuf[encLen++] = 1; /* number of sequences */
+        len -= 1;
+        encBuf[encLen++]  = 0x00; /* sequence with no optional ssp */
+        len -= 1;
+        encBuf[encLen++] = 1; /* number of bytes in the psid */
+        len -= 1;
+        encBuf[encLen++] = psid.psidSsp->psid;
+        len -= 1;
+         if (len != 0)
+         {
+             LOG_ERR("Ieee1609Encode::SequenceOfPsid_: rem length not zero", 1);
+             throw new std::logic_error("cert::encode_sequenceofpsid(): rem length not zero ");
+         }
+         std::cout << "Ieee1609Encode::SequenceOfPsid_: exit  " << encLen << std::endl;
+         return encLen;
+    }
+
     /* encode validity period */
     int Ieee1609Encode::VP(const ValidityPeriod& validityPeriod)
     {
@@ -64,11 +188,10 @@ namespace ctp
         /* and two bytes of duration */
         len += 2;
 
-        /* update the length */
-        len += encLen; 
+       std::cout << "Ieee1609Encode::VP enter " << encLen << std::endl;
 
         /* allocate the buffer for duration*/
-        encBuf = (uint8_t *)realloc(encBuf, len);
+        encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         if(encBuf == nullptr)
         {
             throw std::bad_alloc();
@@ -91,7 +214,7 @@ namespace ctp
         encBuf[encLen++] = buf[1];
         encBuf[encLen++] = buf[0]; 
         len -= 2;
-        std::cout << "Ieee1609Encode::VP " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::VP exit " << encLen << std::endl;
         return encLen;
     }
     /* encode verfication key indicator */
@@ -114,6 +237,8 @@ namespace ctp
         /* update the total encoding length */
         //len += encLen;
 
+        std::cout << "Ieee1609Encode::Vki enter " << encLen << std::endl;
+
         /* reallocate the buffer */
         encBuf = (uint8_t *)buf_realloc(encBuf, (len + encLen));
         uint8_t choice = 0x80 | (uint8_t) (vki.type);
@@ -135,16 +260,29 @@ namespace ctp
             len -= 1;
         }
 
-        std::cout << "Ieee1609Encode::Vki " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::Vki exit " << encLen << std::endl;
 
         return encLen;
 
+    }
+
+    /* encode the 1609Dot2 contents */
+    int Ieee1609Encode::Ieee1609Dot2ContentType_(const Ieee1609Dot2ContentType type)
+    {
+        int len = 1; /* choice */
+        std::cout << "Ieee1609Encode::Ieee1609Dot2ContentType_ enter " << encLen << std::endl;
+        encBuf = (uint8_t *)buf_realloc(encBuf, (encLen +  len));
+        encBuf[encLen++] = (uint8_t)((0x80) | type);
+        len--;
+        std::cout << "Ieee1609Encode::Ieee1609Dot2ContentType_ exit " << encLen << std::endl;
+        return encLen;
     }
 
     int Ieee1609Encode::Signature_(const Signature *signature)
     {
         int len = 1; /* for signature choice */
         uint8_t choice = (0x80) | (signature->type);
+        std::cout << "Ieee1609Encode::Signature_ enter " << encLen << std::endl;
         len += 1; /* choice of curve point type */
 
         len += 64; /* 64 maximum buffer for curve point, r of the signature */
@@ -155,8 +293,8 @@ namespace ctp
             encBuf = (uint8_t*)buf_realloc(encBuf, (encLen +  len));
         }catch (const std::bad_alloc& e)
         {
-            LOG_ERR("cert::encode_sig::buf_realloc error allocation buffer ", 1);
-            throw new std::runtime_error("cert::encode_sig::buf_realloc error allocation buffer ");
+            LOG_ERR("Ieee1609Encode::Signature_::buf_realloc error allocation buffer ", 1);
+            throw new std::runtime_error("Ieee1609Encode::Signature_::buf_realloc error allocation buffer ");
         }
 
         /* start encoding */
@@ -205,27 +343,147 @@ namespace ctp
             pointLen--;
             len --;
         }
-        //static_assert((len >= 0));
-        log_info("cert::encode_sig", 1);
-        std::cout << "cert::encode_sig remaining length (exp >= 0) "  << len << std::endl;
-        std::cout << "cert::encode_sig encoded lenght (exp >= 0) "  << encLen << std::endl;
+        std::stringbuf log_("Ieee1609Encode::Signature_", std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << "Ieee1609Encode::Signature_ remaining length (exp >= 0) "  << len << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        std::cout << "Ieee1609Encode::Signature_ exit " << encLen << std::endl;
         return encLen;
 
     }
 
-    int Ieee1609Encode::SignerIdentifier_(const SignerIdentifier& signer)
+    int Ieee1609Encode::SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type)
     {
-        return 0;
+        int len = 1; /* choice */
+        uint8_t *buf = nullptr;
+        size_t bufLen = 0;
+        std::cout << "Ieee1609Encode::SignerIdentifier_ enter " << encLen << std::endl;
+        if(type != SignerIdentifierTypeSelf)
+        {
+            /* encode the signer, i.e. the certificate */
+            bufLen = signer.encode(&buf);
+        }
+
+        if(bufLen != 0)
+        {
+            len += bufLen;
+        }
+
+        encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+        encBuf[encLen++] = (uint8_t)((0x80) | type);
+        len --;
+        while(len)
+        {
+            encBuf[encLen++] = *buf++;
+            len --;
+        }
+        std::cout << "Ieee1609Encode::SignerIdentifier_ exit " << encLen << std::endl;
+        return encLen;
+    }
+
+    int Ieee1609Encode::OctectsFixed(const uint8_t *octets, size_t len)
+    {
+        std::cout << "Ieee1609Encode::OctectsFixed enter " << encLen << std::endl;
+        encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
+        while(len)
+        {
+            encBuf[encLen++] = *octets++;
+            len--;
+        }
+        std::cout << "Ieee1609Encode::OctectsFixed exit " << encLen << std::endl;
+        return encLen;
+    }
+
+    int Ieee1609Encode::psid_(int psid, int bytes)
+    {
+        int len = 1 +  bytes; /* number of bytes */
+        std::cout << "Ieee1609Encode::psid_ enter " << encLen << std::endl;
+        encBuf = (uint8_t *)buf_realloc(encBuf, (encLen + len));
+        uint8_t *buf = (uint8_t *)&psid;
+        encBuf[encLen++] = bytes;
+        len --;
+        while(len)
+        {
+            encBuf[encLen++] = *buf++;
+            len --;
+        }
+        std::cout << "Ieee1609Encode::psid_ exit " << encLen << std::endl;
+        return encLen;
     }
 
     int Ieee1609Encode::HashAlgo(const HashAlgorithmType type)
     {
+        int len = 1;
+        std::cout << " Ieee1609Encode::HashAlgo enter " << encLen << std::endl;
+        encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+        /* just encode the hash algo type */
+        encBuf[encLen++] = type;
+        std::cout << " Ieee1609Encode::HashAlgo exit " << encLen << std::endl;
         return 0;
     }
 
+    int Ieee1609Encode::HeaderInfo_(const HeaderInfo& header)
+    {
+        /*FIXME, just psid only */
+        int len  = 1; /* preamble */
+        uint8_t preamble = 0x00;
+        std::cout << " Ieee1609Encode::HeaderInfo_ enter " << encLen << std::endl;
+        encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
+        encBuf[encLen++] = preamble;
+        len --;
+        len =  psid_(header.psid);
+        std::cout << " Ieee1609Encode::HeaderInfo_ exit " << encLen << std::endl;
+        return encLen;
+    }
+
+    int Ieee1609Encode::SignedDataPayload_(const Ieee1609Dot2Data& data)
+    {
+        /* default option is one */
+        /* the sequence preamble byte 00 */
+        uint8_t preamble = 0x40; /* only first optional compoent */
+        int len = 1;
+        /* encoding of Ieee1609Dot2Data, 6.3.2 */
+        len += 1; /* for the protcol version */
+        len += 1; /* for choice opaque */
+        len += data.content.unsecuredData.length;
+
+        encBuf = (uint8_t *)buf_realloc(encBuf, (encLen + len));
+
+
+        /* preamble for signed Data payload option */
+        encBuf[encLen++] = preamble;
+        len--;
+        /* protocol version */
+        encBuf[encLen++] = data.protocolVersion; 
+        len --;
+        /* the choice for opaque data */
+        encBuf[encLen++] = (uint8_t)((0x80) | (data.content.type));
+        len --;
+        /* copy the data */
+        uint8_t *dataBuf = data.content.unsecuredData.octets;
+        while(len)
+        {
+            encBuf[encLen++] = *dataBuf++;
+            len--;
+        }
+
+        std::string _log("Ieee1609Encode::SignedDataPayload_  rem length(exp) ");
+        _log.append(std::to_string(len));
+        log_info(_log, MODULE);
+        return encLen;
+
+    }
+    
 
     int Ieee1609Encode::ToBesignedData_(const ToBeSignedData& tbsData)
     {
+        /* to be signd data is composed of
+         1. sigend payload, and 
+         2. header info
+        */
+       SignedDataPayload_(std::ref(*tbsData.payload.data));
+       HeaderInfo_(tbsData.headerInfo);
         return 0;
     }
 

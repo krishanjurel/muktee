@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 
 
 #ifdef __cplusplus
@@ -16,16 +17,16 @@ extern "C"
 */         
 time_t start_time(struct tm *tm)
 {
-    struct tm epoch;
-    // struct tm epoch = {
-    //     .tm_sec = 0,
-    //     .tm_min=0,
-    //     .tm_hour = 0,
-    //     .tm_mday=1,
-    //     .tm_mon = 0,
-    //     .tm_year = 2004,
-    //     .tm_isdst = 0
-    // };
+    // struct tm epoch;
+    struct tm epoch = {
+        .tm_sec = 0,
+        .tm_min=0,
+        .tm_hour = 0,
+        .tm_mday=1,
+        .tm_mon = 0,
+        .tm_year = 2004,
+        .tm_isdst = 0
+    };
     time_t t1 = mktime(&epoch);
     time_t t2 = mktime(tm);
 
@@ -45,6 +46,7 @@ void *buf_alloc(size_t len)
 }
 void *buf_realloc(void *ptr, size_t len)
 {
+    std::cout << "buf_realloc " << len << std::endl;
     return realloc(ptr, len);
 }
 
@@ -116,10 +118,12 @@ namespace ctp
 */
     Ieee1609Cert::Ieee1609Cert()
     {
+        /* create the instance of the encode onject */
+        pEncObj = new Ieee1609Encode();
         /* no certs */
-        certs.clear();
-        certsPsidMap.clear();
-        certsHashIdMap.clear();
+        // certs.clear();
+        // certsPsidMap.clear();
+        // certsHashIdMap.clear();
         ecKey = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
         if (ecKey == nullptr)
         {
@@ -143,14 +147,32 @@ namespace ctp
         /* initialize all the pointers */
         base = (CertificateBase *)((uint8_t *)seqOfCert + sizeof(int));
         /* add the cert into the queue */
-        certs.push_back(base);
-        /*FIXed psid */
-        certsPsidMap.operator[](0x20) = this;
+        // certs.push_back(base);
+        // /*FIXed psid */
+        // certsPsidMap.operator[](0x20) = this;
         issuer = &base->issuer;
         tbs = &base->toBeSignedCertificate;
         vki = &tbs->verifyKeyIndicator;
         /*pointer to the signature structure*/
         signature = &base->signature;
+        /* allocate the buffer of single psid with no ssp */
+        psidSsp = &tbs->appPermisions;
+        /* psid psidssp only contains the psid , with no ssp */
+        psidSsp->psidSsp = (PsidSsp *)buf_alloc(sizeof(PsidSsp));
+        /* there is only item in this sequence */
+        psidSsp->length = 1;
+        /* FIXME, hardcoded psid, BSM */
+        psidSsp->psidSsp->psid = 0x20;
+        /* no ssp */
+        psidSsp->psidSsp->ssp.length = 0;
+        /* default, self-signed */
+        issuer->type = IssuerIdentifierTypeSelf;
+
+    }
+
+    const SequenceOfPsidSsp& Ieee1609Cert::psid_get() const
+    {
+        return std::ref(*psidSsp);
     }
 
     int Ieee1609Cert::sign(const uint8_t *buf, size_t len, SignatureType type)
@@ -238,16 +260,13 @@ namespace ctp
             goto done;
         }
         done:
-            if(ret ==  -1)
-            {
-                /* do cleanup during error */
-                if(sig)
-                    ECDSA_SIG_free(sig);
-                sig = nullptr;
-            }
+            /* do cleanup during error */
+            if(sig)
+                ECDSA_SIG_free(sig);
+            sig = nullptr;
         return ret;
     }
-
+#if 0
     /*        */
     int Ieee1609Cert::encode_certid()
     {
@@ -511,22 +530,75 @@ namespace ctp
         std::cout << "cert::encode_sig encoded lenght (exp >= 0) "  << encLen << std::endl;
         return encLen;
     }
+#endif    
+
+    int Ieee1609Cert::encode(uint8_t **buf)
+    {
+        /* clear whatever was there */
+        pEncObj->clear();
+        EncodeCertBase(true);
+        /* only encode the signature if it is of type explicit */
+        if(base->certType == CertTypeExplicit &&  signature != nullptr)
+            pEncObj->Signature_(signature);
+        encLen = pEncObj->get(buf);
+        return encLen;
+    }
+
+    /* the flag to control , whether to clear the memory or continue encoding */
+    int Ieee1609Cert::EncodeToBeSigned(bool cont)
+    {
+        /* we are only using sequence of psids optional componets */
+        uint8_t preample = 0x10; /* appPermissions are 3 optional components */
+        try
+        {
+            /* if this is not continuous encoding, i.e. only tobesigned to be encoded */
+            if(cont == false)
+            {
+                /* clear the buffer */
+                pEncObj->clear();
+            }
+            /* preamble */
+            pEncObj->OctectsFixed(&preample, 1);
+            /* cert if */
+            pEncObj->CertId(tbs->id);
+            /* hashid3 */
+            const uint8_t hashId[] = {0,0,0};
+            pEncObj->HashId3(hashId, 3);
+            //crlseries();
+            pEncObj->CrlSeries(0x1234);
+            //validityperiod();
+            pEncObj->VP(tbs->validityPeriod);
+            //app permissions
+            pEncObj->SequenceOfPsid_(tbs->appPermisions);
+            //verification key indicator
+            pEncObj->Vki(tbs->verifyKeyIndicator);
+        }catch (std::exception& e)
+        {
+            std::cout << "Ieee1609Cert::EncodeToBeSigned() exception "  << e.what() << std::endl;
+            std::terminate();
+        }
+        return 0;
+    }
 
 
     /* encode the toBeSigned field of the explicit certicate*/
-    int Ieee1609Cert:: encode()
+    int Ieee1609Cert::EncodeCertBase(bool cont)
     {
         /* reset the encoded buffer and length */
-        encBuf = nullptr;
-        encLen = 0;
+        if(cont == false)
+            pEncObj->clear();
         try
         {
-            encode_certid();
-            encode_hashid3();
-            encode_crlseries();
-            encode_validityperiod();
-            encode_sequenceofpsid();
-            encode_vki();
+            /* since we are using the explicit certificate, signature is present */
+            uint8_t preample = 0;
+            if (base->certType == CertTypeExplicit)
+                preample = 0x40;
+            pEncObj->OctectsFixed(&preample, 1);
+            pEncObj->OctectsFixed(&base->version, 1);
+            pEncObj->OctectsFixed((uint8_t *)&base->certType, 1);
+            pEncObj->IssuerIdentifier_(std::ref(*issuer));
+            /* continuous encoding */
+            EncodeToBeSigned(true);
         }
         catch (std::logic_error& e)
         {
@@ -544,7 +616,7 @@ namespace ctp
     /* print the certificate into the file */
     int Ieee1609Cert::print()
     {
-        int i = 0;
+        int i = 0, j = 0;
         log_info("cert::print", 1);
         /* open the file in text mode */
         std::ofstream ofs("cert.txt");
@@ -553,19 +625,22 @@ namespace ctp
         //std::istringstream istram(strng);
         std::streambuf *sbf = ofs.rdbuf();
         std::ostream os(sbf);
+        encLen = pEncObj->get(&encBuf);
         std::cout << "the length of the encoded bffer" << encLen << std::endl;
-        
+        os << std::hex;
         for(i=0; i < encLen; i++)
         {
            // char c[2];
            // istram >> c[0] >> c[1];
             int c;// = atoi(c);
             snprintf((char *)&c, sizeof(int), "%c", encBuf[i]);
-            os << std::hex << (c&0xFF) ; 
+            os << std::setw(2) << (c&0xFF) ; 
             os << ':';
-            if(i != 0 && i % 16 ==0)
+            j++;
+            if(j % 16 == 0)
             {
                 os << std::endl;
+                j = 0;
             }
         }
         std::cout << std::endl;
@@ -638,6 +713,8 @@ namespace ctp
     /* create a certificate */
     void Ieee1609Cert::create()
     {   
+        /* set the next tr to next */
+        this->next = nullptr;
         /* one cert */
         seqOfCert->length = 1;
         base->version = 3;
@@ -660,20 +737,21 @@ namespace ctp
         /* default is uncompressed */
         public_key_get();
 
-        /* FIXME, before signing, encode the certificate, for now keep
-           it as blob of memory 
-        */
         /* define and call the below API */ 
-        encode();
+        EncodeToBeSigned(false);
+        encLen = pEncObj->get(&encBuf);
         sign(encBuf, encLen,ecdsaNistP256Signature);
-        encode_sign();
-        print();
+        /* just to be sure clear the encode memory */
+        pEncObj->clear();
+        encBuf = nullptr;
+        encLen = 0;
     }
 
-    const Ieee1609Cert* Ieee1609Cert::operator[](int psid)
+
+    Ieee1609Cert* Ieee1609Cert::operator[](int psid)
     {
         /* return the certificate for the given psid */
-        return certsPsidMap[psid];
+        return nullptr;//certsPsidMap[psid];
     }
 
 } //namespace ctp

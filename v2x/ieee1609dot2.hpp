@@ -35,6 +35,12 @@ namespace ctp
         {
             std::cout << lvl<< ":" << msg << std::endl;
         }
+
+        static void log(LogLvl lvl, std::string& mod,const std::string &msg)
+        {
+            std::cout << lvl << ":" << mod << ":" << msg << std::endl;
+        }
+
     };
 
 #define LOG_ERR(msg, mod) ctp::log_mgr::log(ctp::LOG_LVL_ERR,mod,msg)
