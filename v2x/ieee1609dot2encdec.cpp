@@ -52,7 +52,7 @@ namespace ctp
 
         std::cout << "Ieee1609Encode::CertId enter " << encLen << std::endl;
 
-        encBuf = (uint8_t *)buf_realloc(encBuf, len_);
+        encBuf = (uint8_t *)buf_realloc(encBuf, (len_ + encLen));
         encBuf[encLen++] = choice;
         len_ --;
         /* encode the length */
