@@ -17,16 +17,16 @@ namespace v2x
 
 //using pow=std::pow;
 
-const int MAX_V2X_EE = 10;
-const int MAX_PQ_SIZE=MAX_V2X_EE;
-const double X_LOW_LIMIT=100.0;
-const double Y_LOW_LIMIT = 30.0;
+const int MAX_V2X_EE = 50;
+const int MAX_PQ_SIZE=5;
+const double X_LOW_LIMIT=20.0;
+const double Y_LOW_LIMIT=20.0;
 
-const double X_HIGH_LIMIT=900.0;
-const double Y_HIGH_LIMIT=400.0;
+const double X_HIGH_LIMIT=500.0;
+const double Y_HIGH_LIMIT=500.0;
 static std::default_random_engine gen;
 static std::uniform_real_distribution<> pos_dist(X_LOW_LIMIT, X_HIGH_LIMIT);
-static std::uniform_real_distribution<> spd_dist(2, 15.0);
+static std::uniform_real_distribution<> spd_dist(-20.0, 20.0);
 double rand_num(double start, double end);
 
 
@@ -43,8 +43,10 @@ struct ee_spd
 {
     /* speed along the x axis, and y axis, z axis (even though we are not flying yet) */
     double x, y, z;
-    //ee_spd():x(0.0),y(0.0),z(0.0){}
-    //ee_spd(double x_, double y_, doub)
+    ee_spd():x(0.0),y(0.0),z(0.0){}
+    ee_spd(double x_, double y_, double z_):x(x_),y(y_), z(z_){}
+    ee_spd(const ee_spd& that):x(that.x),y(that.y),z(that.z){};
+
     ee_spd& operator=(const ee_spd &that)
     {
         this->x = that.x;
@@ -52,16 +54,19 @@ struct ee_spd
         this->z = that.z;
         return *this;
     }
-    friend std::ostream& operator<<(std::ostream& os, const ee_spd& spd) 
+    friend void operator<<(std::ostream& os, const ee_spd& spd)
     {
-        return os << "speed x/y/z " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
+        os << "speed x/y/z " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
     }
 };
 struct ee_pos
 {
     /* current position */
     double x, y, z;
-    //ee_pos():lat(0.0),lng(0.0),alt(0.0){}
+    ee_pos():x(0.0),y(0.0),z(0.0){}
+    ee_pos(double x_, double y_, double z_):x(x_),y(y_), z(z_){}
+    ee_pos(const ee_pos& that):x(that.x),y(that.y),z(that.z){};
+
     ee_pos& operator=(const ee_pos &that)
     {
         this->x = that.x;
@@ -69,9 +74,10 @@ struct ee_pos
         this->z = that.z;
         return *this;
     }
-    std::ostream& operator<< (std::ostream& os)
+
+    void operator<< (std::ostream& os)
     {
-        return os << "pos lat/long/alt " << x << "/" << y << "/" << z << std::endl;
+        os << "pos lat/long/alt " << x << "/" << y << "/" << z << std::endl;
     }
 };
 
@@ -84,13 +90,19 @@ struct ee
         ee_spd spd;
         ee_pos pos;
         double length, width;
-        const double INIFINITY = 1000000.0;
+        double distance;
+        const double INIFINITY = 100000.0;
         int id;
-        ee_color color; /* green,yellow,red*/
+        bool tracked; /* being tracked or not */
         double dt;
 
     public:
-        ee():mass(0.0),length(300.0), width(400.0){ }
+        ee():mass(0.0),length(300.0), width(400.0){
+            distance = 0;
+            dt = 0;
+            id = 0;
+            tracked = false;
+        }
         /* copy constructor */
         ee(const ee &that){
             mass = that.mass;
@@ -100,9 +112,27 @@ struct ee
             width = that.width;
             dt=that.dt;
             id = that.id;
-            color = green;
+            tracked = that.tracked;
+            distance = that.distance;
         }
 
+        /* move constructor */
+        ee(const ee&& that){
+            mass = that.mass;
+            spd = that.spd;
+            pos = that.pos;
+            length = that.length;
+            width = that.width;
+            dt=that.dt;
+            id = that.id;
+            tracked = that.tracked;
+            distance = that.distance;
+        }
+
+        ~ee()
+        {
+//            std::cout << id << "is destroyed " << std::endl;
+        }
 
         void setSpeed(ee_spd& spd)
         {
@@ -116,20 +146,21 @@ struct ee
 
         double radius()
         {
-            return sqrt(pow(length, 2) + pow (width, 2));
-        }
-        double radius (ee &that)
-        {
-            return sqrt(pow(that.length, 2) +  pow(that.width, 2));
+            return 20.0;//sqrt(pow(length, 2) + pow (width, 2));
         }
 
 
         double timeToCollide(ee& that)
         {
-            if(*this == that) return INIFINITY;
+            if(operator==(that))
+            {
+                dt = INFINITY;
+                that.dt = dt;
+                std::cout << "fourth check " << std::endl;
+                return INIFINITY;
+            }
 
-            pos << std::cout;
-            that.pos << std::cout;
+
 
             double dx = that.pos.x - pos.x;
             double dy = that.pos.y - pos.y;
@@ -137,33 +168,96 @@ struct ee
             double dvy = that.spd.y -  spd.y;
 
             double dvdr = dx * dvx +  dy * dvy;
-            if(dvdr > 0) 
-            {
-                dt=INIFINITY;
-                return dt;
-            }
+
 
             double dvdv  = pow(dvx, 2) + pow(dvy, 2);
             double drdr = pow(dx, 2) + pow(dy, 2);
+            distance = drdr;
+            that.distance = distance;
+
             double sigma = radius() + that.radius();
-            double d = (dvdr * dvdr) - dvdv * (drdr -  pow(sigma, 2));
+            double d = pow(dvdr, 2) - (dvdv * (drdr -  pow(sigma, 2)));
             if ( d < 0.0) 
             {
-                dt = INFINITY;
-                return dt;
+////                std::cout << "third check " << std::endl;
+
+////                std::cout << "this " << std::endl;
+////                std::cout << spd;
+////                pos << std::cout;
+
+////                std::cout << "that " << std::endl;
+////                std::cout << that.spd;
+////                that.pos << std::cout;
+//                   std::cout << " third distance " << id << " that " << that.id << " " << d << std::endl;
+
+                that.dt = INFINITY;;
+                return that.dt;
             }
 
+            /* if the average speed is zero,
+             *  in our case it can happen, since we are using random numbers.
+             *  Handle gracefully and claim never meet.
+            */
+            if(dvx == dvy && dvx == 0)
+            {
+////                std::cout << "second check " << std::endl;
+////                std::cout << "this " << std::endl;
+////                std::cout << spd;
+////                pos << std::cout;
+
+////                std::cout << "that " << std::endl;
+////                std::cout << that.spd;
+////                that.pos << std::cout;
+
+//                std::cout << " second speed " << id << " that " << that.id << " " << dvx << std::endl;
+
+                that.dt = INFINITY;;
+                return that.dt;
+            }
+
+            if(dvdr > 0)
+            {
+////                std::cout << "first check " << std::endl;
+
+////                std::cout << "this " << std::endl;
+////                std::cout << spd;
+////                pos << std::cout;
+
+////                std::cout << "that " << std::endl;
+////                std::cout << that.spd;
+////                that.pos << std::cout;
+//                std::cout << " dvdr this  " << id << " that " << that.id << " " << dvdr << std::endl;
+
+                that.dt = INFINITY;;
+                return that.dt;
+            }
+
+
+
             dt =  -(dvdr + sqrt(d))/dvdv;
+            that.dt = dt;
+
+//            std::cout << "this " << std::endl;
+//            std::cout << spd;
+//            pos << std::cout;
+
+//            std::cout << "that " << std::endl;
+//            std::cout << that.spd;
+//            that.pos << std::cout;
+
+//            std::cout << "timetohit " << id << " and " << that.id << " is "  << that.dt << std::endl;
             return dt;
         }
+        double distanceGet() { return distance;}
         double timeToEvent(){return dt;}
         double timeToHitTheVertWall() {return 0.0;}
         double timeToHitTheHorizWall() {return 0.0;}
 
-        double bounceOff(ee &that) { return 0.0;}
+        double bounceOff(ee &that) { return that.dt;}
 
         double bounceOffVertWall() {return 0.0;}
         double bounceOffHorizWall() {return 0.0;}
+
         bool operator==(ee &that)
         {
             return this->id == that.id;
@@ -177,32 +271,32 @@ struct ee
             length = that.length;
             width = that.width;
             id=that.id;
+            tracked = that.tracked;
+            distance = that.distance;
+            dt = that.dt;
             return *this;
         }
 
         void init()
         {
-            std::cout << "Init position and speed " << std::endl;
-            pos.x = rand_num(X_LOW_LIMIT, Y_HIGH_LIMIT);
+            pos.x = rand_num(X_LOW_LIMIT, X_HIGH_LIMIT);
             pos.y = rand_num(Y_LOW_LIMIT,Y_HIGH_LIMIT);
-            spd.x = rand_num(50,150);
-            spd.y = rand_num(50,150);
+            spd.x = rand_num(-50,50);
+            spd.y = rand_num(-20,20);
+
         }
 
-        int getId(){ return id;}
+        int getId() const { return id;}
         void setId(int id){ 
             this->id = id;
-            //std::cout << " the id " << this->id << ":" << id << std::endl; 
             }
         /* move this element, by the time*/
-        void move(double dt)
+        void move(double dt_)
         {
-            std::cout << "moving ee " << id << std::endl;
-            pos.x = pos.x + spd.x * dt/1000;
-            pos.y = pos.y + spd.y * dt/1000;
-            pos.z = pos.z + spd.z * dt/1000;
+            pos.x = pos.x + spd.x * dt_/1000;
+            pos.y = pos.y + spd.y * dt_/1000;
+            pos.z = pos.z + spd.z * dt_/1000;
 
-            this->dt -= dt;
             
             if (pos.x <= X_LOW_LIMIT || 
                 pos.x >= X_HIGH_LIMIT || 
@@ -212,90 +306,50 @@ struct ee
                     init();
                 }
         }
-        void draw()
-        {
-            /*draw the ball*/
-            //std::cout << "draw id: " << id << " pos " << pos.x << "/" << pos.y << "/" << pos.z;
-            //std::cout << " spd " << spd.x << "/" << spd.y << "/" << spd.z << std::endl;
-        }
 
-        ee_color colorGet(){ return color;}
+        bool trackedGet(){ return tracked;}
+        void trackedSet(bool tracked) { this->tracked = tracked;}
         ee_spd& speedGet() { return spd;}
         ee_pos& posGet() { return pos;}
 
 
-        bool operator<(const ee& that)
+        bool operator<(const ee* that) const
         {
-            return dt < that.dt;
+//            std::cout << "compare " << id <<":"<< dt << "<" <<that->id <<":"<< that->dt << std::endl;
+            return dt < that->dt;
+        }
+
+
+
+        /* return the time to collision to that end entity */
+        double timeToEvent() const
+        {
+            return dt;
         }
 };
 
 using sharedEE = std::shared_ptr<ee>;
-
-/* collision event between two end entities*/
-class Event
-{
-    
-    double t; /* time to the collision */
-    sharedEE a, b;     /* the two ee thats going to collide */
-    int countA, countB; /* number of collisions for these two ees */
-
-    public:
-        Event():t(0.0),a(),b(){};
-        Event(double t_, sharedEE a_, sharedEE b_)
-        {
-            t = t_;
-            a = a_;
-            b = b_;
-        }
-
-        ~Event(){
-            std::cout << "event " << b->getId() << " is destroyed " << std::endl;
-        }
-
-        int compareTo(Event& that) {
-            //std::cout << "t:that" << t << ":" << that.t << std::endl;
-            int ret = 0;
-            if (t > that.t) ret = 1;
-            else if (t < that.t) ret = -1;
-            else ret = 0;
-            return ret;
-        }
-        bool isValid() { return true;}
-        double timeToEvent(){return t;}
-        ee& eeGetA() {return *a.get();};
-        ee& eeGetB() { return *b.get();}
-};
+typedef ee* ptrEE;
 
 
-template<typename T>
-struct customLess
-{
-    bool operator() (T a, T b)
-    {
-        return a < b;
-    }
-};
-
-
+bool eventCompare(const ptrEE a, const ptrEE b);
 
 
 /* create a priority queue that contains the items in the
     order of collision event (time). The next collision is at the top
 */
+
  
-template <typename T>
-class MinPQ 
+//template <typename T>
+class MinPQ
 {
     int firstEl, lastEl;
     int N;
-    std::vector<T> events;
+    std::vector<ptrEE> events;
 
     void sort()
     {
-        customLess<T> eventCompare;
-        std::sort(events.begin(), events.end(), eventCompare);
-        return ;
+        std::sort(events.begin(), events.end(),eventCompare);
     }
 
     public:
@@ -304,97 +358,80 @@ class MinPQ
             firstEl = 0;
             lastEl = 0;
             events.clear();
-            N = 0;
-        }
-        MinPQ(T key_[], int N_)
-        {
-            firstEl = 0;
-            lastEl = 0;
-            events.clear();
+            events.reserve(MAX_PQ_SIZE);
             N = 0;
         }
 
-        //void insert(std::shared_ptr<T> ky_)
-        void insert(T& ky_)
+
+
+        void insert(const ptrEE ky_)
         {
             bool _insert = false;
-            //T atlast = events.back();
 
-            if(events.size() <= MAX_PQ_SIZE)
+            /* if its not colliding, dont put into priority queue */
+            if(ky_->timeToEvent() == INFINITY)
             {
-                _insert = true;
+                return;
             }
 
 
-            if(events.size() >= MAX_PQ_SIZE)
+
+            if(events.size() < MAX_PQ_SIZE)
             {
-                --N;
-                events.pop_back();
                 _insert = true;
+
+            }else
+            {
+                /* grab the last element */
+                ptrEE last = events[N-1];
+                if (eventCompare(ky_, last) == true)
+                {
+                    //std::cout << "remove the last one " << std::endl;
+                    --N;
+                    ptrEE temp = events[N];
+                    temp->trackedSet(false);
+                    events.pop_back();
+                    _insert = true;
+                }
             }
 
             if(_insert == true)
             {
-                ++N;
+                ky_->trackedSet(true);
                 events.push_back(ky_);
+                ++N;
                 sort();
             }
             return;
 
         }
-        T delMin() 
-        {
-            T temp;
-            if(firstEl != N)
-            {
-                
-                temp = events[firstEl];
-                firstEl ++;
-            }else{
-                firstEl = 0;
-                N = 0;;
-            }
-            return temp;
-            
-        }
-
-        T delMax()
-        {
-            T temp;
-            if (N != 0)
-            {
-                temp = events[--N];
-            }else{
-                firstEl = 0;
-                N = 0;
-            }
-            return temp;
-        }
 
 
         bool isEmpty() { return firstEl==N;}
-        T max() { return events[N-1];}
-        T min() { return events[firstEl];}
+        ptrEE max() { return events[N-1];}
+        ptrEE min() { return events[firstEl];}
         int size() { return N;}
+        void clear() { /* clear the list */
+            events.clear();
+            N = 0;
+        }
+
+        //const std::vector<ptrEE>& get() { return events;}
 
 
-        #if 0
         void print()
         {
-            std::cout << "priority queue elemnets " <<std::endl;
-            for (int i = 0; i < N; i ++)
-            {
-                std::cout << "id:col " << key[i]->eeGetB().getId() <<":"<< key[i]->timeToEvent() << std::endl;
-
-            }
+//            for (unsigned long long i = 0; i < events.size(); i ++)
+//            {
+//               ptrEE temp = events[i];
+//                std::cout << "PQ id:timetocollision " << temp->getId() << ":" << temp->timeToEvent() << std::endl;
+//            }
         }
-        #endif
-
 };
 
 
 const static double MAX_TIME_DELTA=500;
-const static double MIN_TIME_DELTA=100;
+const static double MIN_TIME_DELTA=50;
 
 class fcw;
 void collision_thread(std::shared_ptr<fcw> obj);
@@ -402,108 +439,110 @@ void collision_thread(std::shared_ptr<fcw> obj);
 
 class fcw
 {
-    MinPQ<ee> *pq; /* priority queue */
-    double t;  /* simulation clock time */
-    ee ees[MAX_V2X_EE]; /* this is others */
-    ee e; /* this is us */
+    MinPQ *pq;
+    ptrEE ees[MAX_V2X_EE]; /* this is others */
+    ptrEE e; /* this is me */
     std::thread _thread;
     std::mutex _mtex;
-    //Event *event;
     
     public:
         fcw() {
-            pq = new MinPQ<ee>();
+            pq = new MinPQ();
             for (int i = 0; i < MAX_V2X_EE; i++)
             {
-                ees[i].init();
-                ees[i].setId(i+1);
+                ees[i] = new ee();
+                ees[i]->setId(i+1);
+                ees[i]->init();
             }
-            e.init();
-            e.setId(0);
+            e = new ee();
+            e->setId(0);
+            e->init();
         }
 
 
         int init(){
             return 0;
         }
-        std::thread start(std::shared_ptr<fcw> obj)
+
+        void start()
         {
             std::cout << "thread start" << std::endl;
-            std::thread _thread(collision_thread, obj);
+            _thread = std::thread(&fcw::operator(), this);
             _thread.detach();
-            return _thread;
+            return;
         }
 
-        void add(ee& _ee)
+        void add(ptrEE _ee)
         {
-            double dt = e.timeToCollide(_ee);
-            std::cout << "time to collide:id1:id2 " << dt << ":" <<  e.getId() << ":" << _ee.getId() <<  std::endl;
             pq->insert(_ee);
         }
 
-        std::vector<ee>& eesGet(std::vector<ee>& eeVector) 
+        std::vector<ee>& eesGet(std::vector<ee>& eeVector)
         {
             std::lock_guard<std::mutex> lck(_mtex);
             {
+                eeVector.clear();
+                /* get the list of priority queue */
+//                const std::vector<ee>& pqList = pq->get();
+//                const std::vector<ptrEE>& pqList = pq->get();
+//                for (auto&& ee_ : pqList)
+//                {
+//                    int id = ee_->getId();
+//                    ees[id-1]->trackedSet(true);
+//                }
                 for (int i = 0; i < MAX_V2X_EE; i++)
                 {
-                    eeVector.push_back(ees[i]);
+                    eeVector.push_back(std::ref(*ees[i]));
                 }
                 /* also push the current object */
-                eeVector.push_back(e);
+                eeVector.push_back(std::ref(*e));
             }
             return eeVector;
         }
 
 
         /* function call operator overloaded */
-        int operator()(int i)
+        int operator()()
         {
             int count = 0; 
             std::condition_variable cv;
             std::mutex mtx;
             //Event *evt;
-            double dt = MAX_TIME_DELTA;
-            int sz;
-            int testCount = 0;
+            double dt = MIN_TIME_DELTA;
             //ee tempEE;
-            
-            while(Count++ < 5)
+            /* loop forever */
+            while(true)
             {
-                sz = pq->size();
-                ee tempEE = pq->delMin();
                 std::unique_lock<std::mutex> lck(mtx);
                 cv.wait_for(lck, std::chrono::milliseconds(int(dt)));
-                if (sz)
-                {
-                    dt = tempEE.timeToEvent();
-                }
-                if (dt > MAX_TIME_DELTA)
-                    dt = MAX_TIME_DELTA;
-                if (dt <= MIN_TIME_DELTA)
-                    dt = MIN_TIME_DELTA;
-                e.move(dt);
-                e.draw();
-                count = 0;
-                std::cout << "number of elements " << sz << std::endl;
-                while(count < sz)
+                /* update the positions */
+                std::lock_guard<std::mutex> lck_(_mtex);
                 {
 
-                    
-                    ees[count].move(dt);
-                    ees[count].draw();
-                    ++count;
-                }
-                count = 0;
-                while(count < MAX_V2X_EE)
-                {
-                    /* update the positions */
-                    std::lock_guard<std::mutex> lck(_mtex);
+                    if (dt > MAX_TIME_DELTA)
+                        dt = MAX_TIME_DELTA;
+                    if (dt <= MIN_TIME_DELTA)
+                        dt = MIN_TIME_DELTA;
+
+                    e->move(dt);
+                    count = 0;
+                    while(count < MAX_V2X_EE)
                     {
-                        std::cout << "count " << count << std::endl;
-                        add (ees[count]);
+                        ees[count]->trackedSet(false);
+                        ees[count]->move(dt);
+                        e->timeToCollide(std::ref(*ees[count]));
                         ++count;
                     }
+                    count = 0;
+                    pq->clear();
+                    {
+                        while(count < MAX_V2X_EE)
+                        {
+                            add (ees[count]);
+                            ++count;
+                        }
+                    }
+                    pq->print();
                 }
             }
 

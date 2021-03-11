@@ -11,6 +11,12 @@
 #include <time.h>
 #include "include.h"
 #include <vector>
+#include <QPushButton>
+#include <QTime>
+#include <QPainter>
+
+#define PAINT
+
 
 
 static std::default_random_engine gen;
@@ -22,81 +28,127 @@ Widget::Widget(QWidget *parent)
     , ui(new Ui::Widget)
 {
     ui->setupUi(this);
+    timer = new QTimer();
+    timer->setInterval(100); /* every 500 milliseconds */
+    trackedColor.setRgb(127,0,127);
+    targetColor.setRgb(255,127,0);
+
+    setFixedSize(500,500);
+
+    setBackgroundRole(QPalette::Base);
+#ifndef PAINT
+    for(int i = 0; i < v2x::MAX_V2X_EE+1; i++)
+    {
+        QPushButton *m_button = new QPushButton(std::to_string(i).c_str(), this);
+        m_button->resize(20,20);
+        m_button->setAutoFillBackground(true);
+        m_buttons.push_back(m_button);
+    }
+#endif
+    /* connect the timeout signal to move EE slot */
+    connect(timer, &QTimer::timeout, this, &Widget::moveEE);
+    /* start the timer */
+    timer->start();
+    fcw = new v2x::fcw();
+    /* start the process */
+    fcw->start();
+    ees.clear();
+
+
+
+    show();
+
+}
+
+void Widget::moveEE()
+{
+#ifndef PAINT
+//    /* get the list of end-entities from the fcw */
+    ees = fcw->eesGet(std::ref(ees));
+    int id;
+    bool tracked = false;
+
+    for(auto&& ee: ees)
+    {
+        id = ee.getId();
+        tracked = ee.trackedGet();
+        v2x::ee_pos pos = ee.posGet();
+
+        QColor color(QColor::Spec::Rgb);
+        color.setRgb(0,255, 0);
+
+        if(tracked)
+        {
+            color.setRgb(255, 0, 0);
+        }
+        if(id == 0)
+        {
+            color.setRgb(0,0,255);
+        }
+
+        QPalette pal;
+        pal.setColor(QPalette::Normal, QPalette::Button, color);
+        m_buttons[id]->setPalette(pal);
+        m_buttons[id]->move(pos.x, pos.y);
+    }
+    ees.clear();
+#endif
+    update();
 }
 
 Widget::~Widget()
 {
     delete ui;
+    m_buttons.clear();
 }
 
-void Widget::operator()()
+/* draw items */
+void Widget::drawItems(QPainter& p)
 {
-    std::mutex mtx;
-    std::condition_variable cv;
-    double dt = 1000;
-    QPushButton *m_button, *m_button1;
-    int x, y; 
+    ees = fcw->eesGet(std::ref(ees));
+    int id;
+    bool tracked = false;
 
-    v2x::MinPQ<v2x::Event> *pq;
-    std::shared_ptr<v2x::fcw> fcw;
-    std::vector<v2x::ee*> ees;
-
-    std::vector<QPushButton*> buttons;
-
-    fcw = fcw_init();
-    
-
-    Widget *w = new Widget();
-    w->setFixedSize(1000,500);
-
-    int count = 1;
-    std::string name("button");
-    setUpdatesEnabled(true);
-    name += std::to_string(count);
-    buttons.clear();
-    m_button = new QPushButton(name.c_str(), w);
-    m_button1 = new QPushButton(name.c_str(), w);
-    buttons.push_back(m_button);
-    buttons.push_back(m_button1);
-    w->show();
-    
-    while (true)
+    for(auto&& ee: ees)
     {
-        /*get the updated priority queue*/
-       // pq = fcw->pqGet();
-        buttons.clear();
+        id = ee.getId();
+        tracked = ee.trackedGet();
+        v2x::ee_pos pos = ee.posGet();
 
-        std::unique_lock<std::mutex> lck(mtx);
-        cv.wait_for(lck, std::chrono::milliseconds(int(dt)));
-        m_button->setText(name.c_str());
-        m_button->windowTitleChanged(name.c_str());
-        srand(time(NULL));
-        x = rand()% 9 + 1; // between 1 and 9 */
-        y = rand()% 40 + 3; //3->40
-        x *= 100; /* scale it by 100, 100->900 */
-        y *= 10; /* scale it by 10, 30 and 400 */
-        //m_button->setGeometry(x,y, 80, 30);
-        m_button->move(x,y);
-        //m_button->updateGeometry();
+        QColor color(QColor::Spec::Rgb);
+        p.setBrush(QColor(0,255,0));
 
-       // m_button1->updateGeometry();
-        x = rand()% 9 + 1; // between 1 and 9 */
-        y = rand()% 40 + 3; //3->40
-        x *= 100; /* scale it by 100, 100->900 */
-        y *= 10; /* scale it by 10, 30 and 400 */
-        m_button1->setText(name.c_str());
-        m_button1->windowTitleChanged(name.c_str());
-        //m_button1->setGeometry(x,y,80, 30);
-        m_button1->move(x,y);
+        if(tracked)
+        {
+            p.setBrush(trackedColor);
+        }
+        if(id == 0)
+        {
+            p.setBrush(targetColor);
+        }
+        int x = pos.x;
+        int y = pos.y;
+        QRect rect(0,0,20,20);
 
-
-        //name += std::to_string(count);
-
-        std::cout << "new name is " << name << std::endl;
-        count++;
-        w->repaint();
-        
+        p.save();
+        rect.moveCenter(QPoint(x, y));
+        p.drawEllipse(rect);
+        p.restore();
     }
-    w->show();
-    return;
+    ees.clear();
 }
+
+
+void Widget::paintEvent(QPaintEvent *event)
+{
+#ifdef PAINT
+    QWidget::paintEvent(event);
+
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+
+    drawItems(p);
+#endif
+}
+

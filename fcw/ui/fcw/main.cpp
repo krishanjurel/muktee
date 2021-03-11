@@ -9,52 +9,53 @@
 static std::thread m_thread;
 
 
-static void thread_handlr(Widget *w)
-{
-    w->operator()();
-}
 
-
-
-static std::thread thread_handler(QApplication *a)
-{
-   Widget w;
-   w.setFixedSize(1000,500);
-#if 0
-   QFrame *qframe = new QFrame(&w);
-   qframe->setFrameShape(QFrame::Shape::Box);
-   //qframe->setFixedSize(500, 200);
-   qframe->setGeometry (500,250, 500, 250);
-   //QRect qrect(100,100,500,500);
-   //qframe->setFrameRect(qrect);
-   QPushButton *m_button = new QPushButton("Hello World", qframe);
-   m_button->setGeometry(10,10, 80, 30);
-   m_button = new QPushButton("Hello World 3",qframe);
-   m_button->setGeometry(10,40, 80, 30);
-   m_button = new QPushButton("Hello World 4",qframe);
-   m_button->setGeometry(10,70, 80, 30);
-   w.show();
- #endif
-   std::thread _thread(thread_handlr, &w);
-   a->exec();
-   return _thread;
-}
+static int test();
 
 int main(int argc, char *argv[])
 {
-    int count = 0;
     QApplication a(argc, argv);
-    std::thread _thread;
-    //std::thread m_thread(thread_handler, &a);
-    //m_thread.join();
-    _thread = thread_handler(&a);
-    
-    //Widget w;
-    //w.setFixedSize(1000,500);
-    //QPushButton *m_button = new QPushButton("Hello World", &w);
-    //w.show();
-    //_thread.join();
-    return 0;//a.exec();
+
+    Widget w;
+    return a.exec();
+
+//    return test();
 }
+
+
+
+
+void test_collision()
+{
+    v2x::ee *ee1 = new v2x::ee();
+    v2x::ee_spd spd1(-1,-1, 0);
+    v2x::ee_pos pos1(448.9,162.9, 0);
+    ee1->setId(0);
+    ee1->setSpeed(spd1);
+    ee1->setPosition(pos1);
+
+
+    v2x::ee *ee2 = new v2x::ee();
+    v2x::ee_spd spd2(2, -1, 0);
+    v2x::ee_pos pos2(433.2,167.9, 0);
+    ee2->setId(1);
+    ee2->setSpeed(spd2);
+    ee2->setPosition(pos2);
+
+
+    double dt = ee1->timeToCollide(std::ref(*ee2));
+    std::cout << " time to collidie " << dt << std::endl;
+    delete ee1;
+    delete ee2;
+}
+
+
+
+static int test()
+{
+    test_collision();
+    return 0;
+}
+
 
 
