@@ -54,6 +54,7 @@ static CosmoV2XKey cosmoV2XKey_g;
 void signal_handler(int sig)
 {
     std::cout << "signal " << sig <<  " had been caugth" << std::endl;
+    std::terminate();
     return;
 }
 
@@ -484,15 +485,38 @@ int main()
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
     pcert->create();
-    encLen = pcert->encode(&encBuf);
-    std::cout << "encoded buffer length " << encLen << std::endl;
+    // encLen = pcert->encode(&encBuf);
+    // std::cout << "encoded buffer length " << encLen << std::endl;
+    
     pcert->print();
+
+     std::string tbsData("this is dummy test data!!!");
+     ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
+     uint8_t *signedData = nullptr;
+     size_t signedDataLength = 0;
+     pdata->sign(0, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcert);
+     print_data("data_payload.txt", signedData, signedDataLength);
+
+    if(signedData)
+        free (signedData);
+
+
+
+
+
+
+    
+
+
+
+
     while(0)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::abort();
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
-    //delete pcert;
+    delete pcert;
+    delete pdata;
     return 0;
 }

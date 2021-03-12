@@ -337,7 +337,6 @@ struct SignerIdentifier
     {
         HashedId8 digest;
         SequenceOfCertificate certificate;
-        char self[0];
     }signer;
 };
 typedef struct SignerIdentifier SignerIdentifier;

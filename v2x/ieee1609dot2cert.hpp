@@ -34,7 +34,6 @@ namespace ctp
         const EC_GROUP *ecGroup;
         EC_KEY *ecKey;
         uint8_t keyType;
-        ECDSA_SIG *sig;
 
         CertificateBase *base;
         IssuerIdentifier *issuer;
@@ -154,6 +153,7 @@ namespace ctp
             int SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type);
             int Signature_(const Signature *signature);
             int Ieee1609Dot2ContentType_(const Ieee1609Dot2ContentType type);
+            int SequenceOfCerts_(const SequenceOfCertificate& certs);
             /* int encoded buffer get */
             int get(uint8_t **buf);
             /* clear the encoded buuffer */

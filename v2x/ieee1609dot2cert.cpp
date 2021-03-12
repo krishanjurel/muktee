@@ -46,7 +46,7 @@ void *buf_alloc(size_t len)
 }
 void *buf_realloc(void *ptr, size_t len)
 {
-    std::cout << "buf_realloc " << len << std::endl;
+    //std::cout << "buf_realloc " << len << std::endl;
     return realloc(ptr, len);
 }
 
@@ -58,13 +58,39 @@ void *buf_calloc(size_t num, size_t size)
 }
 #endif
 
+void print_data(const char* file, const uint8_t *buf, size_t len)
+{
+    int i = 0, j = 0;
+    std::cout << "print" << std::endl;
+    /* open the file in text mode */
+    std::ofstream os(file);
+    //std::ostream os(ofs.rdbuf());
+    os << std::hex;
+    for(i=0; i < len; i++)
+    {
+        // char c[2];
+        // istram >> c[0] >> c[1];
+        int c;// = atoi(c);
+        snprintf((char *)&c, sizeof(int), "%c", buf[i]);
+        os << std::setw(2) << (c&0xFF) ; 
+        os << ':';
+        j++;
+        if(j % 16 == 0)
+        {
+            os << std::endl;
+            j = 0;
+        }
+    }
+    std::cout << std::endl;
+    os.close();
+}
+
 
 
 
 
 namespace ctp
 {
-
 
     void TP::cert_mgr()
     {
@@ -198,6 +224,7 @@ namespace ctp
         const BIGNUM *r;
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
+        ECDSA_SIG *sig;
         // try
         // {
         //     sigBuf = static_cast<uint8_t *>(OPENSSL_malloc(sigBufLen));
@@ -616,35 +643,8 @@ namespace ctp
     /* print the certificate into the file */
     int Ieee1609Cert::print()
     {
-        int i = 0, j = 0;
-        log_info("cert::print", 1);
-        /* open the file in text mode */
-        std::ofstream ofs("cert.txt");
-        //std::stringbuf strbuf(encBuf);
-        //std::string strng((const char *)encBuf, encLen);
-        //std::istringstream istram(strng);
-        std::streambuf *sbf = ofs.rdbuf();
-        std::ostream os(sbf);
-        encLen = pEncObj->get(&encBuf);
-        std::cout << "the length of the encoded bffer" << encLen << std::endl;
-        os << std::hex;
-        for(i=0; i < encLen; i++)
-        {
-           // char c[2];
-           // istram >> c[0] >> c[1];
-            int c;// = atoi(c);
-            snprintf((char *)&c, sizeof(int), "%c", encBuf[i]);
-            os << std::setw(2) << (c&0xFF) ; 
-            os << ':';
-            j++;
-            if(j % 16 == 0)
-            {
-                os << std::endl;
-                j = 0;
-            }
-        }
-        std::cout << std::endl;
-        ofs.close();
+        encLen = encode(&encBuf);
+        print_data("cert.txt", encBuf, encLen);
         return 0;
     }
 

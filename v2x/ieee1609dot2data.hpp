@@ -26,6 +26,7 @@ namespace ctp
 
         /* data member */
         Ieee1609Dot2Data *data;
+        Ieee1609Dot2Content *content;
 
 
 
@@ -35,7 +36,13 @@ namespace ctp
                 enc = new Ieee1609Encode();
                 tpPtr = TP::instance_get();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+                content = (Ieee1609Dot2Content *) buf_alloc(sizeof(Ieee1609Dot2Content));
+                content->type = Ieee1609Dot2ContentSignedData;
                 data->protocolVersion = 0x03;
+                tbsData = nullptr;
+                hashId = nullptr;
+                cert = nullptr;
+                
 
                 /* get the certificate manager */
                 //certMgrPtr = tpPtr->cert_mgr();
@@ -44,6 +51,9 @@ namespace ctp
             ~Ieee1609Data()
             {
                 delete enc;
+                free(data);
+                free(content);
+                free(tbsData);
             }
             /* a method that can be called on recieving signed data */
             void process(const uint8_t *data,size_t len, ...)
@@ -56,11 +66,21 @@ namespace ctp
             */
             void sign(int psid, const uint8_t *tbsData, size_t len,
                     uint8_t **signedData, size_t *signedDataLen);
+            
+            /* sign with a supplied certificate */
+            void sign(int psid, const uint8_t *tbsData, size_t len,
+                    uint8_t **signedData, size_t *signedDataLen,
+                    Ieee1609Cert *cert);
 
             /* encode the data*/
             void encode();
+            void encode_content();
+            int encode_signeridentifier();
             int encode_tbsdata();
-            int encode_signeddata();
+            int encode_signeddata(bool cont = false);
+
+
+            void print();
     };
 
 

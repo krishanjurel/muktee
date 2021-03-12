@@ -116,10 +116,16 @@ namespace ctp
     int Ieee1609Encode::IssuerIdentifier_(const IssuerIdentifier& issuer)
     {
         std::cout << "Ieee1609Encode::IssuerIdentifier_: enter  " << encLen << std::endl;
+        const char *data =  nullptr;
         int len = 1; /* choice */
         if(issuer.type == IssuerIdentifierTypeHashId)
         {
             len += 8;
+            data = issuer.issuer.hashId.x;
+        }
+        else {
+            len += 1; /* just one for hash alogo type */
+            data =  (char *)&issuer.issuer.algo;
         }
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
         encBuf[encLen++] = (uint8_t)((0x80) | issuer.type);
@@ -127,7 +133,7 @@ namespace ctp
 
         for(int i = 0; i < len; i++)
         {
-            encBuf[encLen++] = issuer.issuer.hashId.x[i];
+            encBuf[encLen++] = *data++;
             len --;
         }
         std::cout << "Ieee1609Encode::IssuerIdentifier_: exit  " << encLen << std::endl;
@@ -353,6 +359,12 @@ namespace ctp
 
     }
 
+
+    int Ieee1609Encode::SequenceOfCerts_(const SequenceOfCertificate& certs)
+    {
+        return 0;
+    }
+
     int Ieee1609Encode::SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type)
     {
         int len = 1; /* choice */
@@ -364,19 +376,19 @@ namespace ctp
             /* encode the signer, i.e. the certificate */
             bufLen = signer.encode(&buf);
         }
-
-        if(bufLen != 0)
+    
+        if(bufLen > 0)
         {
             len += bufLen;
-        }
 
-        encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
-        encBuf[encLen++] = (uint8_t)((0x80) | type);
-        len --;
-        while(len)
-        {
-            encBuf[encLen++] = *buf++;
+            encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+            encBuf[encLen++] = (uint8_t)((0x80) | type);
             len --;
+            while(len)
+            {
+                encBuf[encLen++] = *buf++;
+                len --;
+            }
         }
         std::cout << "Ieee1609Encode::SignerIdentifier_ exit " << encLen << std::endl;
         return encLen;
