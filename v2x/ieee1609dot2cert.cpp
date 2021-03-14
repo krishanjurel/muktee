@@ -18,15 +18,16 @@ extern "C"
 time_t start_time(struct tm *tm)
 {
     // struct tm epoch;
-    struct tm epoch = {
-        .tm_sec = 0,
-        .tm_min=0,
-        .tm_hour = 0,
-        .tm_mday=1,
-        .tm_mon = 0,
-        .tm_year = 2004,
-        .tm_isdst = 0
-    };
+    struct tm epoch={0};
+    // = {
+    //     .tm_sec = 0,
+    //     .tm_min=0,
+    //     .tm_hour = 0,
+    //     .tm_mday=1,
+    //     .tm_mon = 0,
+    //     .tm_year = 2004,
+    //     .tm_isdst = 0
+    // };
     time_t t1 = mktime(&epoch);
     time_t t2 = mktime(tm);
 
@@ -213,8 +214,90 @@ namespace ctp
         {
             return signature;
         }else{
+
             return nullptr;
         }
+    }
+
+    /* creates the Hash of the input data, and returns the result into hash with lentgh os hashLen
+        return 1, on success, 
+               0, on error
+    */
+    int Ieee1609Cert::Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash)
+    {
+        SHA256_CTX ctx;
+        int ret = 1;
+        if (SHA256_Init(&ctx) != 1)
+        {
+            LOG_ERR("Ieee1609Cert::Hash SHA256_Init  failed", 1);
+            ret = 0;
+            return ret;
+
+        }
+        *hash = (uint8_t *)buf_alloc(32);
+
+        if(SHA256_Update(&ctx, tbHash, len) == 0)
+        {
+            LOG_ERR("Ieee1609Cert::Hash SHA256_Update  failed", 1);
+            ret = 0;
+            goto done;
+        }
+        if(SHA256_Final(*hash, &ctx) == 0)
+        {
+            LOG_ERR("Ieee1609Cert::Hash SHA256_Update  failed", 1);
+            ret = 0;
+            goto done;
+        }
+        done:
+            if(ret == 0 && *hash != nullptr)
+            {
+                free(*hash);
+            }
+        return ret;
+    }
+
+    /*status of the conversion */
+    int Ieee1609Cert::SigToSignature(const ECDSA_SIG* sig, Signature& signature)
+    {
+        int ret = -1;
+        const BIGNUM *r;
+        const BIGNUM *s;
+        uint8_t *sign_r, *sign_s;
+#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
+        r = ECDSA_SIG_get0_r(sig);
+        s = ECDSA_SIG_get0_s(sig);
+#else
+        r = sig->r;
+        s = sig->s;
+#endif
+        
+        signature.signature.ecdsaP256Signature.r.type= EccP256CurvPointXOnly;
+        sign_r = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.xonly.x;
+        sign_s = (uint8_t *)&signature.signature.ecdsaP256Signature.s.x[0];
+        
+        
+        if(BN_bn2bin(r, sign_r) != sizeof(HashedData32))
+        {
+            LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
+            ret = -1;
+            /*FIXME, try to avoid it */
+            goto done;
+        }
+        if(BN_bn2bin(s, sign_s) != sizeof(HashedData32))
+        {
+            LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
+            ret = -1;
+            /*FIXME, try to avoid it */
+            goto done;
+        }
+        done:
+            return ret;
+    }
+
+    const ECDSA_SIG* Ieee1609Cert::SignData(const uint8_t *buf, size_t len, SignatureType type)
+    {
+        /* use the only key for now */
+        return  ECDSA_do_sign(buf,len,ecKey);
     }
 
     /* sign the certificate */
@@ -246,7 +329,7 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
-#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else

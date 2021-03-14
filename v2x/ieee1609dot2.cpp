@@ -54,7 +54,7 @@ static CosmoV2XKey cosmoV2XKey_g;
 void signal_handler(int sig)
 {
     std::cout << "signal " << sig <<  " had been caugth" << std::endl;
-    std::terminate();
+    //std::terminate();
     return;
 }
 
@@ -481,6 +481,7 @@ int main()
     shm_unlink(sync_file);
     munmap(addr, sizeof(sem_t));
 #endif
+
     ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
@@ -490,24 +491,13 @@ int main()
     
     pcert->print();
 
-     std::string tbsData("this is dummy test data!!!");
-     ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
-     uint8_t *signedData = nullptr;
-     size_t signedDataLength = 0;
-     pdata->sign(0, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcert);
-     print_data("data_payload.txt", signedData, signedDataLength);
-
-    if(signedData)
-        free (signedData);
-
-
-
-
-
-
-    
-
-
+    std::string tbsData("this is dummy test data!!!");
+    ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
+    uint8_t *signedData = nullptr;
+    size_t signedDataLength = 0;
+    pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcert);
+    print_data("data_payload.txt", signedData, signedDataLength);
+    std::cout << "number of bytes " << signedDataLength << std::endl;
 
 
     while(0)

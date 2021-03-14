@@ -10,7 +10,8 @@
                 "/usr/include",
                 "/usr/include/x86_64-linux-gnu"
             ],
-            "intelliSenseMode": "gcc-x64",
+            "intelliSenseMode": "linux-gcc-x64"
+
         }
     ],
     "version": 4

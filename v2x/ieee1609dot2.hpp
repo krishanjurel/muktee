@@ -10,6 +10,7 @@
 #include "openssl/ecdsa.h"
 #include "openssl/obj_mac.h"
 #include <openssl/bn.h>
+#include <openssl/sha.h>
 
 /*  This encpasulation of data definition, declaration of 
     IEEE 1609.2-2016     specification 

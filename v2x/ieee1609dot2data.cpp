@@ -1,4 +1,6 @@
 #include "ieee1609dot2data.hpp"
+#include <stdlib.h>
+#include <string.h>
 
 
 //#define MOUDLE "1609DATA"
@@ -18,12 +20,12 @@ namespace ctp
         /* unsecured data */
         payload->data->content.type = Ieee1609Dot2ContentUnsecuredData;
         payload->data->protocolVersion = 0x03;
-        payload->data->content.unsecuredData.length = len;
-        payload->data->content.unsecuredData.octets = (uint8_t *)buf_alloc(len);
+        payload->data->content.UNSECUREDDATA.length = len;
+        payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* copy the data into unsecured buffer */
         for(int i = 0; i < len; i++)
         {
-            payload->data->content.unsecuredData.octets[i] = tbsData[i];
+            payload->data->content.UNSECUREDDATA.octets[i] = tbsData[i];
         }
 
         /* the complete flow is something like this */
@@ -32,7 +34,7 @@ namespace ctp
         if (cert != nullptr)
         {
             /* sign the data */
-            signature = cert->signEx(tbsData, len);
+            sig = cert->SignData(tbsData, len, ecdsaNistP256Signature);
         }
         encode();
         *signedDataLen = enc->get(signedData);
@@ -54,28 +56,35 @@ namespace ctp
         /* unsecured data */
         payload->data->content.type = Ieee1609Dot2ContentUnsecuredData;
         payload->data->protocolVersion = 0x03;
-        payload->data->content.unsecuredData.length = len;
-        payload->data->content.unsecuredData.octets = (uint8_t *)buf_alloc(len);
+        payload->data->content.UNSECUREDDATA.length = len;
+        payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* create a local copy of the certificate */
         this->cert = cert;
         /* copy the data into unsecured buffer */
         for(int i = 0; i < len; i++)
         {
-            payload->data->content.unsecuredData.octets[i] = tbsData[i];
+            payload->data->content.UNSECUREDDATA.octets[i] = tbsData[i];
         }
         if (cert != nullptr)
         {
             /* sign the data */
-            signature = cert->signEx(tbsData, len);
+            sig = cert->SignData(tbsData, len, ecdsaNistP256Signature);
         }
          encode();
-         size_t templen;
+         size_t templen = 0;
          uint8_t *tempbuf = nullptr;
-        //  *signedDataLen = enc->get(signedData);
+         /* 
+         FIXME, directly writing into signedDataLen and signedData results in segment fault,
+         indicating an illegal memory access 
+         */
         templen = enc->get(&tempbuf);
-        // *signedData = tempbuf;
-        // *signedDataLen = templen;
-
+        if(templen)
+        {
+            //*signedDataLen = enc->get(signedData);
+            *signedData = (uint8_t *)buf_alloc(templen);
+            memcpy(*signedData, tempbuf, templen);
+            *signedDataLen  = templen;
+        }
         LOG_INFO("Ieee1609Data::sign", MODULE);
     }
 
@@ -100,7 +109,7 @@ namespace ctp
         enc->HashAlgo(HashAlgorithmTypeSha256);
         enc->ToBesignedData_(std::ref(*tbsData));
         /* encode the signer */
-        //encode_signeridentifier();
+        encode_signeridentifier();
         //return enc->Signature_(signature);
         return 0;
     }

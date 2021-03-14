@@ -19,10 +19,11 @@ namespace ctp
         ToBeSignedData *tbsData;
         const SignerIdentifier *signer;
         const Signature *signature;
+        const ECDSA_SIG* sig;
         TP_PTR tpPtr;
         Ieee1609Cert *certMgrPtr;
         /* signer for this data */
-        Ieee1609Cert *cert; 
+        Ieee1609Cert *cert;
 
         /* data member */
         Ieee1609Dot2Data *data;
@@ -42,6 +43,7 @@ namespace ctp
                 tbsData = nullptr;
                 hashId = nullptr;
                 cert = nullptr;
+                sig = nullptr;
                 
 
                 /* get the certificate manager */

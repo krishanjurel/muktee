@@ -451,6 +451,7 @@ namespace ctp
 
     int Ieee1609Encode::SignedDataPayload_(const Ieee1609Dot2Data& data)
     {
+        std::cout << " Ieee1609Encode::SignedDataPayload_ enter " << encLen << std::endl;
         /* default option is one */
         /* the sequence preamble byte 00 */
         uint8_t preamble = 0x40; /* only first optional compoent */
@@ -458,7 +459,9 @@ namespace ctp
         /* encoding of Ieee1609Dot2Data, 6.3.2 */
         len += 1; /* for the protcol version */
         len += 1; /* for choice opaque */
-        len += data.content.unsecuredData.length;
+        len += 1; /* number of bytes in the lenght */
+        len += 4; /* 4 bytes in the length */
+        len += data.content.UNSECUREDDATA.length;
 
         encBuf = (uint8_t *)buf_realloc(encBuf, (encLen + len));
 
@@ -469,11 +472,23 @@ namespace ctp
         /* protocol version */
         encBuf[encLen++] = data.protocolVersion; 
         len --;
+        std::cout << "data.content.type " << (data.content.type) << std::endl;
         /* the choice for opaque data */
         encBuf[encLen++] = (uint8_t)((0x80) | (data.content.type));
         len --;
+
+        /* encode the number of bytes , 4 */
+        encBuf[encLen++] = 4; /* 4 integer bytes */
+        len --;
+        uint8_t *dataBuf = (uint8_t *)&data.content.UNSECUREDDATA.length;
+        for (int i = 3; i >= 0; i--)
+        {
+            /* encode in network order */
+            encBuf[encLen++] = dataBuf[i];
+            len --;
+        }
         /* copy the data */
-        uint8_t *dataBuf = data.content.unsecuredData.octets;
+        dataBuf = data.content.UNSECUREDDATA.octets;
         while(len)
         {
             encBuf[encLen++] = *dataBuf++;
@@ -499,10 +514,9 @@ namespace ctp
         return 0;
     }
 
-
     int Ieee1609Encode::get(uint8_t **buf)
     {
-        /* copy the encoded buffer*/
+       /* copy the encoded buffer*/
         *buf = this->encBuf;
         return encLen;
     }

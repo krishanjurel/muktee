@@ -50,7 +50,8 @@ namespace ctp
         int encLen;
 
         int EncodeCertBase(bool cont = true); /* encode certificate base */
-
+        int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
+        const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
 
     #if 0
         int encode_certid();
@@ -81,8 +82,10 @@ namespace ctp
             /* returns the certificate for the given psid */
             Ieee1609Cert* operator[](int psid);
             //int sign (SignatureType type = ecdsaNistP256Signature);
-            int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
-            const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
+             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
+             int SigToSignature(const ECDSA_SIG* sig, Signature& signature);
+             /* and then the hashed data */
+             int Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash);
 
             /* \fn encode(uint8_t **buf)
                     encodes the certificate.

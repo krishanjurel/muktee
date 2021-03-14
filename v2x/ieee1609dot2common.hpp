@@ -388,11 +388,9 @@ typedef struct ToBeSignedData ToBeSignedData;
 /*6.3.4 */
 struct SignedData
 {
-    HashAlgorithmType HashAlgorithm;
+    HashAlgorithmType hashAlgorithm;
     ToBeSignedData toBeSignedData;
-    SignerIdentifierType signerType;
     SignerIdentifier signer;
-    SignatureType signatureType;
     Signature signature;
 };
 
@@ -405,14 +403,21 @@ typedef enum
     Ieee1609Dot2ContentSignedCertReq,
 }Ieee1609Dot2ContentType;
 
-union ieee1609Dot2Content
+
+struct ieee1609Dot2Content
 {
     Ieee1609Dot2ContentType type;
-    OctetString unsecuredData;
-    SignedData signedData;
-    /* TBD: add the types of encrypted data and signed cert request */   
+    union 
+    {
+        OctetString unsecuredData;
+        SignedData signedData;
+        /* TBD: add the types of encrypted data and signed cert request */   
+    }content;
+#define SIGNEDDATA  content.signedData
+#define UNSECUREDDATA content.unsecuredData
+
 };
-typedef union ieee1609Dot2Content Ieee1609Dot2Content;
+typedef struct ieee1609Dot2Content Ieee1609Dot2Content;
 
 /* 6.3.2 */
 struct Ieee1609Dot2Data
