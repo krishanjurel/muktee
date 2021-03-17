@@ -47,7 +47,7 @@ void *buf_alloc(size_t len)
 }
 void *buf_realloc(void *ptr, size_t len)
 {
-    //std::cout << "buf_realloc " << len << std::endl;
+    std::cout << "buf_realloc " << len << std::endl;
     return realloc(ptr, len);
 }
 
@@ -85,10 +85,6 @@ void print_data(const char* file, const uint8_t *buf, size_t len)
     std::cout << std::endl;
     os.close();
 }
-
-
-
-
 
 namespace ctp
 {
@@ -234,7 +230,7 @@ namespace ctp
             return ret;
 
         }
-        *hash = (uint8_t *)buf_alloc(32);
+        *hash = (uint8_t *)buf_alloc(SHA256_DIGEST_LENGTH);
 
         if(SHA256_Update(&ctx, tbHash, len) == 0)
         {
@@ -263,7 +259,7 @@ namespace ctp
         const BIGNUM *r;
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
-#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else
@@ -308,19 +304,6 @@ namespace ctp
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
         ECDSA_SIG *sig;
-        // try
-        // {
-        //     sigBuf = static_cast<uint8_t *>(OPENSSL_malloc(sigBufLen));
-        //     if (sigBuf == nullptr)
-        //     {
-        //         throw std::bad_alloc();
-        //     }
-        // }
-        // catch(const std::exception& e)
-        // {
-        //     std::cerr << e.what() << '\n';
-        //     std::terminate();
-        // }
         sig = ECDSA_do_sign(buf,len,ecKey);
         if (sig == nullptr)
         {
@@ -329,7 +312,7 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
-#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else
@@ -355,6 +338,8 @@ namespace ctp
         /* convert the point to the buf for encoding */
         //EC_POINT_point2oct(grp, point, POINT_CONVERSION_COMPRESSED,xonly_r, sizeof(HashedData32), nullptr);
 
+        std::cout << " BN_num_bytes(r) " << BN_num_bytes(r) << std::endl;
+
         if(BN_bn2bin(r, sign_r) != sizeof(HashedData32))
         {
             LOG_ERR("cert::sign BN_bn2bin(r, sign_r)", 1);
@@ -362,6 +347,9 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
+
+        std::cout << " BN_num_bytes(s) " << BN_num_bytes(s) << std::endl;
+
         if(BN_bn2bin(s, sign_s) != sizeof(HashedData32))
         {
             LOG_ERR("cert::sign BN_bn2bin(r, sign_r)", 1);
@@ -376,289 +364,28 @@ namespace ctp
             sig = nullptr;
         return ret;
     }
-#if 0
-    /*        */
-    int Ieee1609Cert::encode_certid()
-    {
-        int len = 1;
-        uint8_t choice = 0x80 | (uint8_t)(tbs->id.type);
-        uint8_t *buf;
 
-        switch(tbs->id.type)
-        {
-            case CertificateIdTypeName:
-                len += tbs->id.id.hostName.length;
-                buf = (uint8_t *)tbs->id.id.hostName.name;
-                len += 1;
-                break;
-            default:
-                LOG_ERR("cert::encode_certid: unsupported cert id", 1);
-                break;
-        }
-
-        std::cout << "cert::encodecertid " << len << std::endl;
-
-        encBuf = (uint8_t *)realloc(encBuf, len);
-        encBuf[encLen++] = choice;
-        len --;
-        /* encode the length */
-        encBuf[encLen++] = tbs->id.id.hostName.length;
-        len --;
-        /* copy the remainder of buffer into the encoded buffer */
-        while(len > 0)
-        {
-            encBuf[encLen++] = *buf++;
-            len--;
-        }
-        std::cout << "cert::encodecertid " << encLen << std::endl;
-        /* return the length */
-        return encLen;
-    }
-
-    int Ieee1609Cert::encode_hashid3()
-    {
-        int len = encLen + 3;
-        /* just fill it with the hard coded a,b,c */
-        encBuf = (uint8_t *)realloc(encBuf, len);
-        if(issuer->type == IssuerIdentifierTypeSelf)
-        {
-            encBuf[encLen++] = 0x00;
-            encBuf[encLen++] = 0x00;
-            encBuf[encLen++] = 0x00;
-        }
-        std::cout << "cert::encode_hashid3 " << encLen << std::endl;
-        return encLen;
-    }
-
-    int Ieee1609Cert::encode_crlseries()
-    {
-        /* its two bytes */
-        int len = encLen + 2;
-        encBuf = (uint8_t *)realloc(encBuf, len);
-
-        uint8_t *buf = (uint8_t *)&tbs->crlSeries;
-        /* copy in the network byte order */
-        encBuf[encLen++] = buf[1];
-        encBuf[encLen++] = *buf;
-        std::cout << "cert::encode_crlseries " << encLen << std::endl;
-        return encLen;
-    }
-
-    int Ieee1609Cert::encode_validityperiod()
-    {
-        /* validity period consists of start time of 4 bytes */
-        int len = 4;
-        /* 1 byte for choice of duration */
-        len += 1;
-        /* and two bytes of duration */
-        len += 2;
-
-        /* update the length */
-        len += encLen; 
-
-        /* allocate the buffer for duration*/
-        encBuf = (uint8_t *)realloc(encBuf, len);
-        if(encBuf == nullptr)
-        {
-            throw std::bad_alloc();
-        }
-
-        /* copy the duration in the network byte order */
-        uint8_t *buf = (uint8_t *)&tbs->validityPeriod.start;
-        encBuf[encLen++] = buf[3];
-        encBuf[encLen++] = buf[2];
-        encBuf[encLen++] = buf[1];
-        encBuf[encLen++] = buf[0];
-        len -= 4;
-
-        /* initialize the choice */
-        uint8_t choice = 0x80 | (uint8_t)(tbs->validityPeriod.duration.type);
-        len -= 1;
-        encBuf[encLen++] = choice;
-        buf = (uint8_t *)&tbs->validityPeriod.duration.duration.minutes;
-        /* copy in the network byte order */
-        encBuf[encLen++] = buf[1];
-        encBuf[encLen++] = buf[0]; 
-        len -= 2;
-        std::cout << "cert::encode_validityperiod " << encLen << std::endl;
-        return encLen;
-    }
-    /* this is encoding the sequence of psids */
-    int Ieee1609Cert::encode_sequenceofpsid()
-    {
-        /* FIXME, only one psid with no ssp */
-        /* length octet is one */
-        int len = 1;
-        /* there is only 1 sequence */
-        len += 1;
-        /* need one byte to encode sequence */
-        len += 1;
-        /* 1 byte for psid length encoding and 1 bytes for bsm psid (0x20) */
-        len += 2;
-
-        len += encLen;
-
-        encBuf = (uint8_t *)realloc(encBuf, len);
-        if(encBuf == nullptr)
-        {
-            throw std::bad_alloc();
-        }
-
-        /* encode number of sequences */
-        encBuf[encLen++] = 1; /* number of bytes to represent one sequence, 1 */
-        len -= 1;
-        encBuf[encLen++] = 1; /* number of sequences */
-        len -= 1;
-        encBuf[encLen++]  = 0x00; /* sequence with no optional ssp */
-        len -= 1;
-        encBuf[encLen++] = 1; /* number of bytes in the psid */
-        len -= 1;
-        encBuf[encLen++] = 0x20; /*FIXME, define this somewhere BSM psid */
-        len -= 1;
-         if (len != 0)
-         {
-             LOG_ERR("cert::encode_sequenceofpsid(): rem length not zero", 1);
-             //throw new std::logic_error("cert::encode_sequenceofpsid(): rem length not zero ");
-         }
-         std::cout << "cert::encode_sequenceofpsid " << encLen << std::endl;
-         return encLen;
-    }
-
-    /* encode the verification key identifier */
-    int Ieee1609Cert::encode_vki()
-    {
-        /* for hashing purposes, all the ecc points of toBeSigned data structure
-           are used in the compressed form, i.e. compressed-[y0,y1]
-        */
-        /*FIXME, this is using the self-signed, we need to get the compressed form of 
-          all our ecc points in the verification key identifier 
-        */
-        int len = 1; /* for choice indicator */
-        /* next another choice public verification type */
-        len += 1;
-        /* next another choise of point type, which is compressed */
-        len += 1;
-        /* folllowed by 32 bytes of compressed point */
-        len += 32;
-
-        /* update the total encoding length */
-        //len += encLen;
-
-        /* reallocate the buffer */
-        encBuf = (uint8_t *)buf_realloc(encBuf, (len + encLen));
-        uint8_t choice = 0x80 | (uint8_t) (vki->type);
-        encBuf[encLen++] = choice;
-        len -= 1;
-        /* choice of public verification */
-        choice = (0x80) | (uint8_t)(vki->indicator.verificationKey.type);
-        encBuf[encLen++] = choice;
-        len -= 1;
-        /*choice of curve point-type*/
-        choice = (0x80) | (uint8_t)(keyType & 0x01);
-        encBuf[encLen++] = choice;
-        len -= 1;
-        /* just take the y 0*/
-        const uint8_t *key = (uint8_t *)vki->indicator.verificationKey.key.ecdsaNistP256S.point.compressedy0.x;
-        while(len > 0)
-        {
-            encBuf[encLen++] = *key++;
-            len -= 1;
-        }
-
-        std::cout << "cert::encode_vki " << encLen << std::endl;
-
-        return encLen;
-    }
-
-    int Ieee1609Cert::encode_sign()
-    {
-        int len = 1; /* for signature choice */
-        uint8_t choice = (0x80) | (signature->type);
-        len += 1; /* choice of curve point type */
-
-        len += 64; /* 64 maximum buffer for curve point, r of the signature */
-        len += 32; /* 32 bytes for the s */
-
-        try
-        {
-            encBuf = (uint8_t*)buf_realloc(encBuf, (encLen +  len));
-        }catch (const std::bad_alloc& e)
-        {
-            LOG_ERR("cert::encode_sig::buf_realloc error allocation buffer ", 1);
-            throw new std::runtime_error("cert::encode_sig::buf_realloc error allocation buffer ");
-        }
-
-        /* start encoding */
-        encBuf[encLen++] = choice;
-        len --;
-        /* choice of curve point type */
-        choice = (0x80) | (signature->signature.ecdsaP256Signature.r.type);
-        encBuf[encLen++] = choice;
-        len --;
-
-        choice  = signature->signature.ecdsaP256Signature.r.type;
-
-        uint8_t *pointBuf = nullptr;
-        size_t pointLen = 0;
-        if(choice == EccP256CurvPointXOnly){
-            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.xonly.x;
-            pointLen = 32;
-        }else if (choice == EccP256CurvPointCompressedy0)
-        {
-            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.compressedy0.x;
-            pointLen = 32;
-        }else if (choice == EccP256CurvPointCompressedy1)
-        {
-            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.compressedy1.x;
-            pointLen = 32;
-        }else if (choice == EccP256CurvPointUncompressed){
-            pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.uncompressed.x.x;
-            pointLen = 64;
-        }
-
-
-        /*encode the r points */
-        while(pointLen)
-        {
-            encBuf[encLen++] = *pointBuf++;
-            pointLen--;
-            len --;
-        }
-        /* encode the s point */
-        pointBuf = (uint8_t *)signature->signature.ecdsaP256Signature.s.x;
-        pointLen = sizeof(signature->signature.ecdsaP256Signature.s.x);
-
-        while(pointLen)
-        {
-            encBuf[encLen++] = *pointBuf++;
-            pointLen--;
-            len --;
-        }
-        //static_assert((len >= 0));
-        log_info("cert::encode_sig", 1);
-        std::cout << "cert::encode_sig remaining length (exp >= 0) "  << len << std::endl;
-        std::cout << "cert::encode_sig encoded lenght (exp >= 0) "  << encLen << std::endl;
-        return encLen;
-    }
-#endif    
 
     int Ieee1609Cert::encode(uint8_t **buf)
     {
         /* clear whatever was there */
         pEncObj->clear();
+        /* FIXME, use Ieee1609certs class object to encode the certs */
+        uint8_t num = 1;
+
+        pEncObj->SequenceOf(&num, 1);
         EncodeCertBase(true);
         /* only encode the signature if it is of type explicit */
         if(base->certType == CertTypeExplicit &&  signature != nullptr)
-            pEncObj->Signature_(signature);
-        encLen = pEncObj->get(buf);
-        return encLen;
+            pEncObj->Signature_(std::ref(*signature));
+        return pEncObj->get(buf);
     }
 
     /* the flag to control , whether to clear the memory or continue encoding */
     int Ieee1609Cert::EncodeToBeSigned(bool cont)
     {
         /* we are only using sequence of psids optional componets */
-        uint8_t preample = 0x10; /* appPermissions are 3 optional components */
+        uint8_t preample = 0x10; /* appPermissions are 3rd optional components */
         try
         {
             /* if this is not continuous encoding, i.e. only tobesigned to be encoded */
@@ -668,7 +395,7 @@ namespace ctp
                 pEncObj->clear();
             }
             /* preamble */
-            pEncObj->OctectsFixed(&preample, 1);
+            pEncObj->OctetsFixed(&preample, 1);
             /* cert if */
             pEncObj->CertId(tbs->id);
             /* hashid3 */
@@ -703,9 +430,9 @@ namespace ctp
             uint8_t preample = 0;
             if (base->certType == CertTypeExplicit)
                 preample = 0x40;
-            pEncObj->OctectsFixed(&preample, 1);
-            pEncObj->OctectsFixed(&base->version, 1);
-            pEncObj->OctectsFixed((uint8_t *)&base->certType, 1);
+            pEncObj->OctetsFixed(&preample, 1);
+            pEncObj->OctetsFixed(&base->version, 1);
+            pEncObj->OctetsFixed((uint8_t *)&base->certType, 1);
             pEncObj->IssuerIdentifier_(std::ref(*issuer));
             /* continuous encoding */
             EncodeToBeSigned(true);
@@ -726,8 +453,10 @@ namespace ctp
     /* print the certificate into the file */
     int Ieee1609Cert::print()
     {
-        encLen = encode(&encBuf);
-        print_data("cert.txt", encBuf, encLen);
+        size_t len;
+        uint8_t *buf = nullptr;
+        len = encode(&buf);
+        print_data("cert.txt", buf, len);
         return 0;
     }
 
@@ -795,7 +524,8 @@ namespace ctp
 
     /* create a certificate */
     void Ieee1609Cert::create()
-    {   
+    {
+        int ret = 0;
         /* set the next tr to next */
         this->next = nullptr;
         /* one cert */
@@ -822,12 +552,20 @@ namespace ctp
 
         /* define and call the below API */ 
         EncodeToBeSigned(false);
-        encLen = pEncObj->get(&encBuf);
-        sign(encBuf, encLen,ecdsaNistP256Signature);
+        /* this buf is owned by the encoder, dont do anything with this */
+        uint8_t *buf = nullptr;
+        size_t len = 0;
+        len = pEncObj->get(&buf);
+        uint8_t *hash = nullptr;
+        ret = Hash256(buf, len, &hash);
+        if(ret == 0)
+        {
+            LOG_ERR(" Ieee1609Cert::create()::Hash256 ", 1);
+            std::terminate();
+        }
+        sign(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
         /* just to be sure clear the encode memory */
         pEncObj->clear();
-        encBuf = nullptr;
-        encLen = 0;
     }
 
 

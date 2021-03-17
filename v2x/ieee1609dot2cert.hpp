@@ -10,7 +10,9 @@
 #include <map>
 #include <vector>
 
+#define MODULE 2
 
+void print_data(const char* file, const uint8_t *buf, size_t len);
 
 namespace ctp
 {
@@ -46,24 +48,10 @@ namespace ctp
         int private_key_get();
         int _sign(const uint8_t *buf, size_t len, SignatureType type);
         /* encode the certificate */
-        uint8_t *encBuf;
-        int encLen;
 
         int EncodeCertBase(bool cont = true); /* encode certificate base */
         int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
         const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
-
-    #if 0
-        int encode_certid();
-        int encode_hashid3();
-        int encode_crlseries();
-        int encode_validityperiod();
-        int encode_sequenceofpsid();
-        /* encode verificattion key indicator */
-        int encode_vki();
-        /* encode the signature */
-        int encode_sign();
-    #endif
 
         public:
             void create();
@@ -78,7 +66,7 @@ namespace ctp
             const Ieee1609Cert& operator=(const Ieee1609Cert&) = delete;
             /* no move constructor */
             Ieee1609Cert(const Ieee1609Cert&&) = delete;
-            ~Ieee1609Cert(){delete encBuf;}
+            ~Ieee1609Cert(){};
             /* returns the certificate for the given psid */
             Ieee1609Cert* operator[](int psid);
             //int sign (SignatureType type = ecdsaNistP256Signature);
@@ -96,7 +84,7 @@ namespace ctp
 
             int encode(uint8_t **buf);
             /* encode to be signed data of the certificate */
-            int EncodeToBeSigned(bool cont=false);
+            int EncodeToBeSigned(bool cont=true);
 
             void set(Ieee1609Cert *cert)
             {
@@ -110,12 +98,10 @@ namespace ctp
 
     };
 
-
-        class Ieee1609Encode
+    class Ieee1609Encode
     {
         uint8_t *encBuf; /*encoded buffer */
         size_t encLen;   /* encoded length */
-        size_t len_; /* another length to encode the individual components */
         public:
             Ieee1609Encode():encBuf(nullptr),encLen(0){};
             ~Ieee1609Encode()
@@ -126,7 +112,7 @@ namespace ctp
                 encLen = 0;
             }
             /* encode fixed length octets, i.e, no need for length encoding */
-            int OctectsFixed(const uint8_t *octets, size_t len);
+            int OctetsFixed(const uint8_t *octets, size_t len);
             /* encode psid */
             int psid_(int psid, int bytes = 1);
             /* encode octets */
@@ -145,6 +131,7 @@ namespace ctp
             int Vki(const VerificationKeyIndicator& vki);
             int SequenceOfPsid_(const SequenceOfPsidSsp& psids);
             int IssuerIdentifier_(const IssuerIdentifier& issuer);
+            int SequenceOf(const uint8_t *values, size_t bytes);
 
 
             /*6.3.3*/
@@ -154,7 +141,7 @@ namespace ctp
             int HeaderInfo_(const HeaderInfo& header);
             int ToBesignedData_(const ToBeSignedData& tbsData);
             int SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type);
-            int Signature_(const Signature *signature);
+            int Signature_(const Signature& signature);
             int Ieee1609Dot2ContentType_(const Ieee1609Dot2ContentType type);
             int SequenceOfCerts_(const SequenceOfCertificate& certs);
             /* int encoded buffer get */
@@ -196,6 +183,7 @@ namespace ctp
     {
         int num;
         Ieee1609Cert *cert;
+        Ieee1609Encode *enc;
 
         public:
             /*constructor */
@@ -203,6 +191,17 @@ namespace ctp
             explicit Ieee1609Certs(){
                 num = 0;
                 cert = new Ieee1609Cert();
+                enc = new Ieee1609Encode();
+                /* create a self-signed certificate */
+                try {
+                    cert->create();
+                    num++;
+                }catch( std::exception& e){
+                    LOG_ERR("Ieee1609Certs::Ieee1609Certs()::create()", MODULE);
+                    std::cout << " exception " << e.what() << std::endl;
+                    delete cert;
+                    delete enc;
+                }
             }
             /* encoded file */
             explicit Ieee1609Certs(std::string& file)
@@ -225,6 +224,26 @@ namespace ctp
             const Ieee1609Cert *get() const
             {
                 return cert;
+            }
+
+            int encode(){
+                uint8_t *buf = nullptr;
+                /* encode the sequence of certs */
+                enc->clear();
+                /* only 1 byte is needed to encode the number seuqnce */
+                enc->SequenceOf((uint8_t *)&num, 1);
+                /* encode the actual certificate */
+                size_t len = cert->encode(&buf);
+                if (len > 0)
+                    enc->OctetsFixed(buf, len);
+                return len;
+            }
+
+            void print()
+            {
+                uint8_t *buf = nullptr;
+                size_t len = enc->get(&buf);
+                print_data("cert.txt", buf, len);
             }
     };
 

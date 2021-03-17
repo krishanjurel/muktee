@@ -18,7 +18,7 @@ namespace ctp
         HashAlgorithmType *hashId;
         ToBeSignedData *tbsData;
         const SignerIdentifier *signer;
-        const Signature *signature;
+        Signature *signature;
         const ECDSA_SIG* sig;
         TP_PTR tpPtr;
         Ieee1609Cert *certMgrPtr;
@@ -44,6 +44,7 @@ namespace ctp
                 hashId = nullptr;
                 cert = nullptr;
                 sig = nullptr;
+                signature = nullptr;
                 
 
                 /* get the certificate manager */
@@ -56,6 +57,7 @@ namespace ctp
                 free(data);
                 free(content);
                 free(tbsData);
+                free(signature);
             }
             /* a method that can be called on recieving signed data */
             void process(const uint8_t *data,size_t len, ...)
@@ -76,10 +78,11 @@ namespace ctp
 
             /* encode the data*/
             void encode();
-            void encode_content();
-            int encode_signeridentifier();
-            int encode_tbsdata();
-            int encode_signeddata(bool cont = false);
+            void encode_content(bool cont = true);
+            int encode_signeridentifier(bool cont = true);
+            int encode_tbsdata(bool cont = true);
+            int encode_signeddata(bool cont = true);
+            int encode_signature(bool cont = true);
 
 
             void print();

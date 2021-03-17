@@ -306,14 +306,14 @@ int main()
     sigaddset(&sigAct.sa_mask, SIGABRT);
     sigaddset(&sigAct.sa_mask, SIGTERM);
     sigaddset(&sigAct.sa_mask, SIGCHLD);
-    sigaddset(&sigAct.sa_mask, SIGSEGV);
+    //sigaddset(&sigAct.sa_mask, SIGSEGV);
     sigprocmask(SIG_UNBLOCK, &sigAct.sa_mask, nullptr);
     
     sigaction(SIGKILL, &sigAct, NULL);
     sigaction(SIGABRT, &sigAct, NULL);
     sigaction(SIGTERM, &sigAct, NULL);
     sigaction(SIGCHLD, &sigAct, NULL);
-    sigaction(SIGSEGV, &sigAct, NULL);
+    //sigaction(SIGSEGV, &sigAct, NULL);
 
     std::set_terminate(terminate_handler);
    #if 0
@@ -483,10 +483,10 @@ int main()
 #endif
 
     ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
+    pcert->create();
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
-    pcert->create();
-    // encLen = pcert->encode(&encBuf);
+    encLen = pcert->encode(&encBuf);
     // std::cout << "encoded buffer length " << encLen << std::endl;
     
     pcert->print();

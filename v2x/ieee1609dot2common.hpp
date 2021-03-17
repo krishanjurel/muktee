@@ -275,6 +275,13 @@ typedef struct SequenceOfPsidSsp SequenceOfPsidSsp;
 #define TBS_OPTIONAL(_x_) TbsOptional ## _x_
 
 
+// #define TbsOptionalMaskRegion   (1<<(7-TBS_OPTIONAL(Region)))
+// #define TbsOptionalMaskAssuranceL   (1<<(7-TBS_OPTIONAL(Region)))
+// #define TbsOptionalMaskRegion   (1<<(7-TBS_OPTIONAL(Region)))
+// #define TbsOptionalMaskRegion   (1<<(7-TBS_OPTIONAL(Region)))
+// #define TbsOptionalMaskRegion   (1<<(7-TBS_OPTIONAL(Region)))
+
+
 typedef enum
 {
     TBS_OPTIONAL(Region),
@@ -285,6 +292,26 @@ typedef enum
     TBS_OPTIONAL(CanReqRoll),
     TBS_OPTIONAL(EncKey)
 }TbsOptionalComponnets;
+
+
+#define TBS_OPTIONAL_MASK(_x_) TbsOptionalMask ## _x_
+#define OPTIONAL_MASK_SHIFT_BIT 6
+#define TBS_OPTIONAL_MASK_(_x_) (1<<(6-TBS_OPTIONAL(_x_)))
+
+typedef enum
+{
+    TBS_OPTIONAL_MASK(Region) = TBS_OPTIONAL_MASK_(Region),
+    TBS_OPTIONAL_MASK(AssuranceLevel) = TBS_OPTIONAL_MASK_(AssuranceLevel),
+    TBS_OPTIONAL_MASK(AppPerm) = TBS_OPTIONAL_MASK_(AppPerm),
+    TBS_OPTIONAL_MASK(CertIssuePerm) = TBS_OPTIONAL_MASK_(CertIssuePerm),
+    TBS_OPTIONAL_MASK(CertReqPerm) = TBS_OPTIONAL_MASK_(CertReqPerm),
+    TBS_OPTIONAL_MASK(CanReqRoll) = TBS_OPTIONAL_MASK_(CanReqRoll),
+    TBS_OPTIONAL_MASK(EncKey) = TBS_OPTIONAL_MASK_(EncKey),
+    TBS_OPTIONAL_MASK(All) = (3<<6)
+}TbsOptionalComponnetsMask;
+
+
+
 
 /* 6.4.8 */
 struct ToBeSignedCertificate
