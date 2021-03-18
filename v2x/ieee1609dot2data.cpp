@@ -1,6 +1,12 @@
 #include "ieee1609dot2data.hpp"
 #include <stdlib.h>
 #include <string.h>
+#include <memory>
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <iomanip>
+
 
 
 //#define MOUDLE "1609DATA"
@@ -206,4 +212,69 @@ namespace ctp
         // enc->SignerIdentifier_(std::ref(*cert), SignerIdentifierTypeCert); 
         // enc->Signature_(signature);
     }
+
+    void Ieee1609Data::print_decoded(const char* file)
+    {
+        std::ofstream os(file, std::ios::out| std::ios::binary);
+        os << " Protocol version: " << data->protocolVersion << std::endl;
+        os << "content" << std::setw(100) << std::endl;
+        os << std::setw(50) << " Content choice " << data->content.type << std::endl;
+    }
+
+    /* decode the data */
+    void Ieee1609Data::decode(const uint8_t * buf, size_t len)
+    {
+        dec->clear();
+        dec->set(buf, len);
+        decode_content();
+        return;
+    }
+
+    int Ieee1609Data::decode_content()
+    {
+        return 0;
+    }
+    int Ieee1609Data::decode_signeridentifier()
+    {
+        return 0;
+    }
+    int Ieee1609Data::decode_tbsdata()
+    {
+        dec->ToBesignedData_(std::ref(data->content.content.signedData.toBeSignedData));
+        return 0;
+    }
+    int Ieee1609Data::decode_signeddata()
+    {
+        //dec->SignedDataPayload_()
+        return 0;
+    }
+    int Ieee1609Data::decode_signature()
+    {
+        return 0;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }//namespace ctp 

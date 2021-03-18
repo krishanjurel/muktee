@@ -40,6 +40,11 @@ typedef struct
 }OctetString;
 
 
+#define ASN1_COER_CHOICE_MASK   (0x80)
+
+
+
+
 /*6.3.25 */
 typedef struct {char x[3];}HashedId3;
 /* 6.3.26 */
@@ -73,10 +78,7 @@ typedef struct
     EccP256CurvPointType type;
     union 
     {
-        HashedData32 xonly;
-        HashedData32 fill; /* figure it out */
-        HashedData32 compressedy0;
-        HashedData32 compressedy1;
+        HashedData32 octets;
         struct {
             HashedData32 x;
             HashedData32 y;
@@ -394,9 +396,27 @@ struct HeaderInfo
 typedef struct HeaderInfo HeaderInfo;
 
 /* 6.3.7 */
+//SDP=>signed data payload
+typedef enum
+{
+    SDP_OPTION_DATA  = 0,
+    SDP_OPTION_EXT_DATA_HASH,
+    SDP_OPTION_ALL
+}SignedDataPayloadOptions;
+
+
+typedef enum
+{
+    SDP_OPTION_DATA_MASK = (1<<(OPTIONAL_MASK_SHIFT_BIT-SDP_OPTION_DATA)),
+    SDP_OPTION_EXT_DATA_HASH_MASK = (1<<(OPTIONAL_MASK_SHIFT_BIT-SDP_OPTION_EXT_DATA_HASH)),
+    SDP_OPTION_ALL_MASK = (3<<OPTIONAL_MASK_SHIFT_BIT)
+}SignedDataPayloadOptionsMask;
+
+
 struct SignedDataPayload
 {
     /* this is the data has to be sent */
+    SignedDataPayloadOptionsMask mask;
     Ieee1609Dot2Data *data;
     HashedData32 *extDataHash;
 };

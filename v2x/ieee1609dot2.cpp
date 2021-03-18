@@ -263,14 +263,27 @@ namespace ctp
                 fclose(fp);
             }
         }
+
+        /* create instances of cert and data manager */
+        // pCerts = new Ieee1609Certs();
+        // pData = new Ieee1609Data();
+
+
     }
 
     TP::~TP()
     {
-
+        // delete pCerts;
+        // delete pData;
     }
 
+    /* every client must be calling this routine */
     TP_PTR TP::instance_get()
+    {
+        return shared_from_this();
+    }
+
+    TP_PTR TP::init()
     {
         static TP_PTR pObj = nullptr;
         static TP obj; /* need this for private constructor */

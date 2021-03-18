@@ -136,6 +136,7 @@ namespace ctp
          return 0;
      }
 
+
 /* cert class implementation.
    the main purpose of this class is to store and keep certs, together with hashid 
 */
@@ -268,7 +269,7 @@ namespace ctp
 #endif
         
         signature.signature.ecdsaP256Signature.r.type= EccP256CurvPointXOnly;
-        sign_r = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.xonly.x;
+        sign_r = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
         sign_s = (uint8_t *)&signature.signature.ecdsaP256Signature.s.x[0];
         
         
@@ -330,7 +331,7 @@ namespace ctp
         // }
         /* signature r value for FIPS 186-4 takes only x-only */
         signature->signature.ecdsaP256Signature.r.type= EccP256CurvPointXOnly;
-        sign_r = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.xonly.x;
+        sign_r = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.octets.x;
         sign_s = (uint8_t *)&signature->signature.ecdsaP256Signature.s.x[0];
         /* set the signature type */
         signature->type = type;

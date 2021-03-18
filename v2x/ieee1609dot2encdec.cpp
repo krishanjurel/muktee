@@ -259,7 +259,7 @@ namespace ctp
         encBuf[encLen++] = choice;
         len -= 1;
         /* just take the y 0*/
-        const uint8_t *key = (uint8_t *)vki.indicator.verificationKey.key.ecdsaNistP256S.point.compressedy0.x;
+        const uint8_t *key = (uint8_t *)vki.indicator.verificationKey.key.ecdsaNistP256S.point.octets.x;
         while(len > 0)
         {
             encBuf[encLen++] = *key++;
@@ -292,23 +292,23 @@ namespace ctp
         std::cout << "Ieee1609Encode::Signature_ enter " << encLen << std::endl;
         len += 1; /* choice of curve point type */
         len += 32; /* 32 bytes for the s */
-        
+
         type  = signature.signature.ecdsaP256Signature.r.type;
 
         uint8_t *pointBuf = nullptr;
         if(type == EccP256CurvPointXOnly){
-            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.xonly.x;
+            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 32;
         }else if (choice == EccP256CurvPointCompressedy0)
         {
-            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.compressedy0.x;
+            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 32;
         }else if (choice == EccP256CurvPointCompressedy1)
         {
-            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.compressedy1.x;
+            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 32;
         }else if (choice == EccP256CurvPointUncompressed){
-            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.uncompressed.x.x;
+            pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 64;
         }
 
@@ -548,8 +548,321 @@ namespace ctp
         return encLen;
     }
 
+    /* decoding of SignedDataPayload:data, 6.3.7 */
+    int Ieee1609Decode::Ieee1609Dot2Data_(Ieee1609Dot2Data& data)
+    {
+        uint8_t data_;
+        uint8_t *tempPtr=nullptr;
+
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::SignedDataPayload2 enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        data.protocolVersion = buf[offset++];
+
+        /* read the choice data */
+        data_ = buf[offset++];
+        data_ = data_ & ~ASN1_COER_CHOICE_MASK;
+        if(data_ == Ieee1609Dot2ContentUnsecuredData)
+        {
+            uint8_t numLenBytes = buf[offset++];
+            int len_ = 0;
+             tempPtr = (uint8_t*)&len_;
+            while(numLenBytes--)
+            {
+                *tempPtr++ = buf[offset++];
+            }
+
+            os << " Ieee1609Decode::SignedDataPayload2 unsecured length " << len_ << std::endl;
+            log_info(log_.str(), MODULE);
+            os.clear(); 
+
+            data.content.content.unsecuredData.octets = tempPtr =  (uint8_t *)buf_alloc(len_);
+
+            /* copy the length into the buffer */
+            while(len_--)
+            {
+                *tempPtr++ = buf[offset++];
+            }
+        }else {
+            os.clear();
+            os << " Ieee1609Decode::SignedDataPayload2 unspoorted choice " << data_ << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            offset = 0;
+        }
+        os << " Ieee1609Decode::SignedDataPayload2 exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+    /* decode header info */
+    int Ieee1609Decode::HeaderInfo_(HeaderInfo& header)
+    {
+        /* FIXME, no optional components */
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::HeaderInfo_ enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        uint8_t bytes_ = buf[offset++];
+        uint8_t *ptr = (uint8_t *)&header.psid;
+        while (bytes_--)
+        {
+            *ptr++ = buf[offset++];
+        }
+        os << " Ieee1609Decode::HeaderInfo_ psid is " << header.psid << std::endl;
+        log_info(log_.str(), MODULE);
+        os << " Ieee1609Decode::HeaderInfo_ exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+    int Ieee1609Decode::SignedDataPayload1(SignedDataPayload& payload)
+    {
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::SignedDataPayload1 enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        /* get the optional mask */
+        uint8_t data_ = buf[offset++]; 
+        payload.mask = (SignedDataPayloadOptionsMask)data_;
+        if(data_ & SDP_OPTION_DATA_MASK)
+        {
+            payload.data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+            /* decode the data */
+            Ieee1609Dot2Data_(std::ref(*payload.data));
+        }else{
+
+            os << " Ieee1609Decode::SignedDataPayload1 exit " <<  len << " offset " << offset << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            offset = 0;
+        }
+        os << " Ieee1609Decode::SignedDataPayload1 exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+    int Ieee1609Decode::ToBesignedData_(ToBeSignedData& tbsData)
+    {
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::ToBesignedData_ enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        /* decode payload, SignedDataPayload */
+        SignedDataPayload1(std::ref(tbsData.payload));
+        HeaderInfo_(std::ref(tbsData.headerInfo));
+
+#if 0
+        /* get the options mask */
+        SignedDataPayloadOptionsMask mask = (SignedDataPayloadOptionsMask)buf[offset++];
+        // tbsData.payload.mask = (SignedDataPayloadOptionsMask)buf[offset++];
+        /* both options are avaialble */
+        if (mask & SDP_OPTION_ALL)
+        {
+            os.clear();
+            os << " Ieee1609Decode::ToBesignedData_ all options are not supported ";
+            LOG_ERR(log_.str(), MODULE);
+
+        }else if(mask & SDP_OPTION_DATA_MASK)
+        {
+            /* if data is present */
+            /* allocate the buffer for data structure */
+            tbsData.payload.data = (Ieee1609Dot2Data*)buf_alloc(sizeof(Ieee1609Dot2Data));
+        }else if (mask & SDP_OPTION_EXT_DATA_HASH)
+        {
+            /* if extra hash mask is present */
+        }
+#endif
+        os << " Ieee1609Decode::ToBesignedData_ exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+
+
     
 
 
+    int Ieee1609Decode::SignedData(Ieee1609Dot2Data& data)
+    {
+        uint8_t *srcBuf, *dstBuf;
+        size_t bufLen = 0;
+
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::SignedDataPayload_ enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        data.content.content.signedData.hashAlgorithm = (HashAlgorithmType)buf[offset++];
+        ToBesignedData_(std::ref(data.content.content.signedData.toBeSignedData));
+        os << " Ieee1609Decode::SignedDataPayload_ exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+
+    int Ieee1609Decode::Signature_(Signature& signature)
+    {
+        uint8_t *srcBuf, *dstBuf;
+        size_t bufLen;
+
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::Signature_ enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        /* get the signature type */
+        uint8_t data = buf[offset++] & ASN1_COER_CHOICE_MASK;
+        signature.type = (SignatureType)data;
+
+        if(signature.type == ecdsaNistP256Signature)
+        {
+            EccP256CurvPointType type = (EccP256CurvPointType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+            signature.signature.ecdsaP256Signature.r.type = type;
+            srcBuf = &buf[offset];
+            switch(type)
+            {
+                case EccP256CurvPointXOnly:
+                case EccP256CurvPointCompressedy0:
+                case EccP256CurvPointCompressedy1:
+                    dstBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
+                    bufLen = 32;
+                break;
+
+                case EccP256CurvPointUncompressed:
+                    dstBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
+                    bufLen = 64;
+                break;
+                default:
+                     bufLen = 0;
+            }
+
+            if(offset + bufLen > len)
+            {
+                 os << " Ieee1609Decode::Signature_  not enough data" <<  len << " offset " << offset << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+                return 0;
+            }
+
+            while(bufLen)
+            {
+                *dstBuf++ = *srcBuf++;
+                offset++;
+                bufLen--;
+            }
+        }
+
+        os << " Ieee1609Decode::Signature_ exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+
+    int Ieee1609Decode::HashId3(uint8_t* hash, size_t len)
+    {
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::HashId3 enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        if(offset + 2 > len)
+        {
+             os << " Ieee1609Decode::HashId3  not enough data " <<  len << " offset " << offset << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            return 0;
+        }
+
+        *hash++ = buf[offset++];
+        *hash++ = buf[offset++];
+
+        os << " Ieee1609Decode::HashId3 exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+
+
+    /* decode the crl series */
+    int Ieee1609Decode::CrlSeries(uint16_t& series)
+    {
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::CrlSeries enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        uint8_t *tempBuf = (uint8_t *)&series;
+        *tempBuf++ = buf[offset++];
+        *tempBuf++ = buf[offset++];
+
+         os << " Ieee1609Decode::CrlSeries exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        return len;
+
+
+
+    }
+    /* decode the certificate id of the certificate */
+    int Ieee1609Decode::CertId(CertificateId& id)
+    {
+        int len_=0;
+        uint8_t *tempBuf;
+        uint8_t data = buf[offset++]; /* get the choice */
+        id.type = static_cast<CertificateIdType>(data & ~ASN1_COER_CHOICE_MASK); /* extract the id type */
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::CrlSeries enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        os << "Ieee1609Decode::CertId::id.type " <<  id.type << std::endl;
+        log_info(log_.str(), MODULE);
+        
+        
+        switch(id.type)
+        {
+            case CertificateIdTypeName:
+                /* the length of the name */
+                id.id.hostName.length = buf[offset++];
+                id.id.hostName.name = (char *)buf_alloc(id.id.hostName.length);
+                while (len_ < id.id.hostName.length)
+                {
+                    id.id.hostName.name[len_++] = buf[offset++];
+                }
+            break;
+            default:
+                std::cout << " the certificate id type " << id.type << " is not supported " << std::endl;
+        }
+        os << " Ieee1609Decode::CrlSeries exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+
+    /* initialize the decoding engine buffers with the incoming data */
+    void Ieee1609Decode::set(const uint8_t *buf, size_t len)
+    {
+        this->offset = 0;
+        this->len = len;
+        delete this->buf;
+        this->buf = (uint8_t *)buf_realloc(this->buf, len);
+        memcpy(this->buf, buf, len);
+    }
 
 } /*namespace ctp */

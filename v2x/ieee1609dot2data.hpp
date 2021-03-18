@@ -12,6 +12,7 @@ namespace ctp
     {
         /* create an instance of encode object */
         Ieee1609Encode *enc;
+        Ieee1609Decode *dec;
         /* FIXME, create an instance of decode object */
         //decode *decode;
 
@@ -28,14 +29,11 @@ namespace ctp
         /* data member */
         Ieee1609Dot2Data *data;
         Ieee1609Dot2Content *content;
-
-
-
-        
         public:
             Ieee1609Data(){
                 enc = new Ieee1609Encode();
-                tpPtr = TP::instance_get();
+                dec =  new Ieee1609Decode();
+                tpPtr = TP::init();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 content = (Ieee1609Dot2Content *) buf_alloc(sizeof(Ieee1609Dot2Content));
                 content->type = Ieee1609Dot2ContentSignedData;
@@ -45,8 +43,6 @@ namespace ctp
                 cert = nullptr;
                 sig = nullptr;
                 signature = nullptr;
-                
-
                 /* get the certificate manager */
                 //certMgrPtr = tpPtr->cert_mgr();
             }
@@ -85,7 +81,19 @@ namespace ctp
             int encode_signature(bool cont = true);
 
 
+            /* decode the data */
+            void decode(const uint8_t * buf, size_t len);
+            int decode_content();
+            int decode_signeridentifier();
+            int decode_tbsdata();
+            int decode_signeddata();
+            int decode_signature();
+            void print_encoded()
+            {
+                print();
+            }
             void print();
+            void print_decoded(const char* file);
     };
 
 

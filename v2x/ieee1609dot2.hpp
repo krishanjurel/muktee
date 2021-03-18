@@ -34,7 +34,6 @@ namespace ctp
     class log_mgr
     {
         public:
-        //log_mgr(){};
         static void log(LogLvl lvl, int mod,const std::string &msg)
         {
             std::cout << lvl<< ":" << msg << std::endl;
@@ -55,7 +54,7 @@ namespace ctp
 #define log_dbg(msg, mod) LOG_DBG(msg, mod)
 
 
-    class TP
+    class TP:public std::enable_shared_from_this<TP>
     {
         //private:
         public:
@@ -68,13 +67,18 @@ namespace ctp
             //libconfig::Config config;
             std::vector<int> psids;
             TP(); /* private constructor */
+
+            // Ieee1609Certs *pCerts;
+            // Ieee1609Data *pData;
+
         public:
             void cfg_mgr();
             int verify();
             int sign();
             int encrypt();
             int decrypt();
-            static TP_PTR instance_get();
+            TP_PTR instance_get();
+            static TP_PTR init();
             ~TP();
             void psid_list();
     };
