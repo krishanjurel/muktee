@@ -273,7 +273,7 @@ namespace ctp
     }
 
     /* encode the 1609Dot2 contents */
-    int Ieee1609Encode::Ieee1609Dot2ContentType_(const Ieee1609Dot2ContentType type)
+    int Ieee1609Encode::ContentType_(const Ieee1609Dot2ContentType type)
     {
         int len = 1; /* choice */
         std::cout << "Ieee1609Encode::Ieee1609Dot2ContentType_ enter " << encLen << std::endl;
@@ -548,37 +548,47 @@ namespace ctp
         return encLen;
     }
 
+
     /* decoding of SignedDataPayload:data, 6.3.7 */
     int Ieee1609Decode::Ieee1609Dot2Data_(Ieee1609Dot2Data& data)
     {
-        uint8_t data_;
+        uint8_t choice;
         uint8_t *tempPtr=nullptr;
 
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
-        os << " Ieee1609Decode::SignedDataPayload2 enter " <<  len << " offset " << offset << std::endl;
+        os << " Ieee1609Decode::Ieee1609Dot2Data_ enter " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
         os.clear();
 
         data.protocolVersion = buf[offset++];
+        // choice = buf[offset];
+        // int decimal = 0;
+        // snprintf((char *)&decimal, sizeof(int), "%c",data.protocolVersion);
+        // std::cout << "version " << std::hex << data.protocolVersion << " --" << decimal << std::endl;
+        //std::cout << "version " << data.protocolVersion << std::endl;
 
         /* read the choice data */
-        data_ = buf[offset++];
-        data_ = data_ & ~ASN1_COER_CHOICE_MASK;
-        if(data_ == Ieee1609Dot2ContentUnsecuredData)
+        choice = buf[offset++];
+        // std::cout << "chpice " << choice << std::endl;
+        choice = choice & ASN1_COER_CHOICE_MASK;
+        if(choice == Ieee1609Dot2ContentUnsecuredData)
         {
             uint8_t numLenBytes = buf[offset++];
             int len_ = 0;
              tempPtr = (uint8_t*)&len_;
             while(numLenBytes--)
             {
-                *tempPtr++ = buf[offset++];
+                tempPtr[numLenBytes] = buf[offset++];
             }
 
-            os << " Ieee1609Decode::SignedDataPayload2 unsecured length " << len_ << std::endl;
+            os << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
+            std::cout << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
             log_info(log_.str(), MODULE);
             os.clear(); 
 
+
+            data.content.content.unsecuredData.length = len_;
             data.content.content.unsecuredData.octets = tempPtr =  (uint8_t *)buf_alloc(len_);
 
             /* copy the length into the buffer */
@@ -586,13 +596,17 @@ namespace ctp
             {
                 *tempPtr++ = buf[offset++];
             }
-        }else {
+        }else if (choice == Ieee1609Dot2ContentSignedData){
+            SignedData(data);
+            //ToBesignedData_(std::ref(data.content.content.signedData.toBeSignedData));
+        }
+        else {
             os.clear();
-            os << " Ieee1609Decode::SignedDataPayload2 unspoorted choice " << data_ << std::endl;
+            os << " Ieee1609Decode::Ieee1609Dot2Data_ unspoorted choice " << choice << std::endl;
             LOG_ERR(log_.str(), MODULE);
             offset = 0;
         }
-        os << " Ieee1609Decode::SignedDataPayload2 exit " <<  len << " offset " << offset << std::endl;
+        os << " Ieee1609Decode::Ieee1609Dot2Data_ exit " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
         os.clear();
         return offset;
@@ -608,6 +622,8 @@ namespace ctp
         log_info(log_.str(), MODULE);
         os.clear();
 
+        /* go past the optinal preamble of header info*/
+        offset++;
         uint8_t bytes_ = buf[offset++];
         uint8_t *ptr = (uint8_t *)&header.psid;
         while (bytes_--)
@@ -635,7 +651,7 @@ namespace ctp
         payload.mask = (SignedDataPayloadOptionsMask)data_;
         if(data_ & SDP_OPTION_DATA_MASK)
         {
-            payload.data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+            //payload.data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
             /* decode the data */
             Ieee1609Dot2Data_(std::ref(*payload.data));
         }else{
@@ -689,9 +705,6 @@ namespace ctp
         return offset;
     }
 
-
-
-    
 
 
     int Ieee1609Decode::SignedData(Ieee1609Dot2Data& data)

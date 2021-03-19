@@ -40,7 +40,7 @@ typedef struct
 }OctetString;
 
 
-#define ASN1_COER_CHOICE_MASK   (0x80)
+#define ASN1_COER_CHOICE_MASK  (uint8_t)(~0x80)
 
 
 

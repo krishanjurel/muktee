@@ -513,6 +513,21 @@ int main()
     std::cout << "number of bytes " << signedDataLength << std::endl;
 
 
+    /* test the decoding */
+    /* create a new data object */
+    ctp::Ieee1609Data *pData = new ctp::Ieee1609Data();
+    pData->decode(signedData, signedDataLength);
+    //pData->print_decoded("decode-data.txt");
+    pData->print_encoded("decoded-data.txt");
+
+
+
+
+
+
+
+
+
     while(0)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));

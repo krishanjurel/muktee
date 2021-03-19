@@ -19,10 +19,8 @@ namespace ctp
     {
 
         /* create the ToBeSignedData (6.3.6) data structure */
-        this->tbsData = (ToBeSignedData *) buf_realloc(this->tbsData, sizeof(ToBeSignedData));
         this->tbsData->headerInfo.psid = psid; /* just use the psid only for now */
         SignedDataPayload *payload = &this->tbsData->payload;
-        payload->data = (Ieee1609Dot2Data *)buf_realloc(payload->data, sizeof(Ieee1609Dot2Data));
         /* unsecured data */
         payload->data->content.type = Ieee1609Dot2ContentUnsecuredData;
         payload->data->protocolVersion = 0x03;
@@ -47,7 +45,7 @@ namespace ctp
     }
 
 
-    void Ieee1609Data::sign(int psid, const uint8_t *tbsData, size_t tbsDataLen,
+    void Ieee1609Data::sign(int psid, const uint8_t *buf, size_t len,
                   uint8_t **signedData, size_t *signedDataLen,
                   Ieee1609Cert *cert)
     {
@@ -60,31 +58,28 @@ namespace ctp
         size_t tbsLen = 0;
 
         LOG_INFO("Ieee1609Data::sign", MODULE);
-        this->tbsData = nullptr;
         /* create the ToBeSignedData (6.3.6) data structure */
-        this->tbsData = (ToBeSignedData *) buf_realloc(this->tbsData, sizeof(ToBeSignedData));
-        this->tbsData->headerInfo.psid = psid; /* just use the psid only for now */
-        SignedDataPayload *payload = &this->tbsData->payload;
-        payload->data = nullptr;
-        payload->data = (Ieee1609Dot2Data *)buf_realloc(payload->data, sizeof(Ieee1609Dot2Data));
+        //tbsData = (ToBeSignedData *) buf_realloc(tbsData, sizeof(ToBeSignedData));
+        tbsData->headerInfo.psid = psid; /* just use the psid only for now */
+        SignedDataPayload *payload = &tbsData->payload;
         /* unsecured data */
         payload->data->content.type = Ieee1609Dot2ContentUnsecuredData;
         payload->data->protocolVersion = 0x03;
-        payload->data->content.UNSECUREDDATA.length = tbsDataLen;
-        payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(tbsDataLen);
+        payload->data->content.UNSECUREDDATA.length = len;
+        payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* create a local copy of the certificate */
         this->cert = cert;
         /* copy the data into unsecured buffer */
-        for(int i = 0; i < tbsDataLen; i++)
+        for(int i = 0; i < len; i++)
         {
-            payload->data->content.UNSECUREDDATA.octets[i] = tbsData[i];
+            payload->data->content.UNSECUREDDATA.octets[i] = buf[i];
         }
         if (cert != nullptr)
         {
             tbsLen = 0;
 
            /* get the hash the data */
-            ret = cert->Hash256(tbsData, tbsDataLen, &hash);
+            ret = cert->Hash256(buf, len, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -177,8 +172,8 @@ namespace ctp
         enc->HashAlgo(HashAlgorithmTypeSha256);
         enc->ToBesignedData_(std::ref(*tbsData));
         /* encode the signer */
-        encode_signeridentifier();
-        encode_signature();
+        //encode_signeridentifier();
+        //encode_signature();
         return 0;
     }
 
@@ -188,8 +183,8 @@ namespace ctp
         if(cont == false)
             enc->clear();
         /* encode signed data content type */
-        enc->Ieee1609Dot2ContentType_(content->type);
-        switch(content->type)
+        enc->ContentType_(data->content.type);
+        switch(data->content.type)
         {
             case Ieee1609Dot2ContentSignedData:
                 encode_signeddata(true);
@@ -213,13 +208,61 @@ namespace ctp
         // enc->Signature_(signature);
     }
 
+    void Ieee1609Data::print_encoded(const char *file)
+    {
+        enc->clear();
+        encode();
+        uint8_t *_buf=nullptr;
+        size_t _buflen = 0;
+        _buflen = enc->get(&_buf);
+        print_data(file, _buf, _buflen);
+        return;
+    }
+
     void Ieee1609Data::print_decoded(const char* file)
     {
-        std::ofstream os(file, std::ios::out| std::ios::binary);
-        os << " Protocol version: " << data->protocolVersion << std::endl;
-        os << "content" << std::setw(100) << std::endl;
+        //std::ofstream os(file, std::ios::out| std::ios::binary);
+        std::ostream os(std::cout.rdbuf());
+        //os.rdbuf(std::cout.rdbuf());
+        // std::ofstream os(std::cout);
+        // using os = std::cout;
+        //typedef std::cout os;
+        os << " Protocol version: " << std::hex << data->protocolVersion << std::endl;
+        // std::cout << " Protocol version: " << std::hex << data->protocolVersion << std::endl;
+        os << "content " << std::setw(100) << std::endl;
         os << std::setw(50) << " Content choice " << data->content.type << std::endl;
+        if(data->content.type == Ieee1609Dot2ContentSignedData)
+        {
+            os << " signed data " << std::endl;
+            os << " hash algo " << data->content.content.signedData.hashAlgorithm << std::endl;
+            os << "payload option " << tbsData->payload.mask << std::endl;
+            if(tbsData->payload.mask == SDP_OPTION_DATA_MASK)
+            {
+                os << std::setw(50) << "signed data payload " << std::endl; 
+                Ieee1609Dot2Data *data_ = tbsData->payload.data;
+                os << "protocol version " << data_->protocolVersion << std::endl;
+                os << "content choice " << data_->content.type << std::endl;
+                if(data_->content.type == Ieee1609Dot2ContentUnsecuredData)
+                {
+                    os << " unsecured data " << std::endl;
+                    os << "data length " << data_->content.content.unsecuredData.length << std::endl;
+                    for (int i = 0; i < data_->content.content.unsecuredData.length; i++)
+                    {
+                        os << data_->content.content.unsecuredData.octets[i] << ":";
+                        if (i != 0 && i %16==0)
+                            os << std::endl;
+                    }
+                }
+
+                os << "Header info " << std::endl;
+                os << " psid  " << tbsData->headerInfo.psid << std::endl;
+            }
+        }
+        // os.close();
+        return;
     }
+
+
 
     /* decode the data */
     void Ieee1609Data::decode(const uint8_t * buf, size_t len)
@@ -232,7 +275,7 @@ namespace ctp
 
     int Ieee1609Data::decode_content()
     {
-        return 0;
+        return  dec->Ieee1609Dot2Data_(std::ref(*data));
     }
     int Ieee1609Data::decode_signeridentifier()
     {

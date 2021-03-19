@@ -28,17 +28,18 @@ namespace ctp
 
         /* data member */
         Ieee1609Dot2Data *data;
-        Ieee1609Dot2Content *content;
         public:
             Ieee1609Data(){
                 enc = new Ieee1609Encode();
                 dec =  new Ieee1609Decode();
                 tpPtr = TP::init();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
-                content = (Ieee1609Dot2Content *) buf_alloc(sizeof(Ieee1609Dot2Content));
-                content->type = Ieee1609Dot2ContentSignedData;
+                tbsData = (ToBeSignedData *) &data->content.content.signedData.toBeSignedData;
+                /* complete the link */
+                //tbsData->payload.data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+                tbsData->payload.data=(Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 data->protocolVersion = 0x03;
-                tbsData = nullptr;
+                //tbsData = nullptr;
                 hashId = nullptr;
                 cert = nullptr;
                 sig = nullptr;
@@ -51,8 +52,7 @@ namespace ctp
             {
                 delete enc;
                 free(data);
-                free(content);
-                free(tbsData);
+                free(tbsData->payload.data);
                 free(signature);
             }
             /* a method that can be called on recieving signed data */
@@ -68,7 +68,7 @@ namespace ctp
                     uint8_t **signedData, size_t *signedDataLen);
             
             /* sign with a supplied certificate */
-            void sign(int psid, const uint8_t *tbsData, size_t len,
+            void sign(int psid, const uint8_t *buf, size_t len,
                     uint8_t **signedData, size_t *signedDataLen,
                     Ieee1609Cert *cert);
 
@@ -88,11 +88,9 @@ namespace ctp
             int decode_tbsdata();
             int decode_signeddata();
             int decode_signature();
-            void print_encoded()
-            {
-                print();
-            }
-            void print();
+
+            void print_encoded(const char *file);
+            void print(const char* file="data.txt");
             void print_decoded(const char* file);
     };
 

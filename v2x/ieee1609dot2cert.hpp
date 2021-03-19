@@ -145,7 +145,7 @@ namespace ctp
             int ToBesignedData_(const ToBeSignedData& tbsData);
             int SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type);
             int Signature_(const Signature& signature);
-            int Ieee1609Dot2ContentType_(const Ieee1609Dot2ContentType type);
+            int ContentType_(const Ieee1609Dot2ContentType type);
             int SequenceOfCerts_(const SequenceOfCertificate& certs);
             /* int encoded buffer get */
             int get(uint8_t **buf);
@@ -247,6 +247,22 @@ namespace ctp
             {
                 return 0;
             }
+
+            int ContentType_(Ieee1609Dot2ContentType& type)
+            {
+                std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+                std::ostream os(&log_);
+                os << " Ieee1609Decode::ContentType_ enter " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                os.clear();
+                type =  (Ieee1609Dot2ContentType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+
+                os << " Ieee1609Decode::ContentType_ exit " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                os.clear();
+                return offset;
+            }
+            
 
             /* encode certificate identifier */
             int CertId(CertificateId& id);
