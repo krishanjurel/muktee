@@ -11,6 +11,7 @@
 #include "openssl/obj_mac.h"
 #include <openssl/bn.h>
 #include <openssl/sha.h>
+#include <exception>
 
 /*  This encpasulation of data definition, declaration of 
     IEEE 1609.2-2016     specification 
@@ -20,6 +21,26 @@ void print_data(const char* file, const uint8_t *buf, size_t len);
 
 namespace ctp
 {
+    class Exception:public std::exception
+    {
+        std::string msg;
+        public:
+            Exception(std::string _msg):msg(std::move(_msg)){};
+            const char* what() const noexcept
+            {
+                return msg.c_str();
+            }
+
+    };
+
+
+
+
+
+
+
+
+
     class TP; /* forward declaration */
     using TP_PTR = std::shared_ptr<TP>;
 

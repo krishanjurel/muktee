@@ -60,6 +60,7 @@ namespace ctp
         LOG_INFO("Ieee1609Data::sign", MODULE);
         /* create the ToBeSignedData (6.3.6) data structure */
         //tbsData = (ToBeSignedData *) buf_realloc(tbsData, sizeof(ToBeSignedData));
+        data->content.type = Ieee1609Dot2ContentSignedData;
         tbsData->headerInfo.psid = psid; /* just use the psid only for now */
         SignedDataPayload *payload = &tbsData->payload;
         /* unsecured data */
@@ -172,8 +173,8 @@ namespace ctp
         enc->HashAlgo(HashAlgorithmTypeSha256);
         enc->ToBesignedData_(std::ref(*tbsData));
         /* encode the signer */
-        //encode_signeridentifier();
-        //encode_signature();
+        encode_signeridentifier();
+        encode_signature();
         return 0;
     }
 
@@ -265,20 +266,43 @@ namespace ctp
 
 
     /* decode the data */
-    void Ieee1609Data::decode(const uint8_t * buf, size_t len)
+    int Ieee1609Data::decode(const uint8_t * buf, size_t len)
     {
         dec->clear();
         dec->set(buf, len);
         decode_content();
-        return;
+        return 0;
     }
 
     int Ieee1609Data::decode_content()
     {
-        return  dec->Ieee1609Dot2Data_(std::ref(*data));
+        int ret = 0;
+        try
+        {
+            dec->Ieee1609Dot2Data_(std::ref(*data));
+            decode_signeridentifier();
+            if(signer.type == SignerIdentifierTypeCert)
+            {
+                /* decode the sequence of certs */
+                certs->decode(dec);
+            }
+        }
+        catch(const Exception& e)
+        {
+            std::cerr << e.what() << '\n';
+        }
+        
+        return 0;
     }
     int Ieee1609Data::decode_signeridentifier()
     {
+        dec->SignerIdentifier_(std::ref(signer));
+        /* just copy the hashedid of the signer */
+        /* we will find if we have this certificate or not */
+        if(signer.type == SignerIdentifierTypeDigest)
+        {
+            dec->OctetsFixed((uint8_t *)signer.digest.x, sizeof(signer.digest));
+        }
         return 0;
     }
     int Ieee1609Data::decode_tbsdata()

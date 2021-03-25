@@ -146,16 +146,22 @@ namespace ctp
     {
 
         /* FIXME, only one psid with no ssp */
-        /* length octet is one */
+        /* 1 byte to encode quatity*/
         int len = 1;
-        /* there is only 1 sequence */
-        len += 1;
-        /* need one byte to encode sequence */
-        len += 1;
-        /* 1 byte for psid length encoding and 1 bytes for bsm psid (0x20) */
-        len += 2;
+        /* number of bytes to encode sequence preamble for otional component */
+        // len += psid.quantity;
+        /* calculate the total length needed to encode the sequence of psids */
+        for(int i = 0; i < psid.quantity; i++)
+        {
+            /* one byte for sequence preamble */
+            len += 1;
+            /* need one byte to encode the psid lenght*/
+            len += 1;
+            /* 4 bytes for encoding psid*/
+            len += 4;
+            /* FIXME, handle optional component SSP, for now none */
+        }
 
-        //len += encLen;
         std::cout << "Ieee1609Encode::SequenceOfPsid_: enter  " << encLen << std::endl;
         encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         if(encBuf == nullptr)
@@ -163,22 +169,36 @@ namespace ctp
             throw std::bad_alloc();
         }
 
+        /* encode quantity of sequences */
+        encBuf[encLen++] = psid.quantity; /* number of bytes to represent one sequence, 1 */
+        len -= 1;
 
-        /* encode number of sequences */
-        encBuf[encLen++] = 1; /* number of bytes to represent one sequence, 1 */
-        len -= 1;
-        encBuf[encLen++] = 1; /* number of sequences */
-        len -= 1;
-        encBuf[encLen++]  = 0x00; /* sequence with no optional ssp */
-        len -= 1;
-        encBuf[encLen++] = 1; /* number of bytes in the psid */
-        len -= 1;
-        encBuf[encLen++] = psid.psidSsp->psid;
-        len -= 1;
+        /* iterate thru the number of available PsidSsps */
+        PsidSsp *psidSsp = psid.psidSsp;
+        for(int i = 0; psid.quantity; i++)
+        {
+            /* encode the optinal mask */
+            encBuf[encLen++] = 0x00;//FIXME, set it to actual value->psidSsp->optionalMask;
+            len--;
+            /* length encoding of psid */
+            encBuf[encLen++] = 4; /* 4 bytes */
+            len--;
+            /* encode the psid in big endian format */
+            uint8_t *buf_ = (uint8_t *)&psidSsp->psid;
+            for(int j = sizeof(int); j > 0; j--)
+            {
+                encBuf[encLen++] = buf_[j-1];
+                len--;
+            }
+            /* move to the next component */
+            psidSsp += 1;
+
+            /* FIXME, encode the optional ssps */
+        }
          if (len != 0)
          {
              LOG_ERR("Ieee1609Encode::SequenceOfPsid_: rem length not zero", 1);
-             throw new std::logic_error("cert::encode_sequenceofpsid(): rem length not zero ");
+             throw new Exception("cert::encode_sequenceofpsid(): rem length not zero ");
          }
          std::cout << "Ieee1609Encode::SequenceOfPsid_: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
          return encLen;
@@ -365,15 +385,15 @@ namespace ctp
     }
 
 
-    int Ieee1609Encode::SequenceOfCerts_(const SequenceOfCertificate& certs)
-    {
-        return 0;
-    }
+    // int Ieee1609Encode::SequenceOfCerts_(const SequenceOfCertificate& certs)
+    // {
+    //     return 0;
+    // }
 
     int Ieee1609Encode::SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type)
     {
         int len = 1; /* choice */
-        uint8_t *buf = nullptr;
+        uint8_t *buf = nullptr; /*FIXME, set this buffer to correct memory */
         size_t bufLen = 0;
         std::cout << "Ieee1609Encode::SignerIdentifier_ enter " << encLen << std::endl;
         if(type != SignerIdentifierTypeSelf)
@@ -607,6 +627,34 @@ namespace ctp
             offset = 0;
         }
         os << " Ieee1609Decode::Ieee1609Dot2Data_ exit " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+        return offset;
+    }
+
+    /* signer signer identifier is a cert , we decode it into the cert */
+    int Ieee1609Decode::SignerIdentifier_(SignerIdentifier& signer)
+    {
+        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(&log_);
+        os << " Ieee1609Decode::SignerIdentifier_ enter " <<  len << " offset " << offset << std::endl;
+        log_info(log_.str(), MODULE);
+        os.clear();
+
+        uint8_t choice = buf[offset++] & ASN1_COER_CHOICE_MASK;
+        if(choice == SignerIdentifierTypeCert ||
+            choice == SignerIdentifierTypeDigest ||
+            choice == SignerIdentifierTypeSelf)
+            {
+                signer.type = (SignerIdentifierType)choice;
+            }
+        else{
+            os << " Ieee1609Decode::SignerIdentifier_ unrecognized choice " << choice << std::endl;
+            log_info(log_.str(), MODULE);
+            os.clear();
+            offset = 0;
+        }
+        os << " Ieee1609Decode::SignerIdentifier_ exit " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
         os.clear();
         return offset;

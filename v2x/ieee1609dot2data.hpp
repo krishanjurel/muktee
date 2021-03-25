@@ -11,27 +11,28 @@ namespace ctp
     class Ieee1609Data
     {
         /* create an instance of encode object */
-        Ieee1609Encode *enc;
-        Ieee1609Decode *dec;
+        std::shared_ptr<Ieee1609Encode> enc;
+        std::shared_ptr<Ieee1609Decode> dec;
         /* FIXME, create an instance of decode object */
         //decode *decode;
 
         HashAlgorithmType *hashId;
         ToBeSignedData *tbsData;
-        const SignerIdentifier *signer;
+        SignerIdentifier signer;
         Signature *signature;
         const ECDSA_SIG* sig;
         TP_PTR tpPtr;
         Ieee1609Cert *certMgrPtr;
         /* signer for this data */
         Ieee1609Cert *cert;
+        Ieee1609Certs *certs; /* the sequence of certificate */
 
         /* data member */
         Ieee1609Dot2Data *data;
         public:
             Ieee1609Data(){
-                enc = new Ieee1609Encode();
-                dec =  new Ieee1609Decode();
+                enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *ptr){delete ptr;});
+                dec =  std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode(), [](Ieee1609Decode *ptr){delete ptr;});
                 tpPtr = TP::init();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 tbsData = (ToBeSignedData *) &data->content.content.signedData.toBeSignedData;
@@ -50,7 +51,8 @@ namespace ctp
 
             ~Ieee1609Data()
             {
-                delete enc;
+                enc.reset();
+                dec.reset();
                 free(data);
                 free(tbsData->payload.data);
                 free(signature);
@@ -82,7 +84,8 @@ namespace ctp
 
 
             /* decode the data */
-            void decode(const uint8_t * buf, size_t len);
+            int decode(const uint8_t * buf, size_t len);
+            //int decode(std::shared_ptr<Ieee1609Decode> ptr); 
             int decode_content();
             int decode_signeridentifier();
             int decode_tbsdata();

@@ -143,7 +143,8 @@ namespace ctp
     Ieee1609Cert::Ieee1609Cert()
     {
         /* create the instance of the encode onject */
-        pEncObj = new Ieee1609Encode();
+        pEncObj = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){delete p;});
+        pDecObj = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode(), [](Ieee1609Decode *p){delete p;});
         /* no certs */
         // certs.clear();
         // certsPsidMap.clear();
@@ -166,10 +167,10 @@ namespace ctp
         ecGroup = EC_KEY_get0_group(ecKey);
 
         /* allocate the memory for one cert first */
-        seqOfCert = (SequenceOfCertificate *)malloc(sizeof(int) +  sizeof(certificateBase));
+        //seqOfCert = (SequenceOfCertificate *)malloc(sizeof(int) +  sizeof(certificateBase));
         
         /* initialize all the pointers */
-        base = (CertificateBase *)((uint8_t *)seqOfCert + sizeof(int));
+        base = (CertificateBase *)malloc(sizeof(CertificateBase));
         /* add the cert into the queue */
         // certs.push_back(base);
         // /*FIXed psid */
@@ -184,7 +185,7 @@ namespace ctp
         /* psid psidssp only contains the psid , with no ssp */
         psidSsp->psidSsp = (PsidSsp *)buf_alloc(sizeof(PsidSsp));
         /* there is only item in this sequence */
-        psidSsp->length = 1;
+        psidSsp->quantity = 1;
         /* FIXME, hardcoded psid, BSM */
         psidSsp->psidSsp->psid = 0x20;
         /* no ssp */
@@ -367,19 +368,106 @@ namespace ctp
     }
 
 
+    /* to utilize the previously created decode object */
+    int Ieee1609Cert::decode(std::shared_ptr<Ieee1609Decode> ptr)
+    {
+        pDecObj.reset();
+        pDecObj = ptr->GetPtr();
+        try
+        {
+            /* decode version */
+            pDecObj->Octets_((uint8_t *)&base->version, 1);
+            /* decode cert type */
+            pDecObj->Octets_((uint8_t *)&base->certType, 1);
+            pDecObj->IssuerIdentifier_(std::ref(*issuer));
+            DecodeToBeSigned();
+        }catch(Exception& e)
+        {
+            throw; /*throw again from here */
+        }
+        return 0;
+    }
+
+    int Ieee1609Cert::decode(const uint8_t *buf, size_t len)
+    {
+        /* decode the type */
+        // pDecObj->SignerIdentifier_(std::ref(signer));
+        return 0;
+        
+
+    }
+
+
+
+
+
+
     int Ieee1609Cert::encode(uint8_t **buf)
     {
         /* clear whatever was there */
         pEncObj->clear();
         /* FIXME, use Ieee1609certs class object to encode the certs */
         uint8_t num = 1;
+        /*FIXME, to be done encode the signer identifier choice */
 
+        /* the type is cert */
         pEncObj->SequenceOf(&num, 1);
         EncodeCertBase(true);
         /* only encode the signature if it is of type explicit */
         if(base->certType == CertTypeExplicit &&  signature != nullptr)
             pEncObj->Signature_(std::ref(*signature));
         return pEncObj->get(buf);
+    }
+
+    /* decode tToBeSignedCertificate structure, 6.4.8 */
+    int Ieee1609Cert::DecodeToBeSigned(bool cont)
+    {
+        /* decode the optional mask */
+        /* FIXME, hard coded to have only non-extensible fixed size components */
+        pDecObj->Octets_((uint8_t *)&tbs->optionsComps, 1);
+        pDecObj->CertId(std::ref(tbs->id));
+        pDecObj->CrlSeries(std::ref(tbs->crlSeries));
+        pDecObj->VP(std::ref(tbs->validityPeriod));
+        /* decode optional components */
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(Region))
+        {
+            std::cout << "Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(Region) not supported " << std::endl;
+            throw Exception(" Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(Region) not supported ");
+        }
+
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(AssuranceLevel))
+        {
+            std::cout << "Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(AssuranceLevel) not supported " << std::endl;
+            throw Exception(" Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(AssuranceLevel) not supported ");
+        }
+        /* app permissions */
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(AppPerm))
+        {
+            pDecObj->SequenceOfPsid_(std::ref(tbs->appPermisions));
+        }
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(CertIssuePerm))
+        {
+            std::cout << "Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(CertIssuePerm) not supported " << std::endl;
+            throw Exception(" Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(CertIssuePerm) not supported ");
+        }
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(CertReqPerm))
+        {
+            std::cout << "Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(CertReqPerm) not supported " << std::endl;
+            throw Exception(" Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(CertReqPerm) not supported ");
+        }
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(CanReqRoll))
+        {
+            std::cout << "Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(CanReqRoll) not supported " << std::endl;
+            throw Exception(" Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(CanReqRoll) not supported ");
+        }
+        if(tbs->optionsComps & TBS_OPTIONAL_MASK(EncKey))
+        {
+            std::cout << "Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(EncKey) not supported " << std::endl;
+            throw Exception(" Ieee1609Cert::DecodeToBeSigned::tbs->optionsComps TBS_OPTIONAL_MASK(EncKey) not supported ");
+        }
+        /* decode verification key indicator */
+        pDecObj->Vki(std::ref(tbs->verifyKeyIndicator));
+        return 0;
     }
 
     /* the flag to control , whether to clear the memory or continue encoding */
@@ -530,7 +618,7 @@ namespace ctp
         /* set the next tr to next */
         this->next = nullptr;
         /* one cert */
-        seqOfCert->length = 1;
+        //seqOfCert->length = 1;
         base->version = 3;
         base->certType = CertTypeExplicit;
         issuer->type = IssuerIdentifierTypeSelf;

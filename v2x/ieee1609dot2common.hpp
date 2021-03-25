@@ -41,6 +41,7 @@ typedef struct
 
 
 #define ASN1_COER_CHOICE_MASK  (uint8_t)(~0x80)
+#define ASN1_LENGTH_ENCODING_MASK (uint8_t)(0x80)
 
 
 
@@ -262,6 +263,7 @@ typedef struct
 /*6.4.28 */
 struct PsidSsp
 {
+    uint8_t optionalMask;
     int psid;
     OctetString ssp;
 };
@@ -269,7 +271,7 @@ typedef struct PsidSsp PsidSsp;
 
 struct SequenceOfPsidSsp
 {
-    int length;
+    int quantity;
     PsidSsp *psidSsp;
 };
 typedef struct SequenceOfPsidSsp SequenceOfPsidSsp;
@@ -342,13 +344,13 @@ struct certificateBase
 typedef struct certificateBase CertificateBase;
 
 
-/*6.4.2*/
-struct SequenceOfCertificate
-{
-    int length;     /* number of certs */
-    CertificateBase *certs; /* take a hit of 4 bytes */
-};
-typedef struct SequenceOfCertificate SequenceOfCertificate;
+/*6.4.2, not used*/
+// struct SequenceOfCertificate
+// {
+//     int length;     /* number of certs */
+//     CertificateBase *certs; /* take a hit of 4 bytes */
+// };
+// typedef struct SequenceOfCertificate SequenceOfCertificate;
 
 
 /* 6.3.24 */
@@ -362,11 +364,13 @@ typedef enum
 struct SignerIdentifier
 {
     SignerIdentifierType type;
-    union
-    {
-        HashedId8 digest;
-        SequenceOfCertificate certificate;
-    }signer;
+    HashedId8 digest; /* either certs or just hashed id */
+    /* sequence of certs are represented by the class Ieee1609Certs(Ieee1609Cert.hpp)*/
+    // union
+    // {
+    //     HashedId8 digest;
+    //     SequenceOfCertificate certificate;
+    // }signer;
 };
 typedef struct SignerIdentifier SignerIdentifier;
 
