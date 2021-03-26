@@ -335,6 +335,7 @@ typedef struct ToBeSignedCertificate ToBeSignedCertificate;
 /* 6.4.3*/
 struct certificateBase
 {
+    uint8_t options; /* FIXME, there is only one option */
     uint8_t   version;
     CertType   certType;
     IssuerIdentifier issuer;

@@ -40,6 +40,7 @@
 void TEST(data_encoding)();
 void TEST(data_decoding)();
 void TEST(cert_encoding)();
+void TEST(certs_encoding)();
 void TEST(cert_decoding)();
 void TEST(ipc_sockets)();
 
@@ -282,8 +283,9 @@ int main()
 
 
     //TEST(ipc_sockets)();
-    //TEST(cert_encoding)();
-    TEST(data_encoding)();
+    //TEST(certs_encoding)();
+    //  TEST(data_encoding)();
+    TEST(data_decoding)();
 
     while(!stop_)
     {
@@ -315,9 +317,10 @@ void TEST(data_encoding)()
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
     encLen = pcert->encode(&encBuf);
-    // std::cout << "encoded buffer length " << encLen << std::endl;
+    std::cout << "encoded buffer length " << encLen << std::endl;
     
-    pcert->print();
+    pcert->print_encoded(std::string("encoded-cert.txt"));
+    pcert->print_decoded(std::string("decoded-cert.txt"));
 
     std::string tbsData("this is dummy test data!!!");
     ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
@@ -335,7 +338,47 @@ void TEST(data_encoding)()
 void TEST(data_decoding)()
 {
     printf("data_decoding\n");
+    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
+    pcert->create();
+    uint8_t *encBuf = nullptr;
+    size_t encLen = 0;
+    encLen = pcert->encode(&encBuf);
+    std::cout << "encoded buffer length " << encLen << std::endl;
+    
+    pcert->print_encoded(std::string("encoded-cert.txt"));
+    pcert->print_decoded(std::string("decoded-cert.txt"));
+
+    ctp::Ieee1609Cert *pcert1 = new ctp::Ieee1609Cert();
+    /* decode from the previously created certificate */
+    pcert1->decode(encBuf, encLen);
+
+    pcert1->print_decoded(std::string("decoded-cert1.txt"));
+
+
+
+
+
+    // std::string tbsData("this is dummy test data!!!");
+    // ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
+    // uint8_t *signedData = nullptr;
+    // size_t signedDataLength = 0;
+    // pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcert);
+    // print_data("data_payload.txt", signedData, signedDataLength);
+    // std::cout << "number of bytes " << signedDataLength << std::endl;
+    delete pcert;
+    // delete pdata;
+    raise(SIGKILL);
+
+
     return;
+}
+void TEST(certs_encoding)()
+{
+    std::cout << "certs_encoding " << std::endl;
+    ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
+    pcerts->encode();
+    pcerts->print();
+    raise(SIGKILL);
 }
 void TEST(cert_encoding)()
 {
@@ -346,7 +389,7 @@ void TEST(cert_encoding)()
     size_t encLen = 0;
     encLen = pcert->encode(&encBuf);
     // std::cout << "encoded buffer length " << encLen << std::endl;
-    pcert->print();
+    pcert->print_encoded(std::string("cert.txt"));
     delete pcert;
     raise(SIGKILL);
     return;

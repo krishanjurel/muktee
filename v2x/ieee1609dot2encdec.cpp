@@ -161,21 +161,20 @@ namespace ctp
             len += 4;
             /* FIXME, handle optional component SSP, for now none */
         }
-
-        std::cout << "Ieee1609Encode::SequenceOfPsid_: enter  " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::SequenceOfPsid_: enter  len " << len << " enclen "<< encLen << std::endl;
         encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         if(encBuf == nullptr)
         {
             throw std::bad_alloc();
         }
 
-        /* encode quantity of sequences */
+        /* encode quantity of sequences, FIXME assumed fixed size quantity <= 127 */
         encBuf[encLen++] = psid.quantity; /* number of bytes to represent one sequence, 1 */
         len -= 1;
 
         /* iterate thru the number of available PsidSsps */
         PsidSsp *psidSsp = psid.psidSsp;
-        for(int i = 0; psid.quantity; i++)
+        for(int i = 0; i < psid.quantity; i++)
         {
             /* encode the optinal mask */
             encBuf[encLen++] = 0x00;//FIXME, set it to actual value->psidSsp->optionalMask;
@@ -185,14 +184,13 @@ namespace ctp
             len--;
             /* encode the psid in big endian format */
             uint8_t *buf_ = (uint8_t *)&psidSsp->psid;
-            for(int j = sizeof(int); j > 0; j--)
+            for(int j = 4; j > 0; j--)
             {
                 encBuf[encLen++] = buf_[j-1];
                 len--;
             }
             /* move to the next component */
             psidSsp += 1;
-
             /* FIXME, encode the optional ssps */
         }
          if (len != 0)
@@ -419,19 +417,23 @@ namespace ctp
         return encLen;
     }
 
-    int Ieee1609Encode::SequenceOf(const uint8_t *octets, size_t bytes)
+    int Ieee1609Encode::SequenceOf(const uint8_t *octets, size_t num)
     {
         int len = 1; /* 1 byte to encode the number of sequences */
-        len += bytes; /* number of bytes */
+        len += num; /* number of bytes */
         std::cout << "Ieee1609Encode::SequenceOf enter " << encLen << std::endl;
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
-        encBuf[encLen++] = bytes;
+
+        
+
+        /* FIXME, assuming fixed sized quantity of less than or equal to 127 */
+        encBuf[encLen++] = num;
         len --;
-        while(len)
-        {
-            encBuf[encLen++] = *octets++;
-            len --;
-        }
+        // while(len)
+        // {
+        //     encBuf[encLen++] = *octets++;
+        //     len --;
+        // }
 
         std::cout << "Ieee1609Encode::SequenceOf exit " << "rem len " << len << "enc len " << encLen << std::endl;
         return encLen;
@@ -594,19 +596,19 @@ namespace ctp
         choice = choice & ASN1_COER_CHOICE_MASK;
         if(choice == Ieee1609Dot2ContentUnsecuredData)
         {
-            uint8_t numLenBytes = buf[offset++];
-            int len_ = 0;
-             tempPtr = (uint8_t*)&len_;
-            while(numLenBytes--)
-            {
-                tempPtr[numLenBytes] = buf[offset++];
-            }
+            /*FIXME, only bytes less than 127 or less payload is supported */
+            uint8_t len_ = buf[offset++];
+            // int len_ = 0;
+            //  tempPtr = (uint8_t*)&len_;
+            // while(numLenBytes--)
+            // {
+            //     tempPtr[numLenBytes] = buf[offset++];
+            // }
 
             os << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
             std::cout << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
             log_info(log_.str(), MODULE);
             os.clear(); 
-
 
             data.content.content.unsecuredData.length = len_;
             data.content.content.unsecuredData.octets = tempPtr =  (uint8_t *)buf_alloc(len_);
@@ -773,7 +775,7 @@ namespace ctp
         return offset;
     }
 
-
+    /* 6.3.28 */
     int Ieee1609Decode::Signature_(Signature& signature)
     {
         uint8_t *srcBuf, *dstBuf;
@@ -788,7 +790,8 @@ namespace ctp
         uint8_t data = buf[offset++] & ASN1_COER_CHOICE_MASK;
         signature.type = (SignatureType)data;
 
-        if(signature.type == ecdsaNistP256Signature)
+        /* decode r */
+        //if(signature.type == ecdsaNistP256Signature)
         {
             EccP256CurvPointType type = (EccP256CurvPointType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
             signature.signature.ecdsaP256Signature.r.type = type;
@@ -812,8 +815,9 @@ namespace ctp
 
             if(offset + bufLen > len)
             {
-                 os << " Ieee1609Decode::Signature_  not enough data" <<  len << " offset " << offset << std::endl;
+                os << " Ieee1609Decode::Signature_ r  not enough data" <<  len << " offset " << offset << std::endl;
                 LOG_ERR(log_.str(), MODULE);
+                throw Exception(log_.str());
                 return 0;
             }
 
@@ -825,6 +829,24 @@ namespace ctp
             }
         }
 
+        /* decode s */
+        bufLen = sizeof(HashedData32);
+        if(bufLen + offset > len)
+        {
+             os << " Ieee1609Decode::Signature_ s not enough data" <<  len << " offset " << offset << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw Exception(log_.str());
+            return 0;
+        }
+
+        /* copy s */
+        srcBuf = &buf[offset];
+        while(bufLen)
+        {
+            *dstBuf++ = *srcBuf++;
+            offset++;
+            bufLen--;
+        }
         os << " Ieee1609Decode::Signature_ exit " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
         os.clear();
@@ -922,8 +944,12 @@ namespace ctp
         this->offset = 0;
         this->len = len;
         delete this->buf;
+        this->buf = nullptr;
         this->buf = (uint8_t *)buf_realloc(this->buf, len);
         memcpy(this->buf, buf, len);
+
+
+        print_data("testencode.txt", this->buf, this->len);
     }
 
 } /*namespace ctp */

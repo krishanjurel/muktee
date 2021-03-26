@@ -59,11 +59,13 @@ namespace ctp
         /* encode the certificate */
 
         int EncodeCertBase(bool cont = true); /* encode certificate base */
+        int sign(); /* sign the certificate, this is valid only for self-signed */
         int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
         const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
 
         public:
-            void create();
+
+            void create(int nid = NID_X9_62_prime256v1);
 
             //void encode();
             //void decode();
@@ -90,20 +92,18 @@ namespace ctp
                     returns 0: error, else
                             length of the encoded buffer 
             */
-            /* cert decoder */
-            int decode(const uint8_t* buf, size_t len);
+           /* cert encoder */
             int encode(uint8_t **buf);
+            int encode(const uint8_t* buf, size_t len) = delete;
+            int encode(std::shared_ptr<Ieee1609Encode> enc);
             /* encode to be signed data of the certificate */
             int EncodeToBeSigned(bool cont=true);
 
+            /* cert decoder */
+            int decode(const uint8_t* buf, size_t len);
             int decode(std::shared_ptr<Ieee1609Decode> ptr);
             int DecodeToBeSigned(bool cont = true); /* decode to be sined */
-
-
-
-
-
-
+            
             void set(Ieee1609Cert *cert)
             {
                 this->next = cert;
@@ -111,7 +111,8 @@ namespace ctp
             const SequenceOfPsidSsp& psid_get() const;
 
             /* print to stdout or store in a file */
-            int print();
+            int print_encoded(const std::string filename);
+            int print_decoded(const std::string filename);
 
 
     };
@@ -136,6 +137,16 @@ namespace ctp
                 encBuf = nullptr;
                 encLen = 0;
             }
+            // /*FIXME, define a lenght enocding function */
+            // int Length(const uint8_t *length, int len);
+            // {
+            //     uint8_t numBytes = len/128;
+            //     if(numBytes)
+            //     {
+            //         numBytes += 1;
+            //         numByets = ASN1_LENGTH_ENCODING_MASK
+            //     }
+            // }
             /* encode fixed length octets, i.e, no need for length encoding */
             int OctetsFixed(const uint8_t *octets, size_t len);
             /* encode psid */
@@ -196,15 +207,14 @@ namespace ctp
                 len = 0;
             }
             /* decode fixed length octets, i.e, no need for length encoding */
-            int OctetsFixed(uint8_t *octets, size_t len)
+            int OctetsFixed(uint8_t *octets, size_t len_)
             {
                 std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
                 std::ostream os(&log_);
                 os << " Ieee1609Decode::OctetsFixed enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
                 os.clear();
-
-                if (len+offset > this->len)
+                if (len_+offset > this->len)
                 {
                     os << " Ieee1609Decode::OctetsFixed not enough buffer " <<  len << " offset " << offset << std::endl;
                     LOG_ERR(log_.str(), MODULE);
@@ -212,7 +222,7 @@ namespace ctp
                     return 0;
                 }
 
-                while(len--)
+                while(len_--)
                 {
                     *octets++ = buf[offset++];
                 }
@@ -374,6 +384,45 @@ namespace ctp
             }
             int IssuerIdentifier_(IssuerIdentifier& issuer)
             {
+                std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+                std::ostream os(&log_);
+                os << " Ieee1609Decode::IssuerIdentifier_ enter " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                os.clear();
+
+                /* get the choice */
+                int c = (int)buf[offset-1];
+                std::cout << "the value at offset " << offset << " is " << std::hex << std::to_string(c) << std::endl;
+                issuer.type = (IssuerIdentifierType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+
+
+
+                switch(issuer.type)
+                {
+                    case IssuerIdentifierTypeHashId:
+                    {
+                        std::cout << "is this hash " << std::endl;
+                        char *buf_ = issuer.issuer.hashId.x;
+                        /* copy fixed size eight bytes */
+                        for (int i = 0; i < 8; i++)
+                        {
+                            *buf_++ = buf[offset++];
+                        }
+                    }
+                    break;
+                    case IssuerIdentifierTypeSelf:
+                        /* there is only one type of hash algo, so just skip it */
+                        offset++;
+                    break;
+                    default:
+                        os << "Ieee1609Decode::IssuerIdentifier_ unsuuported issuer type " << issuer.type;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw new Exception(log_.str());
+                }
+                os << " Ieee1609Decode::IssuerIdentifier_ exit " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                os.clear();
+
                 return 0;
             }
             /* sequence of routines only encodes the number of components */
@@ -385,20 +434,24 @@ namespace ctp
                 os << " Ieee1609Decode::SequenceOf enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
                 os.clear();
-                
+
+                /* read first byte of the integer encoding */
+                lengthEncoding = buf[offset];
                 if(buf[offset] & ASN1_LENGTH_ENCODING_MASK)
                 {
                     lengthEncoding = buf[offset++] & ASN1_LENGTH_ENCODING_MASK;
-                }
-
-                if(lengthEncoding > bytes)
-                {
-                    throw new Exception("the supplied buffer not long enough");
-                }
-                /* copy the bytes into the given buffer */
-                while(lengthEncoding--)
-                {
-                    value[lengthEncoding] = buf[offset++];
+                    if(lengthEncoding > bytes)
+                    {
+                        throw new Exception("the supplied buffer not long enough");
+                    }
+                                    /* copy the bytes into the given buffer */
+                    while(lengthEncoding--)
+                    {
+                        value[lengthEncoding] = buf[offset++];
+                    }
+                }else{
+                    /* else just read the value */
+                    *value = buf[offset++];
                 }
                 os << " Ieee1609Decode::SequenceOf exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
@@ -462,27 +515,29 @@ namespace ctp
     {
         int quantity;
         Ieee1609Cert *cert;
-        Ieee1609Encode *enc;
+        std::shared_ptr<Ieee1609Encode> enc;
         std::shared_ptr<Ieee1609Decode> dec;
         SignerIdentifier signerIdentifier;
 
         public:
             /*constructor */
             /* self-signed signature */
-            explicit Ieee1609Certs(){
-                quantity = 0;
+            explicit Ieee1609Certs()
+            {
+                quantity = 0; 
                 cert = new Ieee1609Cert();
-                enc = new Ieee1609Encode();
+                enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){ delete p;});
                 dec = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode, [](Ieee1609Decode *p){delete p;});
                 /* create a self-signed certificate */
                 try {
-                    cert->create();
+                    cert->create(NID_X9_62_prime256v1);
                     quantity++;
                 }catch( std::exception& e){
                     LOG_ERR("Ieee1609Certs::Ieee1609Certs()::create()", MODULE);
                     std::cout << " exception " << e.what() << std::endl;
                     delete cert;
-                    delete enc;
+                    enc.reset();
+                    dec.reset();
                 }
             }
             /* encoded file */
@@ -500,6 +555,8 @@ namespace ctp
             }
             ~Ieee1609Certs()
             {
+                enc = nullptr;
+                dec = nullptr;
                 delete cert;
             }
 
@@ -509,29 +566,42 @@ namespace ctp
             }
 
             int encode(){
+
                 uint8_t *buf = nullptr;
-                /* encode the sequence of certs */
-                enc->clear();
-                /* only 1 byte is needed to encode the number seuqnce */
-                enc->SequenceOf((uint8_t *)&quantity, 1);
-                /* encode the actual certificate */
-                size_t len = cert->encode(&buf);
-                if (len > 0)
-                    enc->OctetsFixed(buf, len);
+                size_t len = 0;
+                try{
+                    /* encode the sequence of certs */
+                    enc->clear();
+                    /* only 1 byte is needed to encode the number seuqnce */
+                    enc->SequenceOf((uint8_t *)&quantity, 1);
+                    cert->encode(enc);
+                }catch(Exception& e)
+                {
+                    LOG_ERR(e.what(), MODULE);
+                    len = 0;
+
+                }
                 return len;
             }
 
             /* decode the buffer */
             int decode(const uint8_t *buf, size_t len)
             {
-                /* decode the type */
-                dec->set(buf,len);
-                // if(dec->SignerIdentifier_(std::ref(signerIdentifier)) == 0)
-                // {
-                //     std::cout << "error signer identifier is not supported" << std::endl;
-                //     return 0;
-                // };
-                return 0;
+                int ret = 1;
+                try
+                {
+                    dec->clear();
+                    dec->set(buf, len);
+                    dec->SequenceOf((uint8_t*)&quantity, 4);
+                    /* decode the certificate with the given decoder */
+                    cert->decode(dec);
+                }catch(Exception& e)
+                {
+                    LOG_ERR(e.what(), MODULE);
+                    ret = 0;
+
+                }
+                return ret;
             }
             int decode (std::shared_ptr<Ieee1609Decode> ptr)
             {
@@ -555,9 +625,6 @@ namespace ctp
                     std::cout << "Exception " << e.what() << std::endl;
 
                 }
-
-                
-            
                 return 0;                
 
             }
@@ -566,7 +633,7 @@ namespace ctp
             {
                 uint8_t *buf = nullptr;
                 size_t len = enc->get(&buf);
-                print_data("cert.txt", buf, len);
+                print_data("certs.txt", buf, len);
             }
     };
 
