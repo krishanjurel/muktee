@@ -34,7 +34,7 @@ namespace ctp
     /* encode certificate identifier */
     int Ieee1609Encode::CertId(const CertificateId& id)
     {
-        int len = 1;
+        int len = 1; /* for choice */
         uint8_t choice = 0x80 | (uint8_t)(id.type);
         uint8_t *buf;
 
@@ -43,7 +43,7 @@ namespace ctp
             case CertificateIdTypeName:
                 len += id.id.hostName.length;
                 buf = (uint8_t *)id.id.hostName.name;
-                len += 1;
+                len += 1; /* length encoding */
                 break;
             default:
                 LOG_ERR("Ieee1609Encode::CertId: unsupported cert id", 1);
@@ -102,7 +102,7 @@ namespace ctp
     }
     int Ieee1609Encode::Octets_(const uint8_t* octets, size_t len)
     {
-        std::cout << "Ieee1609Encode::HashId3: enter  " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::Octets_: enter  " << encLen << std::endl;
         //len += encLen;
         encBuf = (uint8_t *)buf_realloc(encBuf, (len + encLen));
         while(len--)
@@ -110,7 +110,7 @@ namespace ctp
             encBuf[encLen++] = *octets++;
         }
 
-        std::cout << "Ieee1609Encode::HashId3: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
+        std::cout << "Ieee1609Encode::Octets_: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
         return encLen;
     }
 
@@ -233,7 +233,7 @@ namespace ctp
         uint8_t choice = 0x80 | (uint8_t)(validityPeriod.duration.type);
         len -= 1;
         encBuf[encLen++] = choice;
-        buf = (uint8_t *)&validityPeriod.duration.duration.minutes;
+        buf = (uint8_t *)&validityPeriod.duration.duration;
         /* copy in the network byte order */
         encBuf[encLen++] = buf[1];
         encBuf[encLen++] = buf[0]; 
@@ -273,7 +273,7 @@ namespace ctp
         encBuf[encLen++] = choice;
         len -= 1;
         /*FIXME, choice of curve point-type*/
-        choice = (0x80) | (uint8_t)(0x01);
+        choice = (0x80) | (uint8_t)(0x00);
         encBuf[encLen++] = choice;
         len -= 1;
         /* just take the y 0*/
@@ -853,8 +853,7 @@ namespace ctp
         return offset;
     }
 
-
-    int Ieee1609Decode::HashId3(uint8_t* hash, size_t len)
+    int Ieee1609Decode::HashId3(uint8_t* hash, size_t len_)
     {
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
@@ -862,15 +861,19 @@ namespace ctp
         log_info(log_.str(), MODULE);
         os.clear();
 
-        if(offset + 2 > len)
+        if(offset + len_ > len)
         {
              os << " Ieee1609Decode::HashId3  not enough data " <<  len << " offset " << offset << std::endl;
             LOG_ERR(log_.str(), MODULE);
             return 0;
         }
 
-        *hash++ = buf[offset++];
-        *hash++ = buf[offset++];
+        int i=0;
+        while(i < len_)
+        {
+            hash[i] = buf[offset++];
+            i++;
+        }
 
         os << " Ieee1609Decode::HashId3 exit " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
@@ -905,13 +908,14 @@ namespace ctp
     {
         int len_=0;
         uint8_t *tempBuf;
-        uint8_t data = buf[offset++]; /* get the choice */
-        id.type = static_cast<CertificateIdType>(data & ~ASN1_COER_CHOICE_MASK); /* extract the id type */
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
-        os << " Ieee1609Decode::CrlSeries enter " <<  len << " offset " << offset << std::endl;
+        os << " Ieee1609Decode::CertId enter " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
         os.clear();
+
+        uint8_t data = buf[offset++]; /* get the choice */
+        id.type = static_cast<CertificateIdType>(data & ASN1_COER_CHOICE_MASK); /* extract the id type */
 
         os << "Ieee1609Decode::CertId::id.type " <<  id.type << std::endl;
         log_info(log_.str(), MODULE);
@@ -922,16 +926,21 @@ namespace ctp
             case CertificateIdTypeName:
                 /* the length of the name */
                 id.id.hostName.length = buf[offset++];
-                id.id.hostName.name = (char *)buf_alloc(id.id.hostName.length);
+                id.id.hostName.name = (char *)buf_alloc(id.id.hostName.length+1);
                 while (len_ < id.id.hostName.length)
                 {
                     id.id.hostName.name[len_++] = buf[offset++];
                 }
+                id.id.hostName.name[len_] = '\0';
+                std::cout << "host name " << id.id.hostName.name << std::endl;
             break;
+
+
             default:
-                std::cout << " the certificate id type " << id.type << " is not supported " << std::endl;
+                std::cout << "Ieee1609Decode::CertId  " << id.type << " is not supported " << std::endl;
         }
-        os << " Ieee1609Decode::CrlSeries exit " <<  len << " offset " << offset << std::endl;
+        os.clear();
+        os << " Ieee1609Decode::CertId exit " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
         os.clear();
         return offset;
@@ -946,9 +955,10 @@ namespace ctp
         delete this->buf;
         this->buf = nullptr;
         this->buf = (uint8_t *)buf_realloc(this->buf, len);
-        memcpy(this->buf, buf, len);
-
-
+        for (int i =0; i < len; i++)
+        {
+            this->buf[i] = buf[i];
+        }
         print_data("testencode.txt", this->buf, this->len);
     }
 

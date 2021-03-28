@@ -265,8 +265,31 @@ namespace ctp
                 return 0;
             }
             /* encode validity period */
-            int VP(ValidityPeriod& validityPeriod)
+            int VP(ValidityPeriod& vp)
             {
+                
+                std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+                std::ostream os(&log_);
+                os << " Ieee1609Decode::VP enter " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                os.clear();
+
+                /* read 4 bytes of uint32 in big endian format */
+                uint8_t *buf = (uint8_t *)&vp.start;
+                size_t len_ = 4;
+                while(len_--)
+                {
+                    buf[len_] = buf[offset++];
+                }
+                /* get the choice of duration */
+                vp.duration.type = (DurationType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+                /* read remaining two bytes of the duration */
+                vp.duration.duration = (buf[offset++] << 8);
+                vp.duration.duration |= (buf[offset++]);
+                os << " Ieee1609Decode::VP exit " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                os.clear();
+
                 return 0;
             }
             /* encode verfication key indicator,6.4.35  */
@@ -315,7 +338,7 @@ namespace ctp
 
                                 }
                                 /* handle the available buffer size */
-                                if(_len+offset < len)
+                                if(_len+offset > len)
                                 {
                                     std::cout << "Ieee1609Decode::Vki:: point type not enough length " << _len << "offset " << offset << "total " << len << std::endl;
                                     throw Exception("Ieee1609Decode::Vki:: point type not enough length ");
@@ -352,9 +375,9 @@ namespace ctp
                 os.clear();
 
                 /* get the number of items in the sequence */
-                psids.quantity = SequenceOf((uint8_t *)&psids.quantity, 4);
+                psids.quantity= 0;
+                SequenceOf((uint8_t *)&psids.quantity, 4);
                 psids.psidSsp = (PsidSsp*)buf_alloc(psids.quantity * sizeof(PsidSsp));
-
                 for(int i = 0; i < psids.quantity; i++)
                 {
                     PsidSsp *ssp = psids.psidSsp + i;
@@ -391,7 +414,7 @@ namespace ctp
                 os.clear();
 
                 /* get the choice */
-                int c = (int)buf[offset-1];
+                int c = (int)buf[offset];
                 std::cout << "the value at offset " << offset << " is " << std::hex << std::to_string(c) << std::endl;
                 issuer.type = (IssuerIdentifierType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
 

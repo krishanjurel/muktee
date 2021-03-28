@@ -345,8 +345,8 @@ void TEST(data_decoding)()
     encLen = pcert->encode(&encBuf);
     std::cout << "encoded buffer length " << encLen << std::endl;
     
-    pcert->print_encoded(std::string("encoded-cert.txt"));
-    pcert->print_decoded(std::string("decoded-cert.txt"));
+    // pcert->print_encoded(std::string("encoded-cert.txt"));
+    // pcert->print_decoded(std::string("decoded-cert.txt"));
 
     ctp::Ieee1609Cert *pcert1 = new ctp::Ieee1609Cert();
     /* decode from the previously created certificate */

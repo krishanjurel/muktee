@@ -262,7 +262,7 @@ namespace ctp
         const BIGNUM *r;
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
-#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else
@@ -315,7 +315,7 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
-#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else
@@ -404,10 +404,13 @@ namespace ctp
         {
             /* get the sequence preamble */
             pDecObj->Octets_(&base->options, 1);
+            std::cout << "base options " << std::to_string(base->options) << std::endl;
             /* decode version */
             pDecObj->Octets_((uint8_t *)&base->version, 1);
+            std::cout << "base version " << std::to_string(base->version) << std::endl;
             /* decode cert type */
             pDecObj->Octets_((uint8_t *)&base->certType, 1);
+            std::cout << "base version " << std::to_string(base->certType) << std::endl;
             pDecObj->IssuerIdentifier_(std::ref(*issuer));
             DecodeToBeSigned();
             /* decode the signature if available */
@@ -467,6 +470,7 @@ namespace ctp
         /* FIXME, hard coded to have only non-extensible fixed size components */
         pDecObj->Octets_((uint8_t *)&tbs->optionsComps, 1);
         pDecObj->CertId(std::ref(tbs->id));
+        pDecObj->HashId3((uint8_t*)tbs->cracaId.x, 3);
         pDecObj->CrlSeries(std::ref(tbs->crlSeries));
         pDecObj->VP(std::ref(tbs->validityPeriod));
         /* decode optional components */
@@ -728,7 +732,7 @@ namespace ctp
         struct tm *tm = localtime((const time_t *)&t);
         tbs->validityPeriod.start = start_time(tm);
         tbs->validityPeriod.duration.type = DurationTypeMinutes;
-        tbs->validityPeriod.duration.duration.minutes = (7*24*60);/* for one week, read it form the config file */
+        tbs->validityPeriod.duration.duration = (uint16_t)(7*24*60);/* for one week, read it form the config file */
         /* set the verification key indicator type */
         vki->type = VerificationKeyIndicatorTypeKey;
         /* default is uncompressed */

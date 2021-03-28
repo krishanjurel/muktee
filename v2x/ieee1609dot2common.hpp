@@ -166,18 +166,7 @@ typedef enum{
 typedef struct 
 {
     DurationType type;
-    union
-    {
-        uint16_t microSeconds;
-        uint16_t milliseconds;
-        uint16_t seconds;
-        uint16_t minutes;
-        uint16_t hours;
-        uint16_t sixtyHours;
-        uint16_t years;
-    }duration;
-#define DURATION_HOURS      duration.hours
-#define DURATION_MINUTES    duration.minutes
+    uint16_t duration;
 }Duration;
 
 

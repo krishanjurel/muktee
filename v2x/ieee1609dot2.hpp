@@ -33,14 +33,6 @@ namespace ctp
 
     };
 
-
-
-
-
-
-
-
-
     class TP; /* forward declaration */
     using TP_PTR = std::shared_ptr<TP>;
 
