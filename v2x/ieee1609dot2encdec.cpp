@@ -11,6 +11,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <unistd.h>
 
 
 
@@ -147,7 +148,8 @@ namespace ctp
 
         /* FIXME, only one psid with no ssp */
         /* 1 byte to encode quatity*/
-        int len = 1;
+        int len = 0;
+        Length(psid.quantity);
         /* number of bytes to encode sequence preamble for otional component */
         // len += psid.quantity;
         /* calculate the total length needed to encode the sequence of psids */
@@ -169,8 +171,8 @@ namespace ctp
         }
 
         /* encode quantity of sequences, FIXME assumed fixed size quantity <= 127 */
-        encBuf[encLen++] = psid.quantity; /* number of bytes to represent one sequence, 1 */
-        len -= 1;
+        // encBuf[encLen++] = psid.quantity; /* number of bytes to represent one sequence, 1 */
+        // len -= 1;
 
         /* iterate thru the number of available PsidSsps */
         PsidSsp *psidSsp = psid.psidSsp;
@@ -417,25 +419,50 @@ namespace ctp
         return encLen;
     }
 
-    int Ieee1609Encode::SequenceOf(const uint8_t *octets, size_t num)
+    int Ieee1609Encode::Length(size_t num)
     {
-        int len = 1; /* 1 byte to encode the number of sequences */
-        len += num; /* number of bytes */
-        std::cout << "Ieee1609Encode::SequenceOf enter " << encLen << std::endl;
+        return Length(nullptr, num);
+    }
+
+    int Ieee1609Encode::Length(const uint8_t *octets, size_t num)
+    {
+        uint32_t numBits = 1;
+        uint32_t len = 0; /* 1 byte to encode the number of sequences */
+        std::cout << "Ieee1609Encode::Length enter " << encLen << std::endl;
+        /*FIXME, is there any better way */
+        while(1)
+        {
+            if((num >> numBits) == 0)
+            {
+                break;
+            }
+            /* increment the num of bits */
+            numBits ++;
+        }
+        uint8_t numBytes = numBits/ASN1_BITS_PER_BYTE;
+        numBytes += 1;
+
+        len += numBytes; /* number of bytes */
+        /* if number of bytes are greater than 1, then use the length prefix */
+        if(numBytes > 1)
+        {
+            len += 1;
+        }
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+        if(numBytes > 1)
+        {
+            encBuf[encLen++] = (uint8_t)(ASN1_LENGTH_ENCODING_MASK | numBytes);
+            len -= 1;
+        }
+        /* copy the bytes in the big-endian order */
+        uint8_t *buf_ = (uint8_t*)&num;
 
-        
-
-        /* FIXME, assuming fixed sized quantity of less than or equal to 127 */
-        encBuf[encLen++] = num;
-        len --;
-        // while(len)
-        // {
-        //     encBuf[encLen++] = *octets++;
-        //     len --;
-        // }
-
-        std::cout << "Ieee1609Encode::SequenceOf exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        while(len)
+        {
+            len--;
+            encBuf[encLen++] = buf_[len];
+        }
+        std::cout << "Ieee1609Encode::Length exit " << "rem len " << std::dec << len << "enc len " << encLen << std::endl;
         return encLen;
     }
 
@@ -830,6 +857,7 @@ namespace ctp
         }
 
         /* decode s */
+        dstBuf = (uint8_t *)signature.signature.ecdsaP256Signature.s.x;
         bufLen = sizeof(HashedData32);
         if(bufLen + offset > len)
         {
@@ -959,6 +987,7 @@ namespace ctp
         {
             this->buf[i] = buf[i];
         }
+        unlink("testencode.txt");
         print_data("testencode.txt", this->buf, this->len);
     }
 

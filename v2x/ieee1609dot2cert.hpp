@@ -167,7 +167,8 @@ namespace ctp
             int Vki(const VerificationKeyIndicator& vki);
             int SequenceOfPsid_(const SequenceOfPsidSsp& psids);
             int IssuerIdentifier_(const IssuerIdentifier& issuer);
-            int SequenceOf(const uint8_t *values, size_t bytes);
+            int Length(size_t bytes);
+            int Length(const uint8_t *values, size_t bytes);
 
 
            /*encoding of signed data, 6.3.4 */
@@ -275,14 +276,17 @@ namespace ctp
                 os.clear();
 
                 /* read 4 bytes of uint32 in big endian format */
-                uint8_t *buf = (uint8_t *)&vp.start;
+                uint8_t *buf_ = (uint8_t *)&vp.start;
                 size_t len_ = 4;
-                while(len_--)
+                while(len_)
                 {
-                    buf[len_] = buf[offset++];
+                    len_ --;
+                    buf_[len_] = buf[offset++];
                 }
+                std::cout << "VP start " << vp.start << std::endl;
                 /* get the choice of duration */
                 vp.duration.type = (DurationType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+                std::cout << "duration type " << vp.duration.type << std::endl;
                 /* read remaining two bytes of the duration */
                 vp.duration.duration = (buf[offset++] << 8);
                 vp.duration.duration |= (buf[offset++]);
@@ -376,7 +380,7 @@ namespace ctp
 
                 /* get the number of items in the sequence */
                 psids.quantity= 0;
-                SequenceOf((uint8_t *)&psids.quantity, 4);
+                Length((uint8_t *)&psids.quantity, 4);
                 psids.psidSsp = (PsidSsp*)buf_alloc(psids.quantity * sizeof(PsidSsp));
                 for(int i = 0; i < psids.quantity; i++)
                 {
@@ -449,12 +453,12 @@ namespace ctp
                 return 0;
             }
             /* sequence of routines only encodes the number of components */
-            int SequenceOf(uint8_t *value, size_t bytes)
+            int Length(uint8_t *value, size_t bytes)
             {
                 uint8_t lengthEncoding=1;
                 std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
                 std::ostream os(&log_);
-                os << " Ieee1609Decode::SequenceOf enter " <<  len << " offset " << offset << std::endl;
+                os << " Ieee1609Decode::Length enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
                 os.clear();
 
@@ -476,7 +480,7 @@ namespace ctp
                     /* else just read the value */
                     *value = buf[offset++];
                 }
-                os << " Ieee1609Decode::SequenceOf exit " <<  len << " offset " << offset << std::endl;
+                os << " Ieee1609Decode::Length exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
                 os.clear();
                 return offset;
@@ -596,7 +600,7 @@ namespace ctp
                     /* encode the sequence of certs */
                     enc->clear();
                     /* only 1 byte is needed to encode the number seuqnce */
-                    enc->SequenceOf((uint8_t *)&quantity, 1);
+                    enc->Length((uint8_t *)&quantity, 1);
                     cert->encode(enc);
                 }catch(Exception& e)
                 {
@@ -615,7 +619,7 @@ namespace ctp
                 {
                     dec->clear();
                     dec->set(buf, len);
-                    dec->SequenceOf((uint8_t*)&quantity, 4);
+                    dec->Length((uint8_t*)&quantity, 4);
                     /* decode the certificate with the given decoder */
                     cert->decode(dec);
                 }catch(Exception& e)
@@ -635,7 +639,7 @@ namespace ctp
                 {
                     // dec->SignerIdentifier_(std::ref(signerIdentifier));
                     /* maximmum 4 bytes */
-                    dec->SequenceOf((uint8_t *)&quantity, 4);
+                    dec->Length((uint8_t *)&quantity, 4);
                     for(int i =0; i < quantity; i++)
                     {
                         Ieee1609Cert *pcert = new Ieee1609Cert();

@@ -42,6 +42,7 @@ typedef struct
 
 #define ASN1_COER_CHOICE_MASK  (uint8_t)(~0x80)
 #define ASN1_LENGTH_ENCODING_MASK (uint8_t)(0x80)
+#define ASN1_BITS_PER_BYTE  8
 
 
 

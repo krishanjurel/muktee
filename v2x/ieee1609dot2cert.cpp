@@ -262,7 +262,7 @@ namespace ctp
         const BIGNUM *r;
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
-#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else
@@ -315,7 +315,7 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
-#if (OPENSSL_VERSION_NUMBER == 0x1010100fL)
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
         r = ECDSA_SIG_get0_r(sig);
         s = ECDSA_SIG_get0_s(sig);
 #else

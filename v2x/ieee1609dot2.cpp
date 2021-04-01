@@ -285,7 +285,8 @@ int main()
     //TEST(ipc_sockets)();
     //TEST(certs_encoding)();
     //  TEST(data_encoding)();
-    TEST(data_decoding)();
+    // TEST(data_decoding)();
+    TEST(cert_decoding)();
 
     while(!stop_)
     {
@@ -389,14 +390,52 @@ void TEST(cert_encoding)()
     size_t encLen = 0;
     encLen = pcert->encode(&encBuf);
     // std::cout << "encoded buffer length " << encLen << std::endl;
-    pcert->print_encoded(std::string("cert.txt"));
+    unlink("encoded-cert.txt");
+    pcert->print_encoded(std::string("encoded-cert.txt"));
     delete pcert;
     raise(SIGKILL);
     return;
 }
+
 void TEST(cert_decoding)()
 {
+    printf("encoding cycle \n");
+    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
+    pcert->create();
+    uint8_t *encBuf = nullptr;
+    size_t encLen = 0;
+    encLen = pcert->encode(&encBuf);
+    // std::cout << "encoded buffer length " << encLen << std::endl;
+    //unlink("encoded-cert.txt");
+    //pcert->print_encoded(std::string("encoded-cert.txt"));
     printf("cert_decoding\n");
+    /* create a certificate object */
+    ctp::Ieee1609Cert *pcert2 = new ctp::Ieee1609Cert();
+    unlink("encoded-cert-data.txt");
+    print_data("encoded-cert-data.txt",encBuf, encLen);
+    pcert2->decode(encBuf, encLen);
+    uint8_t *encBuf2 = nullptr;
+    size_t encLen2 = 0;
+    encLen2 = pcert2->encode(&encBuf2);
+    unlink("encoded-cert1.txt");
+    print_data("encoded-cert1.txt", encBuf2, encLen2);
+    std::cout << "enclen 1:2 " << encLen <<":"<<encLen2 << std::endl;
+
+
+
+    for (int i = 0; i < encLen2; i++)
+    {
+        if(encBuf[i] != encBuf2[i])
+        {
+            std::cout << "mismatch at index " << i <<std::endl;
+            //break;
+        }
+    }
+
+    //pcert2->print_encoded(std::string("encoded-cert1.txt"));
+    delete pcert;
+    delete pcert2;
+    raise(SIGKILL);
     return;
 }
 
