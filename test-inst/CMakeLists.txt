@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 ### Uncomment the line below and specify the path to OpenCV directory i.e. the path to the OpenCVConfig.cmake file. Check the examples given below.
 ###SET PATH TO OPENCV CMAKE CONFIG FILES
 
-SET(OpenCV_DIR /home/krishan/installation/opencv/lib/cmake/opencv4)
+SET(OpenCV_DIR /home/krishan/installation/OpenCV/lib/cmake/opencv4)
 
 ################### OpenCV_DIR Examples  #####################
 #

@@ -3,9 +3,21 @@
 # this line will ensure the users enters the credentials if needed 
 # for the rest of the installation to succeed
 
+
 sudo apt -y update
 
 curr_dir=$(pwd)
+
+# if [ ! -d "$curr_dur/installation" ]
+# then 
+#     mkdir installation
+# fi
+
+
+# if [ ! -d "$curr_dur/installation/OpenCV" ]
+# then 
+#     mkdir -p installation/OpenCV
+# fi
 
 install_packages()
 {
@@ -35,6 +47,19 @@ if [ "$opencv_home_Dir" = "" ]
         mkdir -p $HOME/installation/OpenCV
         opencv_home_dir="$HOME/installation/OpenCV"
 fi        
+
+git clone https://github.com/opencv/opencv_contrib.git
+cd opencv_contrib
+git checkout tags/4.5.0
+cd ..
+
+
+git clone https://github.com/opencv/opencv.git
+cd opencv
+git checkout tags/4.5.0
+
+mkdir build
+cd build
 
 cmake -D CMAKE_BUILD_TYPE=RELEASE \
 -D CMAKE_INSTALL_PREFIX=$opencv_home_dir \
