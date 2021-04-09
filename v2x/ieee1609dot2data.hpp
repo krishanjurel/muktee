@@ -36,13 +36,11 @@ namespace ctp
                 tpPtr = TP::init();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 tbsData = (ToBeSignedData *) &data->content.content.signedData.toBeSignedData;
-                /* complete the link */
-                //tbsData->payload.data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 tbsData->payload.data=(Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 data->protocolVersion = 0x03;
-                //tbsData = nullptr;
                 hashId = nullptr;
                 cert = nullptr;
+                certs = nullptr;
                 sig = nullptr;
                 signature = nullptr;
                 /* get the certificate manager */
@@ -72,7 +70,7 @@ namespace ctp
             /* sign with a supplied certificate */
             void sign(int psid, const uint8_t *buf, size_t len,
                     uint8_t **signedData, size_t *signedDataLen,
-                    Ieee1609Cert *cert);
+                    Ieee1609Certs *cert);
 
             /* encode the data*/
             void encode();
@@ -81,6 +79,7 @@ namespace ctp
             int encode_tbsdata(bool cont = true);
             int encode_signeddata(bool cont = true);
             int encode_signature(bool cont = true);
+            int encode(uint8_t **buf);
 
 
             /* decode the data */

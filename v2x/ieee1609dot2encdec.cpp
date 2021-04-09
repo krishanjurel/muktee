@@ -72,9 +72,10 @@ namespace ctp
     /* encode crl series */
     int Ieee1609Encode::CrlSeries(const uint16_t series)
     {
+        std::stringstream log_(std::ios_base::out);
          /* its two bytes */
         int len = 2;
-         std::cout << "Ieee1609Encode::CrlSeries enter " << encLen << " " << len << std::endl;
+        log_ << "Ieee1609Encode::CrlSeries enter encLen " << encLen << " len " << len << std::endl;
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
 
         uint8_t *buf = (uint8_t *)&series;
@@ -82,13 +83,15 @@ namespace ctp
         encBuf[encLen++] = buf[1];
         encBuf[encLen++] = *buf;
         len -= 2;
-        std::cout << "Ieee1609Encode::CrlSeries exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_ << "Ieee1609Encode::CrlSeries exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
         return encLen;
     }
     /* encode hashid3 */
     int Ieee1609Encode::HashId3(const uint8_t* hash, size_t len)
     {
-        std::cout << "Ieee1609Encode::HashId3 eenter " << encLen << std::endl;
+        std::stringstream log_(std::ios_base::out);
+        log_ << "Ieee1609Encode::HashId3 eenter " << encLen << " len " << len << std::endl;
         /* just fill it with the hard coded a,b,c */
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
 
@@ -98,7 +101,8 @@ namespace ctp
             encBuf[encLen++] = *hash++;
             len -= 3;
         }
-        std::cout << "Ieee1609Encode::HashId3 exit" << "rem len " << len << "enc len " << encLen << std::endl;
+        log_ << "Ieee1609Encode::HashId3 exit" << "rem len " << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
         return 0;
     }
     int Ieee1609Encode::Octets_(const uint8_t* octets, size_t len)
@@ -117,7 +121,8 @@ namespace ctp
 
     int Ieee1609Encode::IssuerIdentifier_(const IssuerIdentifier& issuer)
     {
-        std::cout << "Ieee1609Encode::IssuerIdentifier_: enter  " << encLen << std::endl;
+        std::stringstream log_(std::ios_base::out);
+        log_ << "Ieee1609Encode::IssuerIdentifier_: enter  " << encLen << std::endl;
         const char *data =  nullptr;
         int len = 1; /* choice */
         if(issuer.type == IssuerIdentifierTypeHashId)
@@ -138,13 +143,16 @@ namespace ctp
             encBuf[encLen++] = *data++;
             len --;
         }
-        std::cout << "Ieee1609Encode::IssuerIdentifier_: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_ << "Ieee1609Encode::IssuerIdentifier_: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
         return encLen;
 
     }
 
     int Ieee1609Encode::SequenceOfPsid_(const SequenceOfPsidSsp& psid)
     {
+        std::stringstream log_(std::ios_base::out);
+        log_ << " Ieee1609Encode::SequenceOfPsid_ enter " << encLen << std::endl;
 
         /* FIXME, only one psid with no ssp */
         /* 1 byte to encode quatity*/
@@ -163,7 +171,7 @@ namespace ctp
             len += 4;
             /* FIXME, handle optional component SSP, for now none */
         }
-        std::cout << "Ieee1609Encode::SequenceOfPsid_: enter  len " << len << " enclen "<< encLen << std::endl;
+        log_ << "Ieee1609Encode::SequenceOfPsid_: len " << len << " enclen "<< encLen << std::endl;
         encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         if(encBuf == nullptr)
         {
@@ -197,10 +205,12 @@ namespace ctp
         }
          if (len != 0)
          {
-             LOG_ERR("Ieee1609Encode::SequenceOfPsid_: rem length not zero", 1);
-             throw new Exception("cert::encode_sequenceofpsid(): rem length not zero ");
+            log_ << "Ieee1609Encode::SequenceOfPsid_: rem length not zero" << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw new Exception("cert::encode_sequenceofpsid(): rem length not zero ");
          }
-         std::cout << "Ieee1609Encode::SequenceOfPsid_: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
+         log_ << "Ieee1609Encode::SequenceOfPsid_: exit  " << "rem len " << len << "enc len " << encLen << std::endl;
+         log_info(log_.str(), MODULE);
          return encLen;
     }
 
@@ -268,18 +278,19 @@ namespace ctp
         /* reallocate the buffer */
         encBuf = (uint8_t *)buf_realloc(encBuf, (len + encLen));
         uint8_t choice = 0x80 | (uint8_t) (vki.type);
+
         encBuf[encLen++] = choice;
         len -= 1;
         /* choice of public verification */
         choice = (0x80) | (uint8_t)(vki.indicator.verificationKey.type);
         encBuf[encLen++] = choice;
         len -= 1;
-        /*FIXME, choice of curve point-type*/
-        choice = (0x80) | (uint8_t)(0x00);
+        const EccP256CurvPoint *point = &vki.indicator.verificationKey.key.ecdsaNistP256;
+        choice = (0x80) | (uint8_t)(point->type);
         encBuf[encLen++] = choice;
         len -= 1;
         /* just take the y 0*/
-        const uint8_t *key = (uint8_t *)vki.indicator.verificationKey.key.ecdsaNistP256S.point.octets.x;
+        const uint8_t *key = (uint8_t *)point->point.octets.x;
         while(len > 0)
         {
             encBuf[encLen++] = *key++;
@@ -306,39 +317,41 @@ namespace ctp
 
     int Ieee1609Encode::Signature_(const Signature& signature)
     {
-        int len = 1; /* for signature choice */
+        int len = 0; 
         uint8_t type = 0;
         uint8_t choice = (0x80) | (signature.type);
-        std::cout << "Ieee1609Encode::Signature_ enter " << encLen << std::endl;
+        std::stringbuf log_("Ieee1609Encode::Signature_ enter ", std::ios_base::out);
+        std::ostream os(&log_);
+        os << encLen << std::endl;
+        len = 1; /* for signature choice */
         len += 1; /* choice of curve point type */
-        len += 32; /* 32 bytes for the s */
+        len += 32; /* minimum 32 bytes for the s */
 
         type  = signature.signature.ecdsaP256Signature.r.type;
 
         uint8_t *pointBuf = nullptr;
-        if(type == EccP256CurvPointXOnly){
+        if(type == EccP256CurvPointTypeXOnly){
             pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 32;
-        }else if (choice == EccP256CurvPointCompressedy0)
+        }else if (choice == EccP256CurvPointTypeCompressedy0)
         {
             pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 32;
-        }else if (choice == EccP256CurvPointCompressedy1)
+        }else if (choice == EccP256CurvPointTypeCompressedy1)
         {
             pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 32;
-        }else if (choice == EccP256CurvPointUncompressed){
+        }else if (choice == EccP256CurvPointTypeUncompressed){
             pointBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
             len += 64;
         }
-
-
         try
         {
             encBuf = (uint8_t*)buf_realloc(encBuf, (encLen +  len));
         }catch (const std::bad_alloc& e)
         {
-            LOG_ERR("Ieee1609Encode::Signature_::buf_realloc error allocation buffer ", 1);
+            os << "Ieee1609Encode::Signature_::buf_realloc error allocation buffer " << std::endl;
+            LOG_ERR(log_.str(), MODULE);
             throw new std::runtime_error("Ieee1609Encode::Signature_::buf_realloc error allocation buffer ");
         }
 
@@ -374,28 +387,58 @@ namespace ctp
             len --;
             sLen --;
         }
-        std::stringbuf log_("Ieee1609Encode::Signature_", std::ios_base::out | std::ios_base::ate);
-        std::ostream os(&log_);
-        os << " remaining length (exp >= 0) "  << len << std::endl;
+        os << "Ieee1609Encode::Signature_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
         log_info(log_.str(), MODULE);
-        os.clear();
-        std::cout << "Ieee1609Encode::Signature_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
         return encLen;
 
     }
 
+    /* encoding sequence of certs */
+    int Ieee1609Encode::SignerIdentifier_(Ieee1609Certs& certs, SignerIdentifierType type)
+    {
+        int len = 1; /* choice */
+        uint8_t *buf = nullptr; /*FIXME, set this buffer to correct memory */
+        size_t bufLen = 0;
 
-    // int Ieee1609Encode::SequenceOfCerts_(const SequenceOfCertificate& certs)
-    // {
-    //     return 0;
-    // }
+        std::stringbuf log_(std::ios_base::out);
+        std::ostream os(&log_);
+        std::cout << "Ieee1609Encode::SignerIdentifier_ enter " << encLen << std::endl;
+
+        if(type != SignerIdentifierTypeSelf)
+        {
+            /* encode the signer, i.e. the certificate */
+            bufLen = certs.encode(&buf);
+        }
+    
+        if(bufLen > 0)
+        {
+            len += bufLen;
+
+            encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
+            encBuf[encLen++] = (uint8_t)((0x80) | type);
+            len --;
+            while(len)
+            {
+                encBuf[encLen++] = *buf++;
+                len --;
+            }
+        }
+        os << "Ieee1609Encode::SignerIdentifier_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
+        return encLen;
+    }
+
 
     int Ieee1609Encode::SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type)
     {
         int len = 1; /* choice */
         uint8_t *buf = nullptr; /*FIXME, set this buffer to correct memory */
         size_t bufLen = 0;
+
+        std::stringbuf log_(std::ios_base::out);
+        std::ostream os(&log_);
         std::cout << "Ieee1609Encode::SignerIdentifier_ enter " << encLen << std::endl;
+
         if(type != SignerIdentifierTypeSelf)
         {
             /* encode the signer, i.e. the certificate */
@@ -415,7 +458,8 @@ namespace ctp
                 len --;
             }
         }
-        std::cout << "Ieee1609Encode::SignerIdentifier_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        os << "Ieee1609Encode::SignerIdentifier_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
         return encLen;
     }
 
@@ -428,8 +472,10 @@ namespace ctp
     {
         uint32_t numBits = 1;
         uint32_t len = 0; /* 1 byte to encode the number of sequences */
-        std::cout << "Ieee1609Encode::Length enter " << encLen << std::endl;
-        /*FIXME, is there any better way */
+        int lenBytes = 0;
+        std::stringbuf log_(std::ios_base::out);
+        std::ostream os(&log_);
+        os << "Ieee1609Encode::Length enter " << encLen << std::endl;
         while(1)
         {
             if((num >> numBits) == 0)
@@ -448,6 +494,7 @@ namespace ctp
         {
             len += 1;
         }
+        lenBytes = len;
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
         if(numBytes > 1)
         {
@@ -462,35 +509,39 @@ namespace ctp
             len--;
             encBuf[encLen++] = buf_[len];
         }
-        std::cout << "Ieee1609Encode::Length exit " << "rem len " << std::dec << len << "enc len " << encLen << std::endl;
-        return encLen;
+        os << "Ieee1609Encode::Length exit " << "rem len " << std::dec << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
+        return lenBytes;
     }
 
     int Ieee1609Encode::OctetsFixed(const uint8_t *octets, size_t len)
     {
-        std::cout << "Ieee1609Encode::OctectsFixed enter " << encLen << std::endl;
+        std::stringstream log_(std::ios_base::out);
+        log_ << "Ieee1609Encode::OctectsFixed enter " << encLen << std::endl;
         encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         while(len)
         {
             encBuf[encLen++] = *octets++;
             len--;
         }
-        std::cout << "Ieee1609Encode::OctectsFixed exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_ << "Ieee1609Encode::OctectsFixed exit " << "rem len " << len << "enc len " << encLen << std::endl;
+        log_info(log_.str(), MODULE);
         return encLen;
     }
 
     int Ieee1609Encode::psid_(int psid, int bytes)
     {
-        int len = 1 +  bytes; /* number of bytes */
+        int len;
         std::cout << "Ieee1609Encode::psid_ enter " << encLen << std::endl;
+        uint8_t *buf_ = (uint8_t *)&psid;
+        //encBuf[encLen++] = bytes;
+        len = Length(bytes);
         encBuf = (uint8_t *)buf_realloc(encBuf, (encLen + len));
-        uint8_t *buf = (uint8_t *)&psid;
-        encBuf[encLen++] = bytes;
-        len --;
         while(len)
         {
-            encBuf[encLen++] = *buf++;
-            len --;
+            /* copy in big endian */
+            encBuf[encLen++] = buf_[len];
+            len--;
         }
         std::cout << "Ieee1609Encode::psid_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
         return encLen;
@@ -517,7 +568,7 @@ namespace ctp
         encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         encBuf[encLen++] = preamble;
         len --;
-        psid_(header.psid);
+        psid_(header.psid,1);
         std::cout << " Ieee1609Encode::HeaderInfo_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
         return encLen;
     }
@@ -623,15 +674,26 @@ namespace ctp
         choice = choice & ASN1_COER_CHOICE_MASK;
         if(choice == Ieee1609Dot2ContentUnsecuredData)
         {
-            /*FIXME, only bytes less than 127 or less payload is supported */
-            uint8_t len_ = buf[offset++];
-            // int len_ = 0;
-            //  tempPtr = (uint8_t*)&len_;
-            // while(numLenBytes--)
-            // {
-            //     tempPtr[numLenBytes] = buf[offset++];
-            // }
+            int lenBytes = 0;
+            /* get the encoded length bytes */
+            Length((uint8_t*)&lenBytes, sizeof(int));
+            /* number of length bytes are in lenBytes*/
+            std::cout << "number of bytes in the length " << lenBytes << std::endl;
 
+            /* read the lenBytes */
+            if(lenBytes > sizeof(int))
+            {
+                std::cout << "Error: max lenght supported is 4 bytes " << std::endl;
+                throw;
+            }
+            int len_;
+            uint8_t *buf_ = (uint8_t *)&len_;
+            while(lenBytes != 0)
+            {
+                lenBytes--;
+                buf_[lenBytes] = buf[offset++];
+            }
+            std::cout << " the length of the data " << (int)len_ << std::endl;
             os << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
             std::cout << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
             log_info(log_.str(), MODULE);
@@ -641,13 +703,13 @@ namespace ctp
             data.content.content.unsecuredData.octets = tempPtr =  (uint8_t *)buf_alloc(len_);
 
             /* copy the length into the buffer */
-            while(len_--)
+            while(len_)
             {
+                len_--;
                 *tempPtr++ = buf[offset++];
             }
         }else if (choice == Ieee1609Dot2ContentSignedData){
             SignedData(data);
-            //ToBesignedData_(std::ref(data.content.content.signedData.toBeSignedData));
         }
         else {
             os.clear();
@@ -696,11 +758,14 @@ namespace ctp
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
         os << " Ieee1609Decode::HeaderInfo_ enter " <<  len << " offset " << offset << std::endl;
-        log_info(log_.str(), MODULE);
-        os.clear();
-
         /* go past the optinal preamble of header info*/
-        offset++;
+        header.options =  (HeaderInfoOptionMask)offset++;
+        if(header.options)
+        {
+            os << " Unsupported Header Options " << std::hex << int(header.options) << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw new  ctp::Exception("Unsupported Header Options");
+        }
         uint8_t bytes_ = buf[offset++];
         uint8_t *ptr = (uint8_t *)&header.psid;
         while (bytes_--)
@@ -708,38 +773,38 @@ namespace ctp
             *ptr++ = buf[offset++];
         }
         os << " Ieee1609Decode::HeaderInfo_ psid is " << header.psid << std::endl;
-        log_info(log_.str(), MODULE);
         os << " Ieee1609Decode::HeaderInfo_ exit " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
-        os.clear();
         return offset;
     }
 
     int Ieee1609Decode::SignedDataPayload1(SignedDataPayload& payload)
     {
+        int err_ = 0;
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
         os << " Ieee1609Decode::SignedDataPayload1 enter " <<  len << " offset " << offset << std::endl;
-        log_info(log_.str(), MODULE);
-        os.clear();
 
         /* get the optional mask */
         uint8_t data_ = buf[offset++]; 
         payload.mask = (SignedDataPayloadOptionsMask)data_;
         if(data_ & SDP_OPTION_DATA_MASK)
         {
-            //payload.data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
             /* decode the data */
             Ieee1609Dot2Data_(std::ref(*payload.data));
         }else{
-
-            os << " Ieee1609Decode::SignedDataPayload1 exit " <<  len << " offset " << offset << std::endl;
+            os << " Signed payload data type " << payload.mask << " is not supported " << std::endl;
             LOG_ERR(log_.str(), MODULE);
             offset = 0;
+            err_ = 1;
         }
         os << " Ieee1609Decode::SignedDataPayload1 exit " <<  len << " offset " << offset << std::endl;
-        log_info(log_.str(), MODULE);
-        os.clear();
+        if (err_)
+        {
+            LOG_ERR(log_.str(), MODULE);
+        }else{
+            log_info(log_.str(), MODULE);
+        }
         return offset;
     }
 
@@ -825,14 +890,14 @@ namespace ctp
             srcBuf = &buf[offset];
             switch(type)
             {
-                case EccP256CurvPointXOnly:
-                case EccP256CurvPointCompressedy0:
-                case EccP256CurvPointCompressedy1:
+                case EccP256CurvPointTypeXOnly:
+                case EccP256CurvPointTypeCompressedy0:
+                case EccP256CurvPointTypeCompressedy1:
                     dstBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
                     bufLen = 32;
                 break;
 
-                case EccP256CurvPointUncompressed:
+                case EccP256CurvPointTypeUncompressed:
                     dstBuf = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
                     bufLen = 64;
                 break;
@@ -883,15 +948,16 @@ namespace ctp
 
     int Ieee1609Decode::HashId3(uint8_t* hash, size_t len_)
     {
-        std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
-        std::ostream os(&log_);
+        std::stringstream log_(std::ios_base::out);
+        // std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+        std::ostream os(log_.rdbuf());
         os << " Ieee1609Decode::HashId3 enter " <<  len << " offset " << offset << std::endl;
-        log_info(log_.str(), MODULE);
-        os.clear();
+        // log_info(log_.str(), MODULE);
+        // os.clear();
 
         if(offset + len_ > len)
         {
-             os << " Ieee1609Decode::HashId3  not enough data " <<  len << " offset " << offset << std::endl;
+            os << " Ieee1609Decode::HashId3  not enough data " <<  len << " offset " << offset << std::endl;
             LOG_ERR(log_.str(), MODULE);
             return 0;
         }

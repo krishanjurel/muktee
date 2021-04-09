@@ -15,7 +15,7 @@
 #include <memory>
 #include <string>
 
-#define MODULE 2
+#define MODULE 4
 
 void print_data(const char* file, const uint8_t *buf, size_t len);
 
@@ -23,6 +23,7 @@ namespace ctp
 {
     class Ieee1609Encode; /* forward declaration of encode class */
     class Ieee1609Decode;
+    class Ieee1609Certs;
 
 
     /* cert class */
@@ -53,7 +54,7 @@ namespace ctp
         //SequenceOfCertificate *seqOfCert;
         /* hash id 8 of this certificate */
         HashedId8 hashid8;
-        int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_UNCOMPRESSED);
+        int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_COMPRESSED);
         int private_key_get();
         int _sign(const uint8_t *buf, size_t len, SignatureType type);
         /* encode the certificate */
@@ -177,6 +178,7 @@ namespace ctp
             int HeaderInfo_(const HeaderInfo& header);
             int ToBesignedData_(const ToBeSignedData& tbsData);
             int SignerIdentifier_(Ieee1609Cert& signer, SignerIdentifierType type);
+            int SignerIdentifier_(Ieee1609Certs& signer, SignerIdentifierType type);
             int Signature_(const Signature& signature);
             int ContentType_(const Ieee1609Dot2ContentType type);
             // int SequenceOfCerts_(const SequenceOfCertificate& certs);
@@ -318,22 +320,22 @@ namespace ctp
                             case PublicVerificationKeyTypEecdsaNistP256S:
                             {
                                 /* decode the curve point 6.3.23*/
-                                EccP256CurvPoint *point = &vki.indicator.verificationKey.key.ecdsaNistP256S;
+                                EccP256CurvPoint *point = &vki.indicator.verificationKey.key.ecdsaNistP256;
                                 /* get the choice type */
                                 point->type = (EccP256CurvPointType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
                                 char *_buff = point->point.octets.x;
                                 size_t _len = 0;
                                 switch(point->type)
                                 {
-                                    case EccP256CurvPointXOnly:
-                                    case EccP256CurvPointCompressedy0:
-                                    case EccP256CurvPointCompressedy1:
+                                    case EccP256CurvPointTypeXOnly:
+                                    case EccP256CurvPointTypeCompressedy0:
+                                    case EccP256CurvPointTypeCompressedy1:
                                         _len = 32;
                                         break;
-                                    case EccP256CurvPointUncompressed:
+                                    case EccP256CurvPointTypeUncompressed:
                                         _len = 64;
                                         break;
-                                    case EccP256CurvPointFill:
+                                    case EccP256CurvPointTypeFill:
                                         _len = 0;
                                         break;
                                     default:
@@ -466,19 +468,21 @@ namespace ctp
                 lengthEncoding = buf[offset];
                 if(buf[offset] & ASN1_LENGTH_ENCODING_MASK)
                 {
+                    /* number of bytes in the length */
                     lengthEncoding = buf[offset++] & ASN1_LENGTH_ENCODING_MASK;
                     if(lengthEncoding > bytes)
                     {
                         throw new Exception("the supplied buffer not long enough");
                     }
-                                    /* copy the bytes into the given buffer */
-                    while(lengthEncoding--)
-                    {
-                        value[lengthEncoding] = buf[offset++];
-                    }
                 }else{
-                    /* else just read the value */
-                    *value = buf[offset++];
+                    /* only 1 bytes */
+                    lengthEncoding = 1;
+                }
+                /* copy the bytes into the given buffer */
+                while(lengthEncoding)
+                {
+                    lengthEncoding--;
+                    value[lengthEncoding] = buf[offset++];
                 }
                 os << " Ieee1609Decode::Length exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
@@ -555,18 +559,22 @@ namespace ctp
                 cert = new Ieee1609Cert();
                 enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){ delete p;});
                 dec = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode, [](Ieee1609Decode *p){delete p;});
-                /* create a self-signed certificate */
-                try {
-                    cert->create(NID_X9_62_prime256v1);
+            }
+
+            void create(int nid = NID_X9_62_prime256v1)
+            {
+                try
+                {
+                    cert->create(nid);
                     quantity++;
                 }catch( std::exception& e){
                     LOG_ERR("Ieee1609Certs::Ieee1609Certs()::create()", MODULE);
                     std::cout << " exception " << e.what() << std::endl;
                     delete cert;
-                    enc.reset();
-                    dec.reset();
                 }
             }
+
+
             /* encoded file */
             explicit Ieee1609Certs(std::string& file)
             {
@@ -592,9 +600,16 @@ namespace ctp
                 return cert;
             }
 
-            int encode(){
+            /* encoded message of the signer, 
+                used to create a Signature of the data packet 
+            */
+            int encode_signer(uint8_t **buf)
+            {
+                return cert->encode(buf);
+            }
 
-                uint8_t *buf = nullptr;
+            int encode(uint8_t **buf){
+
                 size_t len = 0;
                 try{
                     /* encode the sequence of certs */
@@ -602,6 +617,7 @@ namespace ctp
                     /* only 1 byte is needed to encode the number seuqnce */
                     enc->Length((uint8_t *)&quantity, 1);
                     cert->encode(enc);
+                    len = enc->get(buf);
                 }catch(Exception& e)
                 {
                     LOG_ERR(e.what(), MODULE);
@@ -654,6 +670,20 @@ namespace ctp
                 }
                 return 0;                
 
+            }
+
+            int Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash)
+            {
+                return cert->Hash256(tbHash, len, hash);
+            }
+
+            const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type)
+            {
+                return cert->SignData(buf, len, type);
+            }
+            int SigToSignature(const ECDSA_SIG* sig, Signature& signature)
+            {
+                return cert->SigToSignature(sig, signature);
             }
 
             void print()

@@ -35,6 +35,8 @@
 #include "remote.hpp"
 
 
+#define MODULE 4 //test
+
 
 #define TEST(_x_) test ## _x_
 void TEST(data_encoding)();
@@ -43,6 +45,7 @@ void TEST(cert_encoding)();
 void TEST(certs_encoding)();
 void TEST(cert_decoding)();
 void TEST(ipc_sockets)();
+void TEST(logging)();
 
 
 
@@ -285,8 +288,9 @@ int main()
     //TEST(ipc_sockets)();
     //TEST(certs_encoding)();
     //  TEST(data_encoding)();
-    // TEST(data_decoding)();
-    TEST(cert_decoding)();
+    TEST(data_decoding)();
+    //TEST(cert_decoding)();
+    // TEST(logging)();
 
     while(!stop_)
     {
@@ -313,15 +317,15 @@ ptrTestFunction test_data[]{
 void TEST(data_encoding)()
 {
     printf("data_encoding\n");
-    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
-    pcert->create();
+    ctp::Ieee1609Certs *pcert = new ctp::Ieee1609Certs();
+    // pcerts->create();
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
     encLen = pcert->encode(&encBuf);
     std::cout << "encoded buffer length " << encLen << std::endl;
     
-    pcert->print_encoded(std::string("encoded-cert.txt"));
-    pcert->print_decoded(std::string("decoded-cert.txt"));
+    //pcert->print_encoded(std::string("encoded-cert.txt"));
+    //pcert->print_decoded(std::string("decoded-cert.txt"));
 
     std::string tbsData("this is dummy test data!!!");
     ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
@@ -339,35 +343,52 @@ void TEST(data_encoding)()
 void TEST(data_decoding)()
 {
     printf("data_decoding\n");
-    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
-    pcert->create();
+    ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
+    pcerts->create();
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
-    encLen = pcert->encode(&encBuf);
+    encLen = pcerts->encode(&encBuf);
     std::cout << "encoded buffer length " << encLen << std::endl;
+    unlink("data_decoding_enc_cert.txt");
     
-    // pcert->print_encoded(std::string("encoded-cert.txt"));
-    // pcert->print_decoded(std::string("decoded-cert.txt"));
+    // pcert->print_encoded(std::string("data_decoding_enc_cert.txt"));
+    print_data("data_decoding_enc_cert.txt",encBuf, encLen);
 
-    ctp::Ieee1609Cert *pcert1 = new ctp::Ieee1609Cert();
-    /* decode from the previously created certificate */
-    pcert1->decode(encBuf, encLen);
+    std::string tbsData("this is dummy test data!!!");
+    ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
+    uint8_t *signedData = nullptr;
+    size_t signedDataLength = 0;
+    pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
+    unlink("data_decoding_enc_data.txt");
+    print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
+    std::cout << "number of bytes " << signedDataLength << std::endl;
 
-    pcert1->print_decoded(std::string("decoded-cert1.txt"));
+    /* decoding section */
 
 
+    ctp::Ieee1609Data *pdata2 = new ctp::Ieee1609Data();
+    pdata2->decode(signedData,signedDataLength);
+    uint8_t *encBuf2 = nullptr;
 
+    size_t encLen2 = pdata2->encode(&encBuf2);
+    unlink("data_decoding_dec_data.txt");
+    print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
 
-
-    // std::string tbsData("this is dummy test data!!!");
-    // ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
-    // uint8_t *signedData = nullptr;
-    // size_t signedDataLength = 0;
-    // pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcert);
-    // print_data("data_payload.txt", signedData, signedDataLength);
-    // std::cout << "number of bytes " << signedDataLength << std::endl;
-    delete pcert;
-    // delete pdata;
+    if(signedDataLength != encLen2)
+    {
+        std::cout << "the decoding has failed length(expected) " << encLen2 << "(" << signedDataLength << ")" << std::endl;
+        throw;
+    }
+    for(int i =0; i < encLen2; i++)
+    {
+        if(signedData[i] != encBuf2[i])
+        {
+            std::cout << "the decoding failed at index " << i << std::endl;
+        }
+    }
+    delete pcerts;
+    delete pdata;
+    delete pdata2;
     raise(SIGKILL);
 
 
@@ -377,8 +398,8 @@ void TEST(certs_encoding)()
 {
     std::cout << "certs_encoding " << std::endl;
     ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
-    pcerts->encode();
-    pcerts->print();
+    // pcerts->encode();
+    // pcerts->print();
     raise(SIGKILL);
 }
 void TEST(cert_encoding)()
@@ -483,4 +504,20 @@ void TEST(ipc_sockets)()
     {
         std::cout << "continued " << std::endl;
     }
+}
+
+void TEST(logging)()
+{
+    std::stringstream strStream(std::ios_base::out);
+    strStream << "Hello world" << std::hex << 20 << std::endl;
+
+    log_info(strStream.str(), MODULE);
+    strStream.sync();
+    strStream.clear();
+    strStream << "Hello world again" << std::hex << 20 << std::endl;
+
+    log_info(strStream.str(), MODULE);
+
+    return;
+
 }

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <sstream>
 #include "ieee1609dot2common.hpp"
 #include "libconfig.h++"
 #include "openssl/ec.h"
@@ -44,17 +45,27 @@ namespace ctp
         LOG_LVL_INFO
     }LogLvl;
 
+    static struct _Loglevel
+    {
+       const char* lvl;
+    }LogLevel[] = {
+        {" Err "},
+        {" Dbg "},
+        {" Warn "},
+        {" info "}
+    };
+
     class log_mgr
     {
         public:
         static void log(LogLvl lvl, int mod,const std::string &msg)
         {
-            std::cout << lvl<< ":" << msg << std::endl;
+            std::cout << LogLevel[(int)lvl].lvl << " : " << mod << " : " << msg << std::endl;
         }
 
         static void log(LogLvl lvl, std::string& mod,const std::string &msg)
         {
-            std::cout << lvl << ":" << mod << ":" << msg << std::endl;
+            std::cout << LogLevel[(int)lvl].lvl << " : " << mod << ":" << msg << std::endl;
         }
 
     };

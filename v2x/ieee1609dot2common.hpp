@@ -67,11 +67,12 @@ typedef enum
 /* 6.3.23 */
 typedef enum 
 {
-    EccP256CurvPointXOnly,
-    EccP256CurvPointFill,
-    EccP256CurvPointCompressedy0,
-    EccP256CurvPointCompressedy1,
-    EccP256CurvPointUncompressed
+    EccP256CurvPointTypeXOnly,
+    EccP256CurvPointTypeFill,
+    EccP256CurvPointTypeCompressedy0,
+    EccP256CurvPointTypeCompressedy1,
+    EccP256CurvPointTypeUncompressed,
+    EccP256CurvPointTypeMax,
 }EccP256CurvPointType;
 
 
@@ -227,7 +228,7 @@ typedef struct
 {
     PublicVerificationKeyType type;
     union {
-        EccP256CurvPoint ecdsaNistP256S;
+        EccP256CurvPoint ecdsaNistP256;
         EccP256CurvPoint ecdsaBrainpoolP256r1;
     }key;
 }PublicVerificationKey;
@@ -382,8 +383,35 @@ struct Ieee1609Dot2Data; /* forward declaration */
 typedef struct Ieee1609Dot2Data Ieee1609Dot2Data;
 
 /* 6.3.9 */
+#define HEADER_INFO_OPTION(_option) HeaderInfoOption ## _option
+#define HEADER_INFO_OPTION_MASK(_option) HeaderInfoOptionMask ## _option
+#define HEADER_INFO_OPTION_MASK_VAL(_option) (1<<(OPTIONAL_MASK_SHIFT_BIT-HEADER_INFO_OPTION(_option)))
+
+typedef enum
+{
+    /* Note: dont change the order */
+    HEADER_INFO_OPTION(GenTime),
+    HEADER_INFO_OPTION(ExTime),
+    HEADER_INFO_OPTION(GenLoc),
+    HEADER_INFO_OPTION(P2pcdLearnReq),
+    HEADER_INFO_OPTION(MissingCrlId),
+    HEADER_INFO_OPTION(EncKey),
+}HeaderInfoOptions;
+
+typedef enum
+{
+    HEADER_INFO_OPTION_MASK_NONE = 0,
+    HEADER_INFO_OPTION_MASK(GenTime) = HEADER_INFO_OPTION_MASK_VAL(GenTime),
+    HEADER_INFO_OPTION_MASK(ExTime) = HEADER_INFO_OPTION_MASK_VAL(ExTime),
+    HEADER_INFO_OPTION_MASK(GenLoc) = HEADER_INFO_OPTION_MASK_VAL(GenLoc),
+    HEADER_INFO_OPTION_MASK(P2pcdLearnReq) = HEADER_INFO_OPTION_MASK_VAL(P2pcdLearnReq),
+    HEADER_INFO_OPTION_MASK(MissingCrlId) = HEADER_INFO_OPTION_MASK_VAL(MissingCrlId),
+    HEADER_INFO_OPTION_MASK(EncKey) = HEADER_INFO_OPTION_MASK_VAL(EncKey)
+}HeaderInfoOptionMask;
+
 struct HeaderInfo
 {
+    HeaderInfoOptionMask options;
     int psid;
     uint64_t genTime;
     uint64_t expTime;

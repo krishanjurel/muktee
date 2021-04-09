@@ -10,7 +10,7 @@
 
 
 //#define MOUDLE "1609DATA"
-#define MODULE 2
+// #define MODULE 2
 
 namespace ctp
 {
@@ -47,7 +47,7 @@ namespace ctp
 
     void Ieee1609Data::sign(int psid, const uint8_t *buf, size_t len,
                   uint8_t **signedData, size_t *signedDataLen,
-                  Ieee1609Cert *cert)
+                  Ieee1609Certs *certs)
     {
         int ret = 0;
         /* for signing, get the encoded certiificate */
@@ -69,18 +69,18 @@ namespace ctp
         payload->data->content.UNSECUREDDATA.length = len;
         payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* create a local copy of the certificate */
-        this->cert = cert;
+        this->certs = certs;
         /* copy the data into unsecured buffer */
         for(int i = 0; i < len; i++)
         {
             payload->data->content.UNSECUREDDATA.octets[i] = buf[i];
         }
-        if (cert != nullptr)
+        if (certs != nullptr)
         {
             tbsLen = 0;
 
            /* get the hash the data */
-            ret = cert->Hash256(buf, len, &hash);
+            ret = certs->Hash256(buf, len, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -96,9 +96,9 @@ namespace ctp
             hash = nullptr;
 
             /* get the encoded buffer of the signer */
-            hashBufLen = cert->encode(&hashBuf);
+            hashBufLen = certs->encode_signer(&hashBuf);
             /* get the hash of the  certificate buffer */
-            ret = cert->Hash256(hashBuf, hashBufLen, &hash);
+            ret = certs->Hash256(hashBuf, hashBufLen, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -113,7 +113,7 @@ namespace ctp
             free(hash);
             hash = nullptr;
             /* calculate the hash of hash(tbsData) || hash(signer) */
-            ret = cert->Hash256(tbsBuf, tbsLen, &hash);
+            ret = certs->Hash256(tbsBuf, tbsLen, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -121,12 +121,11 @@ namespace ctp
                 goto done;
             }
             /* sign the data */
-            sig = cert->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
+            sig = certs->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
             if(signature == nullptr)
             signature = (Signature *)buf_alloc(sizeof(Signature));
-
             /* get the signature from sig */
-            cert->SigToSignature(sig, std::ref(*signature));
+            certs->SigToSignature(sig, std::ref(*signature));
         }
         encode();
         /* get the encoded buffer */
@@ -136,7 +135,6 @@ namespace ctp
                 free (hash);
             if(tbsBuf)
                 free(tbsBuf);
-
         LOG_INFO("Ieee1609Data::sign Exit", MODULE);
     }
 
@@ -154,7 +152,7 @@ namespace ctp
         /* if only signer identifier need to be encoded */
         if (cont == false)
             enc->clear();
-        return enc->SignerIdentifier_(std::ref(*cert), SignerIdentifierTypeCert);
+        return enc->SignerIdentifier_(std::ref(*certs), SignerIdentifierTypeCert);
     }
 
     int Ieee1609Data::encode_signature(bool cont)
@@ -173,7 +171,7 @@ namespace ctp
         enc->HashAlgo(HashAlgorithmTypeSha256);
         enc->ToBesignedData_(std::ref(*tbsData));
         /* encode the signer */
-        encode_signeridentifier();
+        encode_signeridentifier(true);
         encode_signature();
         return 0;
     }
@@ -194,6 +192,14 @@ namespace ctp
                 LOG_ERR("content type not supported ", MODULE);
                 break;
         }
+    }
+
+
+    int Ieee1609Data::encode(uint8_t **buf)
+    {
+        /* encode and return the length and buffer */
+        encode();
+        return enc->get(buf);
     }
 
     void Ieee1609Data::encode()

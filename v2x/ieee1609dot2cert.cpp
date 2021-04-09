@@ -160,16 +160,6 @@ namespace ctp
         signature = &base->signature;
         /* allocate the buffer of single psid with no ssp */
         psidSsp = &tbs->appPermisions;
-        // /* psid psidssp only contains the psid , with no ssp */
-        // psidSsp->psidSsp = (PsidSsp *)buf_alloc(sizeof(PsidSsp));
-        // /* there is only item in this sequence */
-        // psidSsp->quantity = 1;
-        // /* FIXME, hardcoded psid, BSM */
-        // psidSsp->psidSsp->psid = 0x20;
-        // /* no ssp */
-        // psidSsp->psidSsp->ssp.length = 0;
-        // /* default, self-signed */
-        // issuer->type = IssuerIdentifierTypeSelf;
     }
 
     const SequenceOfPsidSsp& Ieee1609Cert::psid_get() const
@@ -270,7 +260,7 @@ namespace ctp
         s = sig->s;
 #endif
         
-        signature.signature.ecdsaP256Signature.r.type= EccP256CurvPointXOnly;
+        signature.signature.ecdsaP256Signature.r.type= EccP256CurvPointTypeXOnly;
         sign_r = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
         sign_s = (uint8_t *)&signature.signature.ecdsaP256Signature.s.x[0];
         
@@ -332,7 +322,7 @@ namespace ctp
         //     sig = nullptr;
         // }
         /* signature r value for FIPS 186-4 takes only x-only */
-        signature->signature.ecdsaP256Signature.r.type= EccP256CurvPointXOnly;
+        signature->signature.ecdsaP256Signature.r.type= EccP256CurvPointTypeXOnly;
         sign_r = (uint8_t *)signature->signature.ecdsaP256Signature.r.point.octets.x;
         sign_s = (uint8_t *)&signature->signature.ecdsaP256Signature.s.x[0];
         /* set the signature type */
@@ -372,7 +362,7 @@ namespace ctp
     /* to utilize the previously created decode object */
     int Ieee1609Cert::decode(std::shared_ptr<Ieee1609Decode> ptr)
     {
-        pDecObj.reset();
+        std::shared_ptr<Ieee1609Decode> temp = pDecObj->GetPtr();
         pDecObj = ptr->GetPtr();
         try
         {
@@ -384,7 +374,6 @@ namespace ctp
             pDecObj->Octets_((uint8_t *)&base->certType, 1);
             pDecObj->IssuerIdentifier_(std::ref(*issuer));
             DecodeToBeSigned();
-
             /* decode the signature if available */
             if(base->options)
             {
@@ -394,6 +383,7 @@ namespace ctp
         {
             throw; /*throw again from here */
         }
+        pDecObj = temp;
         return 1;
     }
 
@@ -429,11 +419,9 @@ namespace ctp
     int Ieee1609Cert::encode(std::shared_ptr<Ieee1609Encode> ptr)
     {
         /* clear any buffer held by the previous encoder */
-        pEncObj->clear();
-        pEncObj.reset();
+        std::shared_ptr<Ieee1609Encode> temp = pEncObj;
         /* acquire the new encoding object*/
         pEncObj = ptr->getPtr();
-
         /* encode the preamble for signature optional component */
         if(base->certType = CertTypeExplicit)
         {
@@ -443,7 +431,9 @@ namespace ctp
         /* only encode the signature if it is of type explicit */
         if(base->certType == CertTypeExplicit &&  signature != nullptr)
             pEncObj->Signature_(std::ref(*signature));
-        
+
+        /* restore the encoder back */
+        pEncObj = temp;
         return 1;
     }
 
@@ -452,7 +442,7 @@ namespace ctp
         /* clear whatever was there */
         pEncObj->clear();
         /* encode the preamble for signature optional component */
-        if(base->certType = CertTypeExplicit)
+        if(base->certType == CertTypeExplicit)
         {
             pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
         }
@@ -586,9 +576,8 @@ namespace ctp
     /* print the certificate into the file */
     int Ieee1609Cert::print_encoded(const std::string filename)
     {
-        size_t len;
         uint8_t *buf = nullptr;
-        len = encode(&buf);
+        size_t len = pEncObj->get(&buf);
         print_data(filename.c_str(), buf, len);
         return 0;
     }
@@ -616,20 +605,12 @@ namespace ctp
         return 0;
     }
 
-
-
-
-
-
-
-
-
     /* gets the public key from the key object */
     int Ieee1609Cert::public_key_get(point_conversion_form_t conv)
     {
         int i = 0;
         uint8_t *keyBuf = nullptr;
-        size_t keylen = 0;//EC_KEY_key2buf(ecKey, conv, &keyBuf, nullptr);
+        size_t keylen = 0;
         const EC_POINT *ecPoint = EC_KEY_get0_public_key(ecKey);
 
         /* get the x, y points from ecPoint */
@@ -663,17 +644,17 @@ namespace ctp
             std::terminate();
             return keylen;
         }
-        EccP256CurvPoint *point = &vki->indicator.verificationKey.key.ecdsaNistP256S;
+        EccP256CurvPoint *point = &vki->indicator.verificationKey.key.ecdsaNistP256;
 
-
-        point->type = EccP256CurvPointUncompressed;
+        /* get the point type from the first byte of the key type */
+        point->type = (EccP256CurvPointType)keyBuf[0];
         char *xPtr = point->point.uncompressedx.x;
         char *yPtr = point->point.uncompressedy.x;
 
         /* there will always be x-component, so lets copy that */
-        for (i = 0; i < sizeof(HashedData32);)
+        for (i = 1; i < sizeof(HashedData32);i++)
         {
-            *xPtr++ = keyBuf[++i];
+            *xPtr++ = keyBuf[i];
         }
         /* copy whatever was there, remaining */
         for(; i < keylen;)
@@ -689,9 +670,6 @@ namespace ctp
     void Ieee1609Cert::create(int nid)
     {
         int ret = 0;
-        // certs.clear();
-        // certsPsidMap.clear();
-        // certsHashIdMap.clear();
         ecKey = EC_KEY_new_by_curve_name(nid);
         if (ecKey == nullptr)
         {
@@ -699,8 +677,6 @@ namespace ctp
             std::terminate();
         }
 
-        /* FIXME, creating the key at the object creation, this could be placed at a later stage, probably during cert::create
-        */
         if(EC_KEY_generate_key(ecKey) != 1)
         {
             LOG_ERR("cert::cert() EC_KEY_generate_key", 1);
@@ -709,11 +685,6 @@ namespace ctp
         }
         ecGroup = EC_KEY_get0_group(ecKey);
 
-        /* allocate the memory for one cert first */
-        //seqOfCert = (SequenceOfCertificate *)malloc(sizeof(int) +  sizeof(certificateBase));
-        
-        /* initialize all the pointers */
-        base = (CertificateBase *)buf_alloc(sizeof(CertificateBase));
         /* set the next tr to next */
         this->next = nullptr;
         /* one cert */
@@ -744,6 +715,8 @@ namespace ctp
         psidSsp->psidSsp = (PsidSsp *)buf_alloc(psidSsp->quantity * sizeof(PsidSsp));
         /* FIXME, hardcoded psid, BSM */
         psidSsp->psidSsp->psid = 0x20;
+        /* No optional mask */
+        psidSsp->psidSsp->optionalMask = 0;
         /* no ssp */
         psidSsp->psidSsp->ssp.length = 0;
         /* default, self-signed */
@@ -751,8 +724,6 @@ namespace ctp
         /* every self-signed certificate is signed by default */
         sign();
     }
-
-
     Ieee1609Cert* Ieee1609Cert::operator[](int psid)
     {
         /* return the certificate for the given psid */
