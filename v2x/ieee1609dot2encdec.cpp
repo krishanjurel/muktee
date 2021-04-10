@@ -540,8 +540,8 @@ namespace ctp
         while(len)
         {
             /* copy in big endian */
-            encBuf[encLen++] = buf_[len];
             len--;
+            encBuf[encLen++] = buf_[len];
         }
         std::cout << "Ieee1609Encode::psid_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
         return encLen;
@@ -659,8 +659,6 @@ namespace ctp
         std::ostream os(&log_);
         os << " Ieee1609Decode::Ieee1609Dot2Data_ enter " <<  len << " offset " << offset << std::endl;
         log_info(log_.str(), MODULE);
-        os.clear();
-
         data.protocolVersion = buf[offset++];
         // choice = buf[offset];
         // int decimal = 0;
@@ -672,6 +670,8 @@ namespace ctp
         choice = buf[offset++];
         // std::cout << "chpice " << choice << std::endl;
         choice = choice & ASN1_COER_CHOICE_MASK;
+        /* store the content type */
+        data.content.type = (Ieee1609Dot2ContentType)choice;
         if(choice == Ieee1609Dot2ContentUnsecuredData)
         {
             int lenBytes = 0;
@@ -693,9 +693,10 @@ namespace ctp
                 lenBytes--;
                 buf_[lenBytes] = buf[offset++];
             }
-            std::cout << " the length of the data " << (int)len_ << std::endl;
+            log_.str("");
+            // std::cout << " the length of the data " << (int)len_ << std::endl;
             os << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
-            std::cout << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
+            // std::cout << " Ieee1609Decode::Ieee1609Dot2Data_ unsecured length " << len_ << std::endl;
             log_info(log_.str(), MODULE);
             os.clear(); 
 
@@ -712,7 +713,7 @@ namespace ctp
             SignedData(data);
         }
         else {
-            os.clear();
+            log_.str("");
             os << " Ieee1609Decode::Ieee1609Dot2Data_ unspoorted choice " << choice << std::endl;
             LOG_ERR(log_.str(), MODULE);
             offset = 0;
@@ -759,7 +760,7 @@ namespace ctp
         std::ostream os(&log_);
         os << " Ieee1609Decode::HeaderInfo_ enter " <<  len << " offset " << offset << std::endl;
         /* go past the optinal preamble of header info*/
-        header.options =  (HeaderInfoOptionMask)offset++;
+        header.options =  (HeaderInfoOptionMask)buf[offset++];
         if(header.options)
         {
             os << " Unsupported Header Options " << std::hex << int(header.options) << std::endl;
@@ -768,9 +769,10 @@ namespace ctp
         }
         uint8_t bytes_ = buf[offset++];
         uint8_t *ptr = (uint8_t *)&header.psid;
-        while (bytes_--)
+        while (bytes_)
         {
-            *ptr++ = buf[offset++];
+            bytes_--;
+            ptr[bytes_] = buf[offset++];
         }
         os << " Ieee1609Decode::HeaderInfo_ psid is " << header.psid << std::endl;
         os << " Ieee1609Decode::HeaderInfo_ exit " <<  len << " offset " << offset << std::endl;
@@ -881,6 +883,8 @@ namespace ctp
         /* get the signature type */
         uint8_t data = buf[offset++] & ASN1_COER_CHOICE_MASK;
         signature.type = (SignatureType)data;
+
+        std::cout << "signature type " << (int)signature.type;
 
         /* decode r */
         //if(signature.type == ecdsaNistP256Signature)

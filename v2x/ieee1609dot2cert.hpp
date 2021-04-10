@@ -68,9 +68,6 @@ namespace ctp
 
             void create(int nid = NID_X9_62_prime256v1);
 
-            //void encode();
-            //void decode();
-
             explicit Ieee1609Cert();
             /* no copy constructure */
             Ieee1609Cert(const Ieee1609Cert&) = delete;
@@ -78,10 +75,14 @@ namespace ctp
             const Ieee1609Cert& operator=(const Ieee1609Cert&) = delete;
             /* no move constructor */
             Ieee1609Cert(const Ieee1609Cert&&) = delete;
-            ~Ieee1609Cert(){};
-            /* returns the certificate for the given psid */
-            Ieee1609Cert* operator[](int psid);
-            //int sign (SignatureType type = ecdsaNistP256Signature);
+            ~Ieee1609Cert()
+            {
+                pEncObj.reset();
+                pDecObj.reset();
+                pEncObj = nullptr;
+                pDecObj = nullptr;
+            }
+
              const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
              int SigToSignature(const ECDSA_SIG* sig, Signature& signature);
              /* and then the hashed data */
@@ -110,6 +111,7 @@ namespace ctp
                 this->next = cert;
             }
             const SequenceOfPsidSsp& psid_get() const;
+
 
             /* print to stdout or store in a file */
             int print_encoded(const std::string filename);
@@ -246,28 +248,13 @@ namespace ctp
                 return OctetsFixed(octets, len);
             }
 
-            /* encode certificate identifier */
-            // done
-            // int CertId(CertificateId& id)
-            // {
-            //     return 0;
-            // }
-            /* encode crl series */
-            // int CrlSeries(uint16_t *series);
-            // {
-            //     return 0;
-            // }
-            /* encode hashid3 */
-            // int HashId3(uint8_t* hash, size_t len)
-            // {
-            //     return 0;
-            // }
             /* encode the signature */
             int Sign(Signature& signature)
             {
                 return 0;
             }
             /* encode validity period */
+            
             int VP(ValidityPeriod& vp)
             {
                 
@@ -590,6 +577,8 @@ namespace ctp
             }
             ~Ieee1609Certs()
             {
+                enc.reset();
+                dec.reset();
                 enc = nullptr;
                 dec = nullptr;
                 delete cert;
@@ -648,6 +637,7 @@ namespace ctp
             }
             int decode (std::shared_ptr<Ieee1609Decode> ptr)
             {
+                std::shared_ptr<Ieee1609Decode> temp = dec->GetPtr();
                 /* clear the exisiting pointer */
                 dec.reset();
                 dec = ptr->GetPtr();
@@ -658,9 +648,9 @@ namespace ctp
                     dec->Length((uint8_t *)&quantity, 4);
                     for(int i =0; i < quantity; i++)
                     {
-                        Ieee1609Cert *pcert = new Ieee1609Cert();
+                        // Ieee1609Cert *pcert = new Ieee1609Cert();
                         /* passed the decode buffer to the cert */
-                        pcert->decode(dec);
+                        cert->decode(dec);
                     }
 
                 }catch(Exception& e)
@@ -668,6 +658,8 @@ namespace ctp
                     std::cout << "Exception " << e.what() << std::endl;
 
                 }
+                dec = temp;
+                temp = nullptr;
                 return 0;                
 
             }

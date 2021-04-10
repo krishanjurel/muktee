@@ -34,12 +34,12 @@ namespace ctp
 
         /* the complete flow is something like this */
         // /* get the cert for this psid */
-        cert = certMgrPtr->operator[](psid);
-        if (cert != nullptr)
-        {
-            /* sign the data */
-            sig = cert->SignData(tbsData, len, ecdsaNistP256Signature);
-        }
+        // cert = certMgrPtr->operator[](psid);
+        // if (cert != nullptr)
+        // {
+        //     /* sign the data */
+        //     sig = cert->SignData(tbsData, len, ecdsaNistP256Signature);
+        // }
         encode();
         *signedDataLen = enc->get(signedData);
     }
@@ -59,7 +59,6 @@ namespace ctp
 
         LOG_INFO("Ieee1609Data::sign", MODULE);
         /* create the ToBeSignedData (6.3.6) data structure */
-        //tbsData = (ToBeSignedData *) buf_realloc(tbsData, sizeof(ToBeSignedData));
         data->content.type = Ieee1609Dot2ContentSignedData;
         tbsData->headerInfo.psid = psid; /* just use the psid only for now */
         SignedDataPayload *payload = &tbsData->payload;
@@ -183,6 +182,7 @@ namespace ctp
             enc->clear();
         /* encode signed data content type */
         enc->ContentType_(data->content.type);
+        std::cout << "content type " << (int)data->content.type << std::endl;
         switch(data->content.type)
         {
             case Ieee1609Dot2ContentSignedData:
@@ -287,10 +287,12 @@ namespace ctp
         {
             dec->Ieee1609Dot2Data_(std::ref(*data));
             decode_signeridentifier();
-            if(signer.type == SignerIdentifierTypeCert)
+            if(signer->type == SignerIdentifierTypeCert)
             {
+                
                 /* decode the sequence of certs */
                 certs->decode(dec);
+                dec->Signature_(std::ref(*signature));
             }
         }
         catch(const Exception& e)
@@ -302,12 +304,12 @@ namespace ctp
     }
     int Ieee1609Data::decode_signeridentifier()
     {
-        dec->SignerIdentifier_(std::ref(signer));
+        dec->SignerIdentifier_(std::ref(*signer));
         /* just copy the hashedid of the signer */
         /* we will find if we have this certificate or not */
-        if(signer.type == SignerIdentifierTypeDigest)
+        if(signer->type == SignerIdentifierTypeDigest)
         {
-            dec->OctetsFixed((uint8_t *)signer.digest.x, sizeof(signer.digest));
+            dec->OctetsFixed((uint8_t *)signer->digest.x, sizeof(signer->digest));
         }
         return 0;
     }

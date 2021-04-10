@@ -343,6 +343,7 @@ void TEST(data_encoding)()
 void TEST(data_decoding)()
 {
     printf("data_decoding\n");
+    std::cout << "string length " << str.length() << std::endl;
     ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
     pcerts->create();
     uint8_t *encBuf = nullptr;
@@ -371,6 +372,7 @@ void TEST(data_decoding)()
     uint8_t *encBuf2 = nullptr;
 
     size_t encLen2 = pdata2->encode(&encBuf2);
+
     unlink("data_decoding_dec_data.txt");
     print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
 

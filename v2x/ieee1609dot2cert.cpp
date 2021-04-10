@@ -384,6 +384,7 @@ namespace ctp
             throw; /*throw again from here */
         }
         pDecObj = temp;
+        temp = nullptr;
         return 1;
     }
 
@@ -724,12 +725,6 @@ namespace ctp
         /* every self-signed certificate is signed by default */
         sign();
     }
-    Ieee1609Cert* Ieee1609Cert::operator[](int psid)
-    {
-        /* return the certificate for the given psid */
-        return nullptr;//certsPsidMap[psid];
-    }
-
 } //namespace ctp
 
 

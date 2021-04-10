@@ -16,10 +16,11 @@ namespace ctp
         /* FIXME, create an instance of decode object */
         //decode *decode;
 
-        HashAlgorithmType *hashId;
+        // HashAlgorithmType *hashId;
         ToBeSignedData *tbsData;
-        SignerIdentifier signer;
+        SignerIdentifier *signer;
         Signature *signature;
+        SignedData *signedData;
         const ECDSA_SIG* sig;
         TP_PTR tpPtr;
         Ieee1609Cert *certMgrPtr;
@@ -35,16 +36,15 @@ namespace ctp
                 dec =  std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode(), [](Ieee1609Decode *ptr){delete ptr;});
                 tpPtr = TP::init();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
-                tbsData = (ToBeSignedData *) &data->content.content.signedData.toBeSignedData;
+                signedData = (SignedData *)&data->content.content.signedData;
+                tbsData = (ToBeSignedData *)&signedData->toBeSignedData;
+                signature = (Signature *)&signedData->signature;
+                signer = (SignerIdentifier*)&signedData->signer;
                 tbsData->payload.data=(Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 data->protocolVersion = 0x03;
-                hashId = nullptr;
-                cert = nullptr;
-                certs = nullptr;
-                sig = nullptr;
-                signature = nullptr;
                 /* get the certificate manager */
                 //certMgrPtr = tpPtr->cert_mgr();
+                certs = new ctp::Ieee1609Certs();
             }
 
             ~Ieee1609Data()

@@ -456,13 +456,13 @@ typedef struct ToBeSignedData ToBeSignedData;
 
 
 /*6.3.4 */
-struct SignedData
+typedef struct SignedData
 {
     HashAlgorithmType hashAlgorithm;
     ToBeSignedData toBeSignedData;
     SignerIdentifier signer;
     Signature signature;
-};
+}SignedData;
 
 /* 6.3.3 */
 typedef enum
