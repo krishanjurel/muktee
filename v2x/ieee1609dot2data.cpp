@@ -77,7 +77,6 @@ namespace ctp
         if (certs != nullptr)
         {
             tbsLen = 0;
-
            /* get the hash the data */
             ret = certs->Hash256(buf, len, &hash);
             /* failure to calculate the hash */
@@ -87,15 +86,26 @@ namespace ctp
                 goto done;
             }
 
-            tbsLen += SHA256_DIGEST_LENGTH;
+            std::cout << "Ieee1609Data::sign payload" << std::endl;
+             print_data(nullptr, buf, len);
+
+            tbsLen = SHA256_DIGEST_LENGTH;
             tbsBuf = nullptr;
             tbsBuf = (uint8_t *)buf_realloc(tbsBuf, tbsLen);
             memcpy(tbsBuf,hash,tbsLen);
             free(hash);
             hash = nullptr;
 
+             
+
+
             /* get the encoded buffer of the signer */
             hashBufLen = certs->encode_signer(&hashBuf);
+
+            std::cout << "Ieee1609Data::sign certs->encode_signer" << std::endl;
+            print_data(nullptr, hashBuf, hashBufLen);
+
+
             /* get the hash of the  certificate buffer */
             ret = certs->Hash256(hashBuf, hashBufLen, &hash);
             /* failure to calculate the hash */
@@ -119,10 +129,14 @@ namespace ctp
                 LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::hash", MODULE);
                 goto done;
             }
+
+             std::cout << "Ieee1609Data::sign certs->Hash256 final " << std::endl;
+             print_data(nullptr, tbsBuf, tbsLen);
+
             /* sign the data */
             sig = certs->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
             if(signature == nullptr)
-            signature = (Signature *)buf_alloc(sizeof(Signature));
+                signature = (Signature *)buf_alloc(sizeof(Signature));
             /* get the signature from sig */
             certs->SigToSignature(sig, std::ref(*signature));
         }

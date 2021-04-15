@@ -25,9 +25,11 @@ namespace ctp
     class Ieee1609Decode;
     class Ieee1609Certs;
 
+    
+
 
     /* cert class */
-    class Ieee1609Cert
+    class Ieee1609Cert: public mem_mgr
     {
         // std::vector<CertificateBase *> certs;
         // std::map<int, ctp::Ieee1609Cert*> certsPsidMap;
@@ -83,7 +85,12 @@ namespace ctp
                 pDecObj = nullptr;
             }
 
-             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
+            const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
+            /* verify the signature of the certificate */
+            int verify(const uint8_t *dgst, size_t len);
+            /* verify a signature signed this cert */
+            int verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature);
+
              int SigToSignature(const ECDSA_SIG* sig, Signature& signature);
              /* and then the hashed data */
              int Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash);
@@ -117,10 +124,10 @@ namespace ctp
             int print_encoded(const std::string filename);
             int print_decoded(const std::string filename);
 
-
+           
     };
 
-    class Ieee1609Encode:public std::enable_shared_from_this<Ieee1609Encode>
+    class Ieee1609Encode:public std::enable_shared_from_this<Ieee1609Encode>,public mem_mgr
     {
         uint8_t *encBuf; /*encoded buffer */
         size_t encLen;   /* encoded length */
@@ -168,6 +175,7 @@ namespace ctp
             int VP(const ValidityPeriod& validityPeriod);
             /* encode verfication key indicator */
             int Vki(const VerificationKeyIndicator& vki);
+            int SequenceOf(size_t quantity);
             int SequenceOfPsid_(const SequenceOfPsidSsp& psids);
             int IssuerIdentifier_(const IssuerIdentifier& issuer);
             int Length(size_t bytes);
@@ -191,7 +199,7 @@ namespace ctp
     };
 
 
-    class Ieee1609Decode:public std::enable_shared_from_this<Ieee1609Decode>
+    class Ieee1609Decode:public std::enable_shared_from_this<Ieee1609Decode>,public mem_mgr
     {
         uint8_t *buf; /*encoded buffer */
         size_t len;   /* encoded length */
@@ -359,17 +367,50 @@ namespace ctp
 
                 return offset;
             }
+            /* decode the sequence of quantity, it returns the number of iterations in quantity
+             */
+            int SequenceOf(uint8_t *quantity, size_t bufLen)
+            {
+                std::stringstream log_;
+                log_ << "Ieee1609Decode::SequenceOf enter " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
+                /* first get the length of iterations */
+                size_t iterations;
+                size_t bytes = Length((uint8_t *)&iterations, sizeof(size_t));
+                if( bytes > bufLen)
+                {
+                    throw Exception("Ieee1609Decode::SequenceOf quantity buffer is not enough");
+                }
+                log_ << "Ieee1609Decode::SequenceOf length bytes " <<  bytes << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
+                /* copy the quantity bytes */
+                while(bytes)
+                {
+                    quantity[--bytes] = buf[offset++];
+                }
+                log_ << "Ieee1609Decode::SequenceOf exit " <<  len << " offset " << offset << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
+                return offset;
+            }
             int SequenceOfPsid_(SequenceOfPsidSsp& psids)
             {
                 std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
                 std::ostream os(&log_);
                 os << " Ieee1609Decode::SequenceOfPsid_ enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
+                log_.str("");
 
                 /* get the number of items in the sequence */
                 psids.quantity= 0;
-                Length((uint8_t *)&psids.quantity, 4);
+                SequenceOf((uint8_t *)&psids.quantity, sizeof(psids.quantity));
+                os << " Ieee1609Decode::SequenceOfPsid_ psids.quantity " <<  psids.quantity << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
+
+
                 psids.psidSsp = (PsidSsp*)buf_alloc(psids.quantity * sizeof(PsidSsp));
                 for(int i = 0; i < psids.quantity; i++)
                 {
@@ -379,6 +420,7 @@ namespace ctp
                     ssp->optionalMask = buf[offset++];
                     /* get the variable length bytes */
                     int intBytes = buf[offset++];
+                    std::cout << "optional mask / number of bytes " << ssp->optionalMask << " " << intBytes << std::endl;
                     for(int j = intBytes; j > 0; j--)
                     {
                         buf_[j-1] = buf[offset++];
@@ -433,7 +475,7 @@ namespace ctp
                     default:
                         os << "Ieee1609Decode::IssuerIdentifier_ unsuuported issuer type " << issuer.type;
                         LOG_ERR(log_.str(), MODULE);
-                        throw new Exception(log_.str());
+                        throw Exception(log_.str());
                 }
                 os << " Ieee1609Decode::IssuerIdentifier_ exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
@@ -441,30 +483,31 @@ namespace ctp
 
                 return 0;
             }
-            /* sequence of routines only encodes the number of components */
+            /* only copies the integer encoded and returns number of bytes integer occupies */
             int Length(uint8_t *value, size_t bytes)
             {
+                int numBytes = 0;
                 uint8_t lengthEncoding=1;
                 std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
                 std::ostream os(&log_);
                 os << " Ieee1609Decode::Length enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
-
+                log_.str("");
                 /* read first byte of the integer encoding */
                 lengthEncoding = buf[offset];
                 if(buf[offset] & ASN1_LENGTH_ENCODING_MASK)
                 {
                     /* number of bytes in the length */
-                    lengthEncoding = buf[offset++] & ASN1_LENGTH_ENCODING_MASK;
-                    if(lengthEncoding > bytes)
-                    {
-                        throw new Exception("the supplied buffer not long enough");
-                    }
+                    lengthEncoding = (buf[offset++] & ~ASN1_LENGTH_ENCODING_MASK);
                 }else{
                     /* only 1 bytes */
                     lengthEncoding = 1;
                 }
+                if(lengthEncoding > bytes)
+                {
+                    throw Exception("the supplied buffer not long enough");
+                }
+                numBytes = lengthEncoding;
                 /* copy the bytes into the given buffer */
                 while(lengthEncoding)
                 {
@@ -474,7 +517,7 @@ namespace ctp
                 os << " Ieee1609Decode::Length exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
                 os.clear();
-                return offset;
+                return numBytes;
             }
 
             int ContentType_(Ieee1609Dot2ContentType& type)
@@ -604,7 +647,7 @@ namespace ctp
                     /* encode the sequence of certs */
                     enc->clear();
                     /* only 1 byte is needed to encode the number seuqnce */
-                    enc->Length((uint8_t *)&quantity, 1);
+                    enc->SequenceOf(quantity);
                     cert->encode(enc);
                     len = enc->get(buf);
                 }catch(Exception& e)
@@ -624,7 +667,7 @@ namespace ctp
                 {
                     dec->clear();
                     dec->set(buf, len);
-                    dec->Length((uint8_t*)&quantity, 4);
+                    dec->SequenceOf((uint8_t*)&quantity, 4);
                     /* decode the certificate with the given decoder */
                     cert->decode(dec);
                 }catch(Exception& e)
@@ -645,7 +688,7 @@ namespace ctp
                 {
                     // dec->SignerIdentifier_(std::ref(signerIdentifier));
                     /* maximmum 4 bytes */
-                    dec->Length((uint8_t *)&quantity, 4);
+                    dec->SequenceOf((uint8_t *)&quantity, 4);
                     for(int i =0; i < quantity; i++)
                     {
                         // Ieee1609Cert *pcert = new Ieee1609Cert();
@@ -667,6 +710,16 @@ namespace ctp
             int Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash)
             {
                 return cert->Hash256(tbHash, len, hash);
+            }
+
+            int verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature)
+            {
+                return cert->verify(dgst, dgst_len, signature);
+            }
+
+            int verify(const uint8_t *dgst, size_t dgst_len)
+            {
+                return cert->verify(dgst, dgst_len);
             }
 
             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type)

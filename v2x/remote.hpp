@@ -45,6 +45,7 @@ namespace remote
         int stop_;
         Type type;
         struct sockaddr_un my_addr, peer_addr;
+        struct sockaddr _sockadr;
 
         public:
             SharedRemotePtr get()

@@ -41,6 +41,7 @@ time_t start_time(struct tm *tm)
     }
     return t1;
 }
+#if 0
 void *buf_alloc(size_t num)
 {
     /* return the num blocks of size 1 */ 
@@ -56,6 +57,7 @@ void *buf_calloc(size_t num, size_t size)
 {
     return calloc(num,size);
 }
+#endif
 #ifdef __cplusplus
 }
 #endif
@@ -63,9 +65,15 @@ void *buf_calloc(size_t num, size_t size)
 void print_data(const char* file, const uint8_t *buf, size_t len)
 {
     int i = 0, j = 0;
-    std::cout << "print" << std::endl;
+    std::ostream os(std::cout.rdbuf());
+    std::ofstream ofs;
     /* open the file in text mode */
-    std::ofstream os(file);
+    if(file != nullptr)
+    {
+        ofs.open(file);
+        /* set the buffer */
+        os.rdbuf(ofs.rdbuf());
+    }
     //std::ostream os(ofs.rdbuf());
     os << std::hex;
     for(i=0; i < len; i++)
@@ -84,7 +92,11 @@ void print_data(const char* file, const uint8_t *buf, size_t len)
         }
     }
     std::cout << std::endl;
-    os.close();
+    os.flush();
+    if(file != nullptr)
+    {
+        ofs.close();
+    }
 }
 
 namespace ctp
@@ -191,6 +203,132 @@ namespace ctp
         return 1;
     }
 
+    int Ieee1609Cert::verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature_)
+    {
+        int ret = 0;
+        BIGNUM *r, *s;
+        EC_POINT *point;
+        uint8_t *sign_r, *sign_s;
+
+
+        ECDSA_SIG *sig = ECDSA_SIG_new();
+
+        /* get r and s from octet encoded signature values */
+        sign_r = (uint8_t *)signature_.signature.ecdsaP256Signature.r.point.octets.x;
+        sign_s = (uint8_t *)&signature_.signature.ecdsaP256Signature.s.x[0];
+
+        std::cout << "Ieee1609Cert::verify: verification payload " << std::endl;
+        print_data(nullptr, dgst, dgst_len);
+
+        // /* signature */
+        // for(int i = 0; i < 32; i++)
+        // {
+        //     if(i % 16 ==0)
+        //         std::cout << std::endl;
+            
+        //     std::cout << std::hex << (int)sign_r[i] << ":";
+        // }
+        r = BN_new();
+        s = BN_new();
+
+        r = BN_bin2bn(sign_r,SHA256_DIGEST_LENGTH, r);
+        if(r == nullptr)
+        {
+            throw Exception("Ieee1609Cert::verify::BN_bin2bn::r");
+        }
+        s = BN_bin2bn(sign_s,SHA256_DIGEST_LENGTH, s);
+        if(s == nullptr)
+        {
+            throw Exception("Ieee1609Cert::verify::BN_bin2bn::s");
+        }
+
+        ret = ECDSA_SIG_set0(sig, r, s);
+        if(ret == 0 )
+        {
+            throw Exception("Ieee1609Cert::verify::ECDSA_SIG_set0");
+        }
+
+        /* now get the public key of the signer */
+        EC_KEY *key = nullptr;
+        /* allocate the temporary buffer to specify the comporessed point of the key */
+        /* allocate the max buffer including the compressed notification */
+        size_t buf_len = SHA256_DIGEST_LENGTH*2+1;
+        uint8_t *buf1_;
+        uint8_t *buf2_ = (uint8_t*)buf_alloc(buf_len);
+        
+        if(vki->type == VerificationKeyIndicatorTypeKey)
+        {
+            if(vki->indicator.verificationKey.type == PublicVerificationKeyTypEecdsaNistP256S)
+            {
+                key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+                buf2_[0] = (uint8_t )vki->indicator.verificationKey.key.ecdsaNistP256.type;
+                if (vki->indicator.verificationKey.key.ecdsaNistP256.type == EccP256CurvPointTypeFill)
+                {
+                    buf_len = 0;
+                }
+                if(vki->indicator.verificationKey.key.ecdsaNistP256.type != EccP256CurvPointTypeUncompressed)
+                {
+                    buf1_ = (uint8_t *)&vki->indicator.verificationKey.key.ecdsaNistP256.point.octets.x[0];
+                    buf_len = SHA256_DIGEST_LENGTH;
+                }else
+                {
+                    buf1_= (uint8_t *)&vki->indicator.verificationKey.key.ecdsaNistP256.point.uncompressed;
+                    buf_len = SHA256_DIGEST_LENGTH * 2;
+
+                }
+                /* key is needed */
+                if(buf_len == 0)
+                {
+                    BN_free(r);
+                    BN_free(s);
+                    EC_KEY_free(key);
+                    free(buf2_);
+                    throw Exception("Ieee1609Cert::verify:: public key len 0");
+                }
+                memcpy(&buf2_[1], buf1_, buf_len);
+
+                buf_len +=1;
+                /* now get the point from the octet encode buffer */
+                // if (key == nullptr ) std::cout << "no key " << std::endl;
+                ret = EC_KEY_oct2key(key, buf2_, buf_len, nullptr);
+                if(ret == 0)
+                {
+                    std::cout << "the key has failed " << std::endl;
+                    BN_free(r);
+                    BN_free(s);
+                    EC_KEY_free(key);
+                    free(buf2_);
+                    throw Exception("Ieee1609Cert::verify::EC_KEY_oct2key");
+                }
+                /* now we got the key, verify the signature */
+                ret = ECDSA_do_verify(dgst, dgst_len, sig, key);
+                if(ret == 0)
+                {
+                    perror("Ieee1609Cert::verify::ECDSA_do_verify");
+                    BN_free(r);
+                    BN_free(s);
+                    EC_KEY_free(key);
+                    free(buf2_);
+                    throw Exception("Ieee1609Cert::verify::ECDSA_do_verify");
+                }
+                std::cout << "14\n";
+                BN_free(r);
+                BN_free(s);
+                EC_KEY_free(key);
+                free(buf2_);
+            }
+        }
+        return ret;
+
+
+    }
+
+    /* verify the signature on the given digest */
+    int Ieee1609Cert::verify(const uint8_t *dgst, size_t dgst_len)
+    {
+        return verify(dgst, dgst_len, std::ref(*signature));
+    }
+
     int Ieee1609Cert::sign(const uint8_t *buf, size_t len, SignatureType type)
     {
         return _sign(buf, len, type);
@@ -283,8 +421,19 @@ namespace ctp
             return ret;
     }
 
+
+
     const ECDSA_SIG* Ieee1609Cert::SignData(const uint8_t *buf, size_t len, SignatureType type)
     {
+        std::cout << "signed data " << std::endl;
+        for(int i = 0; i < len; i++)
+        {
+            if(i%16 ==0)
+                std::cout << std::endl;
+            std::cout << std::hex << (int)buf[i] << ":";
+        }
+        std::cout << std::endl;
+
         /* use the only key for now */
         return  ECDSA_do_sign(buf,len,ecKey);
     }
@@ -311,7 +460,17 @@ namespace ctp
 #else
         r = sig->r;
         s = sig->s;
-#endif        
+#endif   
+
+        std::cout << "_signed data " << std::endl;
+        for(int i = 0; i < len; i++)
+        {
+            if(i%16 ==0)
+                std::cout << std::endl;
+            std::cout << std::hex << (int)buf[i] << ":";
+        }
+        std::cout << std::endl;
+
         //EC_POINT *point = EC_POINT_new(grp);
 
         // if(EC_POINT_bn2point(grp, r, point, nullptr) != point)
@@ -424,10 +583,10 @@ namespace ctp
         /* acquire the new encoding object*/
         pEncObj = ptr->getPtr();
         /* encode the preamble for signature optional component */
-        if(base->certType = CertTypeExplicit)
-        {
-            pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
-        }
+        // if(base->certType = CertTypeExplicit)
+        // {
+        //     pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
+        // }
         EncodeCertBase(true);
         /* only encode the signature if it is of type explicit */
         if(base->certType == CertTypeExplicit &&  signature != nullptr)
@@ -443,10 +602,10 @@ namespace ctp
         /* clear whatever was there */
         pEncObj->clear();
         /* encode the preamble for signature optional component */
-        if(base->certType == CertTypeExplicit)
-        {
-            pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
-        }
+        // if(base->certType == CertTypeExplicit)
+        // {
+        //     pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
+        // }
         EncodeCertBase(true);
         /* only encode the signature if it is of type explicit */
         if(base->certType == CertTypeExplicit &&  signature != nullptr)
@@ -550,11 +709,7 @@ namespace ctp
             pEncObj->clear();
         try
         {
-            /* since we are using the explicit certificate, signature is present */
-            uint8_t preample = 0;
-            if (base->certType == CertTypeExplicit)
-                preample = 0x40;
-            pEncObj->OctetsFixed(&preample, 1);
+            pEncObj->OctetsFixed(&base->options, 1);
             pEncObj->OctetsFixed(&base->version, 1);
             pEncObj->OctetsFixed((uint8_t *)&base->certType, 1);
             pEncObj->IssuerIdentifier_(std::ref(*issuer));
@@ -653,8 +808,11 @@ namespace ctp
         char *yPtr = point->point.uncompressedy.x;
 
         /* there will always be x-component, so lets copy that */
-        for (i = 1; i < sizeof(HashedData32);i++)
+        for (i = 1; i < keylen;i++)
         {
+            std::cout << std::hex << (int)keyBuf[i] << ":";
+            if(i%16 ==0)
+                std::cout << std::endl;
             *xPtr++ = keyBuf[i];
         }
         /* copy whatever was there, remaining */
@@ -724,6 +882,8 @@ namespace ctp
         issuer->type = IssuerIdentifierTypeSelf;
         /* every self-signed certificate is signed by default */
         sign();
+        /* have the signature option */
+        base->options = 0x40;
     }
 } //namespace ctp
 

@@ -343,7 +343,6 @@ void TEST(data_encoding)()
 void TEST(data_decoding)()
 {
     printf("data_decoding\n");
-    std::cout << "string length " << str.length() << std::endl;
     ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
     pcerts->create();
     uint8_t *encBuf = nullptr;
@@ -351,8 +350,6 @@ void TEST(data_decoding)()
     encLen = pcerts->encode(&encBuf);
     std::cout << "encoded buffer length " << encLen << std::endl;
     unlink("data_decoding_enc_cert.txt");
-    
-    // pcert->print_encoded(std::string("data_decoding_enc_cert.txt"));
     print_data("data_decoding_enc_cert.txt",encBuf, encLen);
 
     std::string tbsData("this is dummy test data!!!");
@@ -374,7 +371,8 @@ void TEST(data_decoding)()
     size_t encLen2 = pdata2->encode(&encBuf2);
 
     unlink("data_decoding_dec_data.txt");
-    print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
+    // print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
+    print_data(nullptr, encBuf2, encLen2);
 
     if(signedDataLength != encLen2)
     {
@@ -387,6 +385,16 @@ void TEST(data_decoding)()
         {
             std::cout << "the decoding failed at index " << i << std::endl;
         }
+    }
+    std::cout << "verification start " << std::endl;
+    try
+    {
+        /* do the verification */
+        pdata2->verify();
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
     }
     delete pcerts;
     delete pdata;
