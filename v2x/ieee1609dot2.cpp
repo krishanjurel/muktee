@@ -46,6 +46,8 @@ void TEST(certs_encoding)();
 void TEST(cert_decoding)();
 void TEST(ipc_sockets)();
 void TEST(logging)();
+void TEST(hashing)();
+void TEST(encoding)();
 
 
 
@@ -288,9 +290,11 @@ int main()
     //TEST(ipc_sockets)();
     //TEST(certs_encoding)();
     //  TEST(data_encoding)();
-    TEST(data_decoding)();
-    //TEST(cert_decoding)();
+    // TEST(data_decoding)();
+    // TEST(cert_decoding)();
     // TEST(logging)();
+    // TEST(hashing)();
+    TEST(encoding)();
 
     while(!stop_)
     {
@@ -311,6 +315,31 @@ ptrTestFunction test_data[]{
         TEST(data_encoding),
         TEST(data_decoding)
 };
+
+
+void TEST(hashing)()
+{
+    printf("Hashing \n");
+    uint8_t *hash = nullptr;
+    int ret = 0;
+    /* get an empty string */
+    std::string str("");
+    ctp::Ieee1609Cert *pCert = new ctp::Ieee1609Cert();
+    ret = pCert->Hash256((const uint8_t *)str.c_str(), str.length(), &hash);
+    if(ret == 0)
+    {
+        LOG_ERR("TEST(hashing): has failed creating hash of empty string ",MODULE);
+        delete pCert;
+        raise(SIGKILL);
+    }
+
+    print_data(nullptr, hash, SHA256_DIGEST_LENGTH);
+    free(hash);
+    LOG_INFO("TEST(hashing): has passed ", MODULE);
+
+    raise(SIGKILL);
+
+}
 
 
 
@@ -348,7 +377,7 @@ void TEST(data_decoding)()
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
     encLen = pcerts->encode(&encBuf);
-    std::cout << "encoded buffer length " << encLen << std::endl;
+    std::cout << "encoded buffer length " << std::dec << encLen << std::endl;
     unlink("data_decoding_enc_cert.txt");
     print_data("data_decoding_enc_cert.txt",encBuf, encLen);
 
@@ -436,22 +465,17 @@ void TEST(cert_decoding)()
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
     encLen = pcert->encode(&encBuf);
-    // std::cout << "encoded buffer length " << encLen << std::endl;
-    //unlink("encoded-cert.txt");
-    //pcert->print_encoded(std::string("encoded-cert.txt"));
+    unlink("cert_decoding_encoded_cert.txt");
+    print_data("cert_decoding_encoded_cert.txt",encBuf, encLen);
     printf("cert_decoding\n");
     /* create a certificate object */
     ctp::Ieee1609Cert *pcert2 = new ctp::Ieee1609Cert();
-    unlink("encoded-cert-data.txt");
-    print_data("encoded-cert-data.txt",encBuf, encLen);
     pcert2->decode(encBuf, encLen);
     uint8_t *encBuf2 = nullptr;
     size_t encLen2 = 0;
     encLen2 = pcert2->encode(&encBuf2);
-    unlink("encoded-cert1.txt");
-    print_data("encoded-cert1.txt", encBuf2, encLen2);
-    std::cout << "enclen 1:2 " << encLen <<":"<<encLen2 << std::endl;
-
+    unlink("cert_decoding_deccode_encoded_cert.txt");
+    print_data("cert_decoding_deccode_encoded_cert.txt", encBuf2, encLen2);
 
 
     for (int i = 0; i < encLen2; i++)
@@ -524,10 +548,50 @@ void TEST(logging)()
     log_info(strStream.str(), MODULE);
     strStream.sync();
     strStream.clear();
+    strStream.str("");
     strStream << "Hello world again" << std::hex << 20 << std::endl;
 
     log_info(strStream.str(), MODULE);
-
     return;
+}
 
+
+void TEST(encoding)()
+{
+    std::stringstream log_(std::ios_base::out);
+    log_ << "TEST(encdoing) length\n";
+    log_info(log_.str(), MODULE);
+    log_.str("");
+    std::vector<int> invalues={7,127,128,255,256, 32768, 65535, 65536};
+    std::vector<int> expvalue={1,1, 2,    2,  3,   3,     3, 4};
+
+    int enclen = 0;
+    uint8_t *encbuf = nullptr;
+
+    ctp::Ieee1609Encode *enc = new ctp::Ieee1609Encode();
+    for(int i=0; i < invalues.size(); i++)
+    {
+        int encvalue = invalues.at(i);
+        int retvalue = enc->Length(encvalue);
+        if(retvalue != expvalue.at(i))
+        {
+            log_ << " TEST(encdoing) fails " << " input " << encvalue << " out/exp " << retvalue << "/";
+            log_ << expvalue.at(i) << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            delete enc;
+            raise(SIGKILL);
+        }
+
+        log_ << " TEST(encoding) the data for encoding  " << encvalue << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+        enclen = enc->get(&encbuf);
+        print_data(nullptr, encbuf, enclen);
+        enc->clear();
+    }
+
+    log_ << " TEST(encdoing) passes " << std::endl;
+    log_info(log_.str(), MODULE);   
+    delete enc;
+    raise(SIGKILL);
 }

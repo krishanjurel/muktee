@@ -149,7 +149,7 @@ namespace ctp
             static void log(LogLvl lvl, int mod,const std::string &msg)
             {
                 // std::lock_guard<std::mutex> lk(mLock);
-                std::cout << LogLevel[(int)lvl].lvl << " : " << mod << " : " << msg << std::endl;
+                std::cout << LogLevel[(int)lvl].lvl << " : " << mod << " : " << msg;
             }
 
             static void log(LogLvl lvl, std::string& mod,const std::string &msg)

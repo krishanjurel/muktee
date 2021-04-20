@@ -3,20 +3,6 @@
 #include <iostream>
 
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-extern void *buf_alloc(size_t len);
-extern void *buf_realloc(void *ptr, size_t len);
-extern void *buf_calloc(size_t num, size_t size);
-#ifdef __cplusplus
-}
-#endif
-
-
-
-
 
 #ifdef __cpluplus
 extern "C"
@@ -40,7 +26,9 @@ typedef struct
 }OctetString;
 
 
-#define ASN1_COER_CHOICE_MASK  (uint8_t)(~0x80)
+#define ASN1_COER_CHOICE_MASK_CLR  (uint8_t)(~0x80)
+#define ASN1_COER_CHOICE_MASK_SET  (uint8_t)(0x80)
+
 #define ASN1_LENGTH_ENCODING_MASK (uint8_t)(0x80)
 #define ASN1_BITS_PER_BYTE  8
 

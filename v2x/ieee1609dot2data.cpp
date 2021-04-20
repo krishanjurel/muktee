@@ -196,15 +196,19 @@ namespace ctp
             enc->clear();
         /* encode signed data content type */
         enc->ContentType_(data->content.type);
-        std::cout << "content type " << (int)data->content.type << std::endl;
+        std::stringstream log_(std::ios_base::out);
+        log_ << "Ieee1609Data::encode_content content type " << (int)data->content.type << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
         switch(data->content.type)
         {
             case Ieee1609Dot2ContentSignedData:
                 encode_signeddata(true);
                 break;
             default:
-                LOG_ERR("content type not supported ", MODULE);
-                break;
+                log_ << "Ieee1609Data::encode_content content type " << data->content.type << " not supported " << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+                throw Exception(log_.str());
         }
     }
 

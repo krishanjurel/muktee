@@ -147,16 +147,6 @@ namespace ctp
                 encBuf = nullptr;
                 encLen = 0;
             }
-            // /*FIXME, define a lenght enocding function */
-            // int Length(const uint8_t *length, int len);
-            // {
-            //     uint8_t numBytes = len/128;
-            //     if(numBytes)
-            //     {
-            //         numBytes += 1;
-            //         numByets = ASN1_LENGTH_ENCODING_MASK
-            //     }
-            // }
             /* encode fixed length octets, i.e, no need for length encoding */
             int OctetsFixed(const uint8_t *octets, size_t len);
             /* encode psid */
@@ -222,16 +212,16 @@ namespace ctp
             /* decode fixed length octets, i.e, no need for length encoding */
             int OctetsFixed(uint8_t *octets, size_t len_)
             {
-                std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
+                std::stringbuf log_(std::ios_base::out);
                 std::ostream os(&log_);
                 os << " Ieee1609Decode::OctetsFixed enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
+                log_.str("");
                 if (len_+offset > this->len)
                 {
                     os << " Ieee1609Decode::OctetsFixed not enough buffer " <<  len << " offset " << offset << std::endl;
                     LOG_ERR(log_.str(), MODULE);
-                    os.clear();
+                    throw Exception(log_.str());
                     return 0;
                 }
 
@@ -242,7 +232,6 @@ namespace ctp
 
                 os << " Ieee1609Decode::OctetsFixed exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
                 return offset;
             }
             /* decode psid */
@@ -270,7 +259,7 @@ namespace ctp
                 std::ostream os(&log_);
                 os << " Ieee1609Decode::VP enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
+                log_.str("");
 
                 /* read 4 bytes of uint32 in big endian format */
                 uint8_t *buf_ = (uint8_t *)&vp.start;
@@ -280,10 +269,14 @@ namespace ctp
                     len_ --;
                     buf_[len_] = buf[offset++];
                 }
-                std::cout << "VP start " << vp.start << std::endl;
+                os << " Ieee1609Decode::VP start " << vp.start << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
                 /* get the choice of duration */
-                vp.duration.type = (DurationType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
-                std::cout << "duration type " << vp.duration.type << std::endl;
+                vp.duration.type = (DurationType)(buf[offset++] & ASN1_COER_CHOICE_MASK_CLR);
+                os << " Ieee1609Decode::VP " << " duration type " << vp.duration.type << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
                 /* read remaining two bytes of the duration */
                 vp.duration.duration = (buf[offset++] << 8);
                 vp.duration.duration |= (buf[offset++]);
@@ -297,19 +290,18 @@ namespace ctp
             /* FIXME, break it into sub modules */
             int Vki(VerificationKeyIndicator& vki)
             {
-                std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
-                std::ostream os(&log_);
-                os << " Ieee1609Decode::Vki enter " <<  len << " offset " << offset << std::endl;
+                std::stringstream log_(std::ios_base::out);
+                log_ << " Ieee1609Decode::Vki enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
+                log_.str("");
 
                 /* read the choice, 6.4.35 */
-                vki.type = (VerificationKeyIndicatorType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+                vki.type = (VerificationKeyIndicatorType)(buf[offset++] & ASN1_COER_CHOICE_MASK_CLR);
                 switch(vki.type)
                 {
                     case VerificationKeyIndicatorTypeKey:
                         /* decode public verfiification key, 6.4.36 */
-                        vki.indicator.verificationKey.type = (PublicVerificationKeyType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+                        vki.indicator.verificationKey.type = (PublicVerificationKeyType)(buf[offset++] & ASN1_COER_CHOICE_MASK_CLR);
                         switch(vki.indicator.verificationKey.type)
                         {
                             case PublicVerificationKeyTypEecdsaNistP256S:
@@ -317,7 +309,7 @@ namespace ctp
                                 /* decode the curve point 6.3.23*/
                                 EccP256CurvPoint *point = &vki.indicator.verificationKey.key.ecdsaNistP256;
                                 /* get the choice type */
-                                point->type = (EccP256CurvPointType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+                                point->type = (EccP256CurvPointType)(buf[offset++] & ASN1_COER_CHOICE_MASK_CLR);
                                 char *_buff = point->point.octets.x;
                                 size_t _len = 0;
                                 switch(point->type)
@@ -334,15 +326,17 @@ namespace ctp
                                         _len = 0;
                                         break;
                                     default:
-                                        std::cout << "Ieee1609Decode::Vki:: point type not supported " << point->type << std::endl;
-                                        throw Exception("Ieee1609Decode::Vki:: point type not supported ");
+                                        log_ << "Ieee1609Decode::Vki:: point type not supported " << point->type << std::endl;
+                                        LOG_ERR(log_.str(), MODULE);
+                                        throw Exception(log_.str());
 
                                 }
                                 /* handle the available buffer size */
                                 if(_len+offset > len)
                                 {
-                                    std::cout << "Ieee1609Decode::Vki:: point type not enough length " << _len << "offset " << offset << "total " << len << std::endl;
-                                    throw Exception("Ieee1609Decode::Vki:: point type not enough length ");
+                                    log_ << "Ieee1609Decode::Vki:: point type not enough length " << _len << "offset " << offset << "total " << len << std::endl;
+                                    LOG_ERR(log_.str(), MODULE);
+                                    throw Exception(log_.str());
                                 }
 
                                 while(_len--)
@@ -352,19 +346,19 @@ namespace ctp
                             }
                             break;
                             default:
-                                std::cout << "Ieee1609Decode::Vki:: verfication public key type not supported " << vki.indicator.verificationKey.type << std::endl;
-                                throw Exception("Ieee1609Decode::Vki:: verfication public key type not supported ");
+                                log_ << "Ieee1609Decode::Vki:: verfication public key type not supported " << vki.indicator.verificationKey.type << std::endl;
+                                LOG_ERR(log_.str(), MODULE);
+                                throw Exception(log_.str());
                         }
                     break;
                     default:
-                        std::cout << "Ieee1609Decode::Vki:: verfication key type not supported " << vki.type << std::endl;
-                        throw Exception("Ieee1609Decode::Vki:: verfication key type not supported ");
+                        log_ << "Ieee1609Decode::Vki:: verfication key type not supported " << vki.type << std::endl;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw Exception(log_.str());
                 }
 
-                os << " Ieee1609Decode::Vki exit " <<  len << " offset " << offset << std::endl;
+                log_ << " Ieee1609Decode::Vki exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
-
                 return offset;
             }
             /* decode the sequence of quantity, it returns the number of iterations in quantity
@@ -420,7 +414,9 @@ namespace ctp
                     ssp->optionalMask = buf[offset++];
                     /* get the variable length bytes */
                     int intBytes = buf[offset++];
-                    std::cout << "optional mask / number of bytes " << ssp->optionalMask << " " << intBytes << std::endl;
+                    os << "Ieee1609Decode::SequenceOfPsid_ optional mask / number of bytes " << std::to_string(ssp->optionalMask) << " " << intBytes << std::endl;
+                    log_info(log_.str(), MODULE);
+                    log_.str("");
                     for(int j = intBytes; j > 0; j--)
                     {
                         buf_[j-1] = buf[offset++];
@@ -444,22 +440,23 @@ namespace ctp
             {
                 std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
                 std::ostream os(&log_);
-                os << " Ieee1609Decode::IssuerIdentifier_ enter " <<  len << " offset " << offset << std::endl;
+                os << "Ieee1609Decode::IssuerIdentifier_ enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
-                os.clear();
+                log_.str("");
 
                 /* get the choice */
                 int c = (int)buf[offset];
-                std::cout << "the value at offset " << offset << " is " << std::hex << std::to_string(c) << std::endl;
-                issuer.type = (IssuerIdentifierType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
-
-
-
+                os << "Ieee1609Decode::IssuerIdentifier_ the value at offset " << offset << " is " << std::hex << std::to_string(c) << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
+                issuer.type = (IssuerIdentifierType)(buf[offset++] & ASN1_COER_CHOICE_MASK_CLR);
                 switch(issuer.type)
                 {
                     case IssuerIdentifierTypeHashId:
                     {
-                        std::cout << "is this hash " << std::endl;
+                        os << "Ieee1609Decode::IssuerIdentifier_ is hash " << std::endl;
+                        log_info(log_.str(), MODULE);
+                        log_.str("");
                         char *buf_ = issuer.issuer.hashId.x;
                         /* copy fixed size eight bytes */
                         for (int i = 0; i < 8; i++)
@@ -527,7 +524,7 @@ namespace ctp
                 os << " Ieee1609Decode::ContentType_ enter " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);
                 os.clear();
-                type =  (Ieee1609Dot2ContentType)(buf[offset++] & ASN1_COER_CHOICE_MASK);
+                type =  (Ieee1609Dot2ContentType)(buf[offset++] & ASN1_COER_CHOICE_MASK_CLR);
 
                 os << " Ieee1609Decode::ContentType_ exit " <<  len << " offset " << offset << std::endl;
                 log_info(log_.str(), MODULE);

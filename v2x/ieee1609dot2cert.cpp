@@ -82,7 +82,7 @@ void print_data(const char* file, const uint8_t *buf, size_t len)
         // istram >> c[0] >> c[1];
         int c = (int)(buf[i]);
         //snprintf((char *)&c, sizeof(int), "%c", buf[i]);
-        os << std::setw(2) << std::hex << c;
+        os << std::setw(2) << std::setfill('0') << std::hex << c;
         os << ':';
         j++;
         if(j % 16 == 0)
@@ -190,16 +190,39 @@ namespace ctp
         uint8_t *buf = nullptr;
         size_t len = 0;
         len = pEncObj->get(&buf);
-        uint8_t *hash = nullptr;
-        ret = Hash256(buf, len, &hash);
+        uint8_t *hash1 = nullptr; /* hash of tobesigned */
+        uint8_t *hash2 = nullptr; /* hash of signer idetntifier */
+        uint8_t *hash = nullptr;  /* total hash */
+        ret = Hash256(buf, len, &hash1);
         if(ret == 0)
         {
-            LOG_ERR(" Ieee1609Cert::sign()::Hash256 ", 1);
-            std::terminate();
+            LOG_ERR(" Ieee1609Cert::sign()::Hash256 ", MODULE);
+            throw Exception(" Ieee1609Cert::sign()::Hash256 ");
+ 
         }
-        sign(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
-        /* just to be sure clear the encode memory */
         pEncObj->clear();
+        if(base->issuer.type == IssuerIdentifierTypeSelf)
+        {
+            const uint8_t *nullstr = (const uint8_t*)"\0";
+            ret = Hash256((uint8_t *)nullptr, 0, &hash2);
+        }else if(base->issuer.type == IssuerIdentifierTypeHashId)
+        {
+            ret = Hash256((uint8_t *)base->issuer.issuer.hashId.x, sizeof(hashid8), &hash2);
+        }
+
+        if(ret == 0)
+        {
+            LOG_ERR(" Ieee1609Cert::sign()::Hash256 hash nullstr ", MODULE);
+            throw Exception(" Ieee1609Cert::sign()::Hash256 hash nullstr ");
+        }
+
+        hash = (uint8_t *)buf_alloc(2*SHA256_DIGEST_LENGTH);
+        /* copy the hash1 */
+        memcpy(hash,hash1, SHA256_DIGEST_LENGTH);
+        /* copy the hash 2*/
+        memcpy(&hash[SHA256_DIGEST_LENGTH], hash2, SHA256_DIGEST_LENGTH);
+        sign(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
+        buf_free(hash);
         return 1;
     }
 
@@ -354,6 +377,10 @@ namespace ctp
     {
         SHA256_CTX ctx;
         int ret = 1;
+        std::stringstream log_(std::ios_base::out);
+        log_ << " Ieee1609Cert::Hash256 enter length " << len << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str(""); 
         if (SHA256_Init(&ctx) != 1)
         {
             LOG_ERR("Ieee1609Cert::Hash SHA256_Init  failed", 1);
@@ -380,6 +407,10 @@ namespace ctp
             {
                 free(*hash);
             }
+
+        log_ << " Ieee1609Cert::Hash256 exit status " << ret << std::endl;
+        log_info(log_.str(), MODULE);
+
         return ret;
     }
 
@@ -549,18 +580,26 @@ namespace ctp
 
     int Ieee1609Cert::decode(const uint8_t *buf, size_t len)
     {
+        std::stringstream log_(std::ios_base::out);
         pDecObj->set(buf, len);
         try
         {
             /* get the sequence preamble */
             pDecObj->Octets_(&base->options, 1);
-            std::cout << "base options " << std::to_string(base->options) << std::endl;
+            log_ << "base options " << std::to_string(base->options) << std::endl;
+            log_info(log_.str(), MODULE);
+            log_.str("");
             /* decode version */
             pDecObj->Octets_((uint8_t *)&base->version, 1);
-            std::cout << "base version " << std::to_string(base->version) << std::endl;
+            log_ << "base version " << std::to_string(base->version) << std::endl;
+            log_info(log_.str(), MODULE);
+            log_.str("");
+
             /* decode cert type */
             pDecObj->Octets_((uint8_t *)&base->certType, 1);
-            std::cout << "base version " << std::to_string(base->certType) << std::endl;
+            log_ << "base cert type " << std::to_string(base->certType) << std::endl;
+            log_info(log_.str(), MODULE);
+            log_.str("");
             pDecObj->IssuerIdentifier_(std::ref(*issuer));
             DecodeToBeSigned();
             /* decode the signature if available */
@@ -570,7 +609,8 @@ namespace ctp
             }
         }catch(Exception& e)
         {
-            std::cout << "Exception " << e.what() << std::endl;
+            log_ << "Exception " << e.what() << std::endl;
+            LOG_ERR(log_.str(), MODULE);
             throw; /*throw again from here */
         }
         return 0;
@@ -582,11 +622,7 @@ namespace ctp
         std::shared_ptr<Ieee1609Encode> temp = pEncObj;
         /* acquire the new encoding object*/
         pEncObj = ptr->getPtr();
-        /* encode the preamble for signature optional component */
-        // if(base->certType = CertTypeExplicit)
-        // {
-        //     pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
-        // }
+        /* encode the certificate base */
         EncodeCertBase(true);
         /* only encode the signature if it is of type explicit */
         if(base->certType == CertTypeExplicit &&  signature != nullptr)
@@ -883,7 +919,7 @@ namespace ctp
         /* every self-signed certificate is signed by default */
         sign();
         /* have the signature option */
-        base->options = 0x40;
+        base->options = 0x80;
     }
 } //namespace ctp
 
