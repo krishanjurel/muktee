@@ -48,6 +48,8 @@ void TEST(ipc_sockets)();
 void TEST(logging)();
 void TEST(hashing)();
 void TEST(encoding)();
+void TEST(config)();
+void TEST(tp_test_client)();
 
 
 
@@ -87,85 +89,15 @@ typedef union
     do { perror(msg); exit(EXIT_FAILURE);}while(0)
 
 
-namespace ctp
-{
-    TP::TP()
-    {
-        psids.clear();
-        libconfig::Config config;
-        {
-            FILE *fp = fopen("./config.file", "r");
-            if(fp != nullptr)
-            {
-                try
-                {
-                    config.read(fp);
-                    libconfig::Setting& setting = config.lookup("app.components.psid");
-                    if(setting.getLength() == 0)
-                    {
-                        throw libconfig::SettingException("app.components.psid");
-                    }
-                    using itr = libconfig::Setting::iterator;
-                    itr it=setting.begin();
-                    while(it != setting.end())
-                    {
-                        psids.push_back(*it);
-                        it++;
-                    }
-                }
-                catch(const std::exception& e)
-                {
-                    std::cerr << e.what() << '\n';
-                }
-                fclose(fp);
-            }
-        }
 
-        /* create instances of cert and data manager */
-        // pCerts = new Ieee1609Certs();
-        // pData = new Ieee1609Data();
-
-
-    }
-
-    TP::~TP()
-    {
-        // delete pCerts;
-        // delete pData;
-    }
-
-    /* every client must be calling this routine */
-    TP_PTR TP::instance_get()
-    {
-        return shared_from_this();
-    }
-
-    TP_PTR TP::init()
-    {
-        static TP_PTR pObj = nullptr;
-        static TP obj; /* need this for private constructor */
-        if(pObj == nullptr)
-        {
-            pObj = std::make_shared<TP>(obj);
-        }
-        return pObj;
-    }
-
-    void TP::psid_list()
-    {
-        std::for_each(psids.begin(), psids.end(), [](const int n){ std::cout << n << " ";});
-    }
-}
+/* initialize the log lvl */
+ctp::LogLvl ctp::log_mgr::logLvl = ctp::LOG_LVL_DBG;    
 
 
 int main()
 {
     
     struct sigaction sigAct;
-    //  = {
-    //     .sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT,
-    //     .sa_restorer = nullptr,
-    // };
     sigAct.sa_flags = SA_NOCLDSTOP | SA_NOCLDWAIT;
     sigAct.sa_restorer = nullptr;
 
@@ -288,27 +220,93 @@ int main()
 
 
     //TEST(ipc_sockets)();
-    //TEST(certs_encoding)();
-    //  TEST(data_encoding)();
-    // TEST(data_decoding)();
+    // TEST(certs_encoding)();
+    // TEST(data_encoding)();
+    TEST(data_decoding)();
     // TEST(cert_decoding)();
     // TEST(logging)();
     // TEST(hashing)();
-    TEST(encoding)();
+    // TEST(encoding)();
 
-    while(!stop_)
-    {
+    // TEST(config)();
+    TEST(tp_test_client)();
+
+    // while(!stop_)
+    // {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         //std::abort();
         std::this_thread::sleep_for(std::chrono::seconds(5));
-    }
+    // }
     // delete pcert;
     // delete pdata;
+    raise(SIGKILL);
     return 0;
 }
 
 
 
+class tp_test_client: public ctp::tp_client
+{
+    /* count the number of packets*/
+    int packets;
+    int psid; /* client for this psid */
+    public:
+        tp_test_client():packets(0),psid(32),ctp::tp_client(){};
+        /* define the callback routine */
+        void callback(void *data, size_t len)
+        {
+            std::stringstream log_(std::ios_base::out);
+            packets ++;
+            /* since the test data is a string , lets print it */
+            std::string _data((const char*)data, len);
+            log_ << packets << _data << std::endl;
+            std::cout << log_.str();
+        }
+        const int psid_get() const
+        {
+            return psid;
+        }
+};
+
+
+void TEST(tp_test_client)()
+{
+    /* create and get trust pointer object */
+    ctp::TP_PTR tp = ctp::TP::init();
+    /* create a new object tp_test_client */
+    std::shared_ptr<tp_test_client> tpTestClient = std::shared_ptr<tp_test_client>(new tp_test_client());
+    /* register the clients */
+    try
+    {
+        /* start the trust pointer*/
+        tp->start();
+        tp->client_register(tpTestClient->psid_get(),tpTestClient);
+        
+
+        /*call the routine to sign the data */
+        std::string tbsData("this is dummy test data!!!");
+        std::string tbsData1("this is dummy test data1!!!");
+        uint8_t *signedData = nullptr;
+        size_t signedDataLen = 0;
+        uint8_t *signedData1 = nullptr;
+        size_t signedDataLen1 = 0;
+        /* sign the data */
+        tp->sign(tpTestClient->psid_get(),(const uint8_t *)tbsData.c_str(),tbsData.size(), &signedData, &signedDataLen);
+        tp->sign(tpTestClient->psid_get(),(const uint8_t *)tbsData1.c_str(),tbsData1.size(), &signedData1, &signedDataLen1);
+        /* use the one below for failure testing */
+        // tp->sign(33,(const uint8_t *)tbsData1.c_str(),tbsData1.size(), &signedData1, &signedDataLen1);
+
+        tp->verify(signedData, signedDataLen);
+        tp->verify(signedData1, signedDataLen1);
+        /* now the callaback must be called */
+    }
+    catch(const ctp::Exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+    
+    
+}
 
 typedef void (*ptrTestFunction)();
 ptrTestFunction test_data[]{
@@ -316,6 +314,22 @@ ptrTestFunction test_data[]{
         TEST(data_decoding)
 };
 
+
+void TEST(config)()
+{
+    try
+    {
+        ctp::TP_PTR tp = ctp::TP::init();
+        tp->start();
+        tp->psid_list();
+        tp->curves_list();
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+    
+}
 
 void TEST(hashing)()
 {
@@ -371,66 +385,81 @@ void TEST(data_encoding)()
 
 void TEST(data_decoding)()
 {
-    printf("data_decoding\n");
-    ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
-    pcerts->create();
-    uint8_t *encBuf = nullptr;
-    size_t encLen = 0;
-    encLen = pcerts->encode(&encBuf);
-    std::cout << "encoded buffer length " << std::dec << encLen << std::endl;
-    unlink("data_decoding_enc_cert.txt");
-    print_data("data_decoding_enc_cert.txt",encBuf, encLen);
-
+    std::stringstream log_(std::ios_base::out);
     std::string tbsData("this is dummy test data!!!");
-    ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
+    ctp::Ieee1609Data *pdata = nullptr;
     uint8_t *signedData = nullptr;
     size_t signedDataLength = 0;
-    pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
-    unlink("data_decoding_enc_data.txt");
-    print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
-    std::cout << "number of bytes " << signedDataLength << std::endl;
-
-    /* decoding section */
-
-
-    ctp::Ieee1609Data *pdata2 = new ctp::Ieee1609Data();
-    pdata2->decode(signedData,signedDataLength);
-    uint8_t *encBuf2 = nullptr;
-
-    size_t encLen2 = pdata2->encode(&encBuf2);
-
-    unlink("data_decoding_dec_data.txt");
-    // print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
-    print_data(nullptr, encBuf2, encLen2);
-
-    if(signedDataLength != encLen2)
-    {
-        std::cout << "the decoding has failed length(expected) " << encLen2 << "(" << signedDataLength << ")" << std::endl;
-        throw;
-    }
-    for(int i =0; i < encLen2; i++)
-    {
-        if(signedData[i] != encBuf2[i])
-        {
-            std::cout << "the decoding failed at index " << i << std::endl;
-        }
-    }
-    std::cout << "verification start " << std::endl;
+    ctp::Ieee1609Certs *pcerts = nullptr;
+    ctp::Ieee1609Data *pdata2 = nullptr;
     try
     {
+    
+        log_ << "data_decoding start " << std::endl;
+        LOG_DBG(log_.str(), MODULE);
+        log_.str("");
+        pcerts = new ctp::Ieee1609Certs();
+        pcerts->create();
+        // uint8_t *encBuf = nullptr;
+        // size_t encLen = 0;
+        // encLen = pcerts->encode(&encBuf);
+        // log_ << "encoded buffer length " << std::dec << encLen << std::endl;
+        // LOG_DBG(log_.str(), MODULE);
+        // log_.str("");
+        // unlink("data_decoding_enc_cert.txt");
+        // print_data("data_decoding_enc_cert.txt",encBuf, encLen);
+        pdata = new ctp::Ieee1609Data();
+        pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
+        unlink("data_decoding_enc_data.txt");
+        print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
+        delete pdata;
+        // std::cout << "number of bytes " << signedDataLength << std::endl;
+
+        /* decoding section */
+
+
+        pdata2 = new ctp::Ieee1609Data();
+        pdata2->decode(signedData,signedDataLength);
+        uint8_t *encBuf2 = nullptr;
+
+        size_t encLen2 = pdata2->encode(&encBuf2);
+
+        unlink("data_decoding_dec_data.txt");
+        // print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
+        // print_data(nullptr, encBuf2, encLen2);
+
+        if(signedDataLength != encLen2)
+        {
+            log_ << "the decoding has failed length(expected) " << encLen2 << "(" << signedDataLength << ")" << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw;
+        }
+        for(int i =0; i < encLen2; i++)
+        {
+            if(signedData[i] != encBuf2[i])
+            {
+                log_ << "the decoding failed at index " << i << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+                throw;
+            }
+        }
+        log_.str("");
+        log_ << "data_decoding verification start " << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
         /* do the verification */
         pdata2->verify();
-    }
-    catch(const std::exception& e)
+    }catch(ctp::Exception& e)
     {
-        std::cerr << e.what() << '\n';
+        log_ << "TEST(data_decoding)() is failed " << std::endl;
+        LOG_ERR(log_.str(), MODULE);
+        throw;
     }
-    delete pcerts;
-    delete pdata;
+    log_ << "TEST(data_decoding)() passed " << std::endl;
+    LOG_DBG(log_.str(), MODULE);
+    // delete pcerts;
+    // delete pdata;
     delete pdata2;
-    raise(SIGKILL);
-
-
     return;
 }
 void TEST(certs_encoding)()
@@ -439,7 +468,8 @@ void TEST(certs_encoding)()
     ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
     // pcerts->encode();
     // pcerts->print();
-    raise(SIGKILL);
+    // raise(SIGKILL);
+    
 }
 void TEST(cert_encoding)()
 {
@@ -459,38 +489,55 @@ void TEST(cert_encoding)()
 
 void TEST(cert_decoding)()
 {
-    printf("encoding cycle \n");
-    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
-    pcert->create();
-    uint8_t *encBuf = nullptr;
-    size_t encLen = 0;
-    encLen = pcert->encode(&encBuf);
-    unlink("cert_decoding_encoded_cert.txt");
-    print_data("cert_decoding_encoded_cert.txt",encBuf, encLen);
-    printf("cert_decoding\n");
-    /* create a certificate object */
-    ctp::Ieee1609Cert *pcert2 = new ctp::Ieee1609Cert();
-    pcert2->decode(encBuf, encLen);
-    uint8_t *encBuf2 = nullptr;
-    size_t encLen2 = 0;
-    encLen2 = pcert2->encode(&encBuf2);
-    unlink("cert_decoding_deccode_encoded_cert.txt");
-    print_data("cert_decoding_deccode_encoded_cert.txt", encBuf2, encLen2);
-
-
-    for (int i = 0; i < encLen2; i++)
+    std::stringstream log_(std::ios_base::out);
+    ctp::Ieee1609Cert *pcert2 = nullptr;
+    ctp::Ieee1609Cert *pcert1 = nullptr;
+    try
     {
-        if(encBuf[i] != encBuf2[i])
-        {
-            std::cout << "mismatch at index " << i <<std::endl;
-            //break;
-        }
-    }
 
-    //pcert2->print_encoded(std::string("encoded-cert1.txt"));
-    delete pcert;
+        log_ << "cert_decoding: encoding cycle" << std::endl;
+        LOG_DBG(log_.str(), MODULE);
+        log_.str("");
+        pcert1 = new ctp::Ieee1609Cert();
+        pcert1->create();
+        uint8_t *encBuf = nullptr;
+        size_t encLen = 0;
+        encLen = pcert1->encode(&encBuf);
+        unlink("cert_decoding_encoded_cert.txt");
+        print_data("cert_decoding_encoded_cert.txt",encBuf, encLen);
+        log_ << "cert_decoding: decoding cycle" << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+
+        /* create a certificate object */
+        pcert2 = new ctp::Ieee1609Cert();
+        pcert2->decode(encBuf, encLen);
+        uint8_t *encBuf2 = nullptr;
+        size_t encLen2 = 0;
+        encLen2 = pcert2->encode(&encBuf2);
+        unlink("cert_decoding_deccode_encoded_cert.txt");
+        print_data("cert_decoding_deccode_encoded_cert.txt", encBuf2, encLen2);
+
+
+        for (int i = 0; i < encLen2; i++)
+        {
+            if(encBuf[i] != encBuf2[i])
+            {
+                log_ << "cert_decoding mismatch at index " << i <<std::endl;
+                LOG_ERR(log_.str(), MODULE);
+            }
+        }
+    }catch(ctp::Exception& e)
+    {
+        LOG_ERR(e.what(), MODULE);
+        throw;
+        raise(SIGKILL);
+    }
+    log_ << "TEST(cert_decoding)() passed " << std::endl;
+    LOG_DBG(log_.str(), MODULE);
+
+    delete pcert1;
     delete pcert2;
-    raise(SIGKILL);
     return;
 }
 
@@ -560,10 +607,10 @@ void TEST(encoding)()
 {
     std::stringstream log_(std::ios_base::out);
     log_ << "TEST(encdoing) length\n";
-    log_info(log_.str(), MODULE);
+    LOG_DBG(log_.str(), MODULE);
     log_.str("");
     std::vector<int> invalues={7,127,128,255,256, 32768, 65535, 65536};
-    std::vector<int> expvalue={1,1, 2,    2,  3,   3,     3, 4};
+    std::vector<int> expvalue={1,1, 1,    1,  2,   2,     2, 3};
 
     int enclen = 0;
     uint8_t *encbuf = nullptr;
@@ -583,7 +630,7 @@ void TEST(encoding)()
         }
 
         log_ << " TEST(encoding) the data for encoding  " << encvalue << std::endl;
-        log_info(log_.str(), MODULE);
+        LOG_DBG(log_.str(), MODULE);
         log_.str("");
         enclen = enc->get(&encbuf);
         print_data(nullptr, encbuf, enclen);
@@ -591,7 +638,6 @@ void TEST(encoding)()
     }
 
     log_ << " TEST(encdoing) passes " << std::endl;
-    log_info(log_.str(), MODULE);   
+    LOG_DBG(log_.str(), MODULE);   
     delete enc;
-    raise(SIGKILL);
 }

@@ -1,6 +1,82 @@
 #ifndef __IEEE_1609DOT2COMMON_HPP__
 #define __IEEE_1609DOT2COMMON_HPP__
 #include <iostream>
+#include <vector>
+#include <memory>
+
+
+
+
+/* common structures with c++ linkage */
+namespace ctp
+{
+    struct _remote_host
+    {
+        /* ip address */
+        std::string ip;
+        /* port number */
+        int port;
+    };
+
+    /* distribution center */
+    struct _dc
+    {
+        /* certis distribution center */
+        _remote_host certs;
+        _remote_host ctls;
+        _remote_host crls;
+    };
+
+
+    /* trusted platform configuration */
+    struct tp_cfg
+    {
+        /* supported psids */
+        std::vector<int> psids;
+        std::vector<std::string> curves; /* supported curves */
+        /* identifier of the system, use mac address for now */
+        std::string id;
+        _dc  dc;    /* distribution center */
+        _remote_host ra; /* registration authority */
+        _remote_host dcm; /* device config manager */
+        tp_cfg(const char *filename);
+    };
+
+
+    /* clients will create an instance of this class and register with the TP.
+       These clients will be notified whenever a packet of specified psids
+       is processed by the  TP
+    */
+    class tp_client
+    {
+        public:
+            virtual void callback(void *data, size_t len) = 0;
+
+    };
+
+    struct client_msg
+    {
+        void *buf;
+        size_t len;
+        client_msg(void *buf_, size_t len_):buf(buf_), len(len_){};
+        ~client_msg(){std::cout << " client_msg::~client_msg" << std::endl; free(buf);}
+    };
+
+
+    struct psid_tp_client
+    {
+        int psid;
+        std::vector<std::shared_ptr<tp_client>> clients;
+        psid_tp_client(int _psid):psid(_psid){
+            clients.clear();
+        }
+        ~psid_tp_client()
+        {
+            std::cout << " psid_tp_client::~psid_tp_client() " << std::endl;
+            clients.clear();
+        }
+    };
+} //namespace ctp
 
 
 
@@ -489,6 +565,10 @@ struct Ieee1609Dot2Data
 #ifdef _cplusplus
 }
 #endif
+
+
+
+
 
 
 

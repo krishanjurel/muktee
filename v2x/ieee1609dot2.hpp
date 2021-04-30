@@ -16,6 +16,8 @@
 #include <mutex>
 #include <condition_variable>
 #include <thread>
+#include <sys/time.h>
+#include<map>
 
 /*  This encpasulation of data definition, declaration of 
     IEEE 1609.2-2016     specification 
@@ -57,7 +59,7 @@ namespace ctp
             {
                 try
                 {
-                    addr_ = malloc(s);
+                    addr_ = calloc(s,1);
                     allocated_ = s;
                     used_ = s;
                 }catch (std::bad_alloc& e){
@@ -100,14 +102,12 @@ namespace ctp
 
 
     
-    class TP; /* forward declaration */
-    using TP_PTR = std::shared_ptr<TP>;
-
+    
     typedef enum
     {
         LOG_LVL_ERR,
-        LOG_LVL_DBG,
         LOG_LVL_WARN, 
+        LOG_LVL_DBG,
         LOG_LVL_INFO
     }LogLvl;
 
@@ -116,8 +116,8 @@ namespace ctp
        const char* lvl;
     }LogLevel[] = {
         {" Err "},
-        {" Dbg "},
         {" Warn "},
+        {" Dbg "},
         {" info "}
     };
 
@@ -128,6 +128,7 @@ namespace ctp
         std::condition_variable cv;
         std::vector<std::string> queues[2];
         int index = 0;
+        static LogLvl logLvl;
         // std::thread _thread;s
 
         /* thread */
@@ -143,20 +144,34 @@ namespace ctp
             queues[0].clear();
             queues[1].clear();
             index = 0;
+            logLvl = LOG_LVL_INFO;
         }
 
         public:
+
+            static void log_level(LogLvl lvl_)
+            {
+                logLvl = lvl_;
+
+            }
+
             static void log(LogLvl lvl, int mod,const std::string &msg)
             {
-                // std::lock_guard<std::mutex> lk(mLock);
-                std::cout << LogLevel[(int)lvl].lvl << " : " << mod << " : " << msg;
+                /* log only the messages with high severity */
+                struct timeval _timeval;
+                int ret = gettimeofday(&_timeval, nullptr);
+                if (lvl <= logLvl)
+                    std::cout << LogLevel[(int)lvl].lvl << " : " << mod << " : " << std::dec << _timeval.tv_sec << "."<< _timeval.tv_usec << " "<< msg; 
             }
 
             static void log(LogLvl lvl, std::string& mod,const std::string &msg)
             {
-                std::cout << LogLevel[(int)lvl].lvl << " : " << mod << ":" << msg << std::endl;
+                struct timeval _timeval;
+                int ret = gettimeofday(&_timeval, nullptr);
+                /* log only the messages with high severity */
+                if (lvl <= logLvl)
+                    std::cout << LogLevel[(int)lvl].lvl << " : " << mod << " : " << _timeval.tv_sec <<"."<<_timeval.tv_usec << " "<< msg; 
             }
-
 
             static void init()
             {
@@ -177,35 +192,8 @@ namespace ctp
 #define log_info(msg, mod) LOG_INFO(msg, mod)
 #define log_dbg(msg, mod) LOG_DBG(msg, mod)
 
-
-    class TP:public std::enable_shared_from_this<TP>
-    {
-        //private:
-        public:
-            void enrol_mgr();
-            void cert_mgr();
-            void crl_mgr();
-            void report_mgr();
-            //SequenceOfCertificate certs;
-            //Ieee1609Dot2Data data;
-            //libconfig::Config config;
-            std::vector<int> psids;
-            TP(); /* private constructor */
-
-            // Ieee1609Certs *pCerts;
-            // Ieee1609Data *pData;
-
-        public:
-            void cfg_mgr();
-            int verify();
-            int sign();
-            int encrypt();
-            int decrypt();
-            TP_PTR instance_get();
-            static TP_PTR init();
-            ~TP();
-            void psid_list();
-    };
+    
+    
 } //namespace ctp
 
 

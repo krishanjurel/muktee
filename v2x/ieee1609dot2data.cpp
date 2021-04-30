@@ -86,8 +86,8 @@ namespace ctp
                 goto done;
             }
 
-            std::cout << "Ieee1609Data::sign payload" << std::endl;
-             print_data(nullptr, buf, len);
+            // std::cout << "Ieee1609Data::sign payload" << std::endl;
+            // print_data(nullptr, buf, len);
 
             tbsLen = SHA256_DIGEST_LENGTH;
             tbsBuf = nullptr;
@@ -96,14 +96,11 @@ namespace ctp
             free(hash);
             hash = nullptr;
 
-             
-
-
             /* get the encoded buffer of the signer */
             hashBufLen = certs->encode_signer(&hashBuf);
 
-            std::cout << "Ieee1609Data::sign certs->encode_signer" << std::endl;
-            print_data(nullptr, hashBuf, hashBufLen);
+            // std::cout << "Ieee1609Data::sign certs->encode_signer" << std::endl;
+            // print_data(nullptr, hashBuf, hashBufLen);
 
 
             /* get the hash of the  certificate buffer */
@@ -130,8 +127,8 @@ namespace ctp
                 goto done;
             }
 
-             std::cout << "Ieee1609Data::sign certs->Hash256 final " << std::endl;
-             print_data(nullptr, tbsBuf, tbsLen);
+            //  std::cout << "Ieee1609Data::sign certs->Hash256 final " << std::endl;
+            //  print_data(nullptr, tbsBuf, tbsLen);
 
             /* sign the data */
             sig = certs->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);

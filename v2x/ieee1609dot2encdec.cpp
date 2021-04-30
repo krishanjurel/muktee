@@ -173,7 +173,9 @@ namespace ctp
         /*reset the stream buffer */
         log_.str("");
         /* encode the length for quantity */
-        size_t lenBytes = Length(quantity);
+        size_t lenBytes = NumBytes(quantity);
+        /* now encode the length */
+        Length(lenBytes);
         OctetsFixed((uint8_t*)&quantity, lenBytes);
         log_ << " Ieee1609Encode::SequenceOf exit " << encLen << std::endl;
         log_info(log_.str(), MODULE);
@@ -509,6 +511,39 @@ namespace ctp
         log_info(log_.str(), MODULE);
         return encLen;
     }
+    size_t Ieee1609Encode::NumBytes(size_t num)
+    {
+
+        uint32_t numBits = 0;
+        size_t len_ = 0; /* totatl encoding length for this number */
+
+        std::stringstream log_;
+        log_ << "Ieee1609Encode::NumBytes enter " << encLen << " number " << num << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+        /* take care of the zero */
+        while(num != 0)
+        {
+            num = num >> 1;
+            /* increment the num of bits */
+            numBits ++;
+        }
+        /* handle the case of zero */
+        if(numBits == 0)
+        {
+            numBits = 1;
+        }
+
+        uint8_t numBytes = numBits/ASN1_BITS_PER_BYTE;
+        if (numBytes * ASN1_BITS_PER_BYTE != numBits)
+        {
+            numBytes += 1;
+        }
+        log_ << "Ieee1609Encode::NumBytes exit " << encLen << " num-bytes " << (int)numBytes << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+        return numBytes;
+    }
 
     /* encode the number */
     int Ieee1609Encode::Length(size_t num)
@@ -534,6 +569,14 @@ namespace ctp
             /* increment the num of bits */
             numBits ++;
         }
+
+        /* handle a case of zero length */
+        if(numBits == 0)
+        {
+            numBits = 1;
+        }
+
+
         uint8_t numBytes = numBits/ASN1_BITS_PER_BYTE;
         /* check is number of bytes are more than 8 , any more than 8 would require the length 
            determinant
@@ -549,14 +592,14 @@ namespace ctp
             numBytes += 1;
         }
         len += numBytes;
-        log_ << "Ieee1609Encode::Length number of bytes " << std::dec << (int) numBytes << std::endl;
+        log_ << "Ieee1609Encode::Length number of bytes " << std::dec << (int) len << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
 
         len_ = len;
 
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
-        if(numBytes > 1)
+        if(len > 1)
         {
             encBuf[encLen++] = (uint8_t)(ASN1_LENGTH_ENCODING_MASK | numBytes);
             len -= 1;
@@ -571,7 +614,7 @@ namespace ctp
         }
         log_ << "Ieee1609Encode::Length exit " << "rem len " << std::dec << len << "enc len " << encLen << std::endl;
         log_info(log_.str(), MODULE);
-        return len_;
+        return numBytes;
     }
 
     int Ieee1609Encode::OctetsFixed(const uint8_t *octets, size_t len)
@@ -719,7 +762,8 @@ namespace ctp
     int Ieee1609Encode::get(uint8_t **buf)
     {
        /* copy the encoded buffer*/
-        *buf = this->encBuf;
+       *buf = (uint8_t *)buf_alloc(encLen);
+       memcpy(*buf, encBuf, encLen);
         return encLen;
     }
 

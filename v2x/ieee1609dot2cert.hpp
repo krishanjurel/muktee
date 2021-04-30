@@ -25,9 +25,6 @@ namespace ctp
     class Ieee1609Decode;
     class Ieee1609Certs;
 
-    
-
-
     /* cert class */
     class Ieee1609Cert: public mem_mgr
     {
@@ -52,7 +49,7 @@ namespace ctp
         ToBeSignedCertificate *tbs;
         VerificationKeyIndicator *vki;
         Signature *signature;
-        SequenceOfPsidSsp *psidSsp;
+        SequenceOfPsidSsp *seqOfPsidSsp;
         //SequenceOfCertificate *seqOfCert;
         /* hash id 8 of this certificate */
         HashedId8 hashid8;
@@ -91,9 +88,11 @@ namespace ctp
             /* verify a signature signed this cert */
             int verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature);
 
-             int SigToSignature(const ECDSA_SIG* sig, Signature& signature);
-             /* and then the hashed data */
-             int Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash);
+            int SigToSignature(const ECDSA_SIG* sig, Signature& signature);
+            /* and then the hashed data */
+            int Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash);
+            /*haeder info consistency check */
+            int ConsistencyCheck(const HeaderInfo& header);
 
             /* \fn encode(uint8_t **buf)
                     encodes the certificate.
@@ -119,7 +118,6 @@ namespace ctp
             }
             const SequenceOfPsidSsp& psid_get() const;
 
-
             /* print to stdout or store in a file */
             int print_encoded(const std::string filename);
             int print_decoded(const std::string filename);
@@ -133,6 +131,7 @@ namespace ctp
         size_t encLen;   /* encoded length */
 
         using sharedPtr = std::shared_ptr<Ieee1609Encode>;
+        
 
         public:
             sharedPtr getPtr()
@@ -142,7 +141,7 @@ namespace ctp
             Ieee1609Encode():encBuf(nullptr),encLen(0){};
             ~Ieee1609Encode()
             {
-                std::cout << " encode destructor " << std::endl;
+                std::cout << " Ieee1609Encode::Ieee1609Encode " << std::endl;
                 delete encBuf;
                 encBuf = nullptr;
                 encLen = 0;
@@ -170,6 +169,11 @@ namespace ctp
             int IssuerIdentifier_(const IssuerIdentifier& issuer);
             int Length(size_t bytes);
             int Length(const uint8_t *values, size_t bytes);
+            /* There are instances where only the number of bytes to store a number, i.e. sequence-of, and 
+                There are instances where a certain length has to be encoded. the length encoding is done 
+                by Length method.
+            */
+            size_t NumBytes(size_t number);
 
 
            /*encoding of signed data, 6.3.4 */
@@ -467,7 +471,8 @@ namespace ctp
                     break;
                     case IssuerIdentifierTypeSelf:
                         /* there is only one type of hash algo, so just skip it */
-                        offset++;
+                        issuer.issuer.algo = (HashAlgorithmType)buf[offset++];
+                        
                     break;
                     default:
                         os << "Ieee1609Decode::IssuerIdentifier_ unsuuported issuer type " << issuer.type;
@@ -726,6 +731,11 @@ namespace ctp
             int SigToSignature(const ECDSA_SIG* sig, Signature& signature)
             {
                 return cert->SigToSignature(sig, signature);
+            }
+            int ConsistencyCheck(const HeaderInfo& header)
+            {
+                return cert->ConsistencyCheck(header);
+
             }
 
             void print()

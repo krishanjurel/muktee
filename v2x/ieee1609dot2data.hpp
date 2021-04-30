@@ -8,6 +8,8 @@
 
 namespace ctp
 {
+    class TP; /* forward declaration */
+    using TP_PTR = std::shared_ptr<TP>;
 
     class Ieee1609Data:public mem_mgr
     {
@@ -18,6 +20,7 @@ namespace ctp
         //decode *decode;
 
         // HashAlgorithmType *hashId;
+        HeaderInfo *headerInfo;
         ToBeSignedData *tbsData;
         SignerIdentifier *signer;
         Signature *signature;
@@ -35,13 +38,14 @@ namespace ctp
             Ieee1609Data(){
                 enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *ptr){delete ptr;});
                 dec =  std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode(), [](Ieee1609Decode *ptr){delete ptr;});
-                tpPtr = TP::init();
+                tpPtr = nullptr; //TP::init();
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 signedData = (SignedData *)&data->content.content.signedData;
                 tbsData = (ToBeSignedData *)&signedData->toBeSignedData;
                 signature = (Signature *)&signedData->signature;
                 signer = (SignerIdentifier*)&signedData->signer;
                 tbsData->payload.data=(Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+                headerInfo = (HeaderInfo*)&tbsData->headerInfo;
                 data->protocolVersion = 0x03;
                 /* get the certificate manager */
                 //certMgrPtr = tpPtr->cert_mgr();
@@ -88,9 +92,18 @@ namespace ctp
                     std::cout << "Ieee1609Data::verify payload  " << std::endl;
                     print_data(nullptr, data_->content.content.unsecuredData.octets,
                                         data_->content.content.unsecuredData.length);
-#endif                                        
-
-
+#endif
+                    /* check the signing capability of the signer */
+                    /* consistency check of the certificate */
+                    ret = certs->ConsistencyCheck(std::ref(*headerInfo));
+                    if(ret == 0)
+                    {
+                        std::stringstream err_( std::ios_base::out);
+                        err_ << "Ieee1609Data::verify::certs->ConsistencyCheck(const HeaderInfo& header) failed ";
+                        err_ << std::endl;
+                        LOG_ERR(err_.str(), MODULE);
+                        throw Exception(err_.str());
+                    }
 
                     /* create the hash of the received data */
                     ret = certs->Hash256(data_->content.content.unsecuredData.octets, 
@@ -143,6 +156,7 @@ namespace ctp
                     {
                         std::string msg_("Ieee1609Data::verify::certs->verify failed");
                         LOG_ERR(msg_, MODULE);
+                        throw Exception(msg_);
                     }
                     return 1;
 
@@ -155,6 +169,21 @@ namespace ctp
                 }
             }
 
+            /* exposed apis for clients to access information*/
+            HeaderInfo* HeaderInfo_()
+            {
+                return headerInfo;
+            }
+            /* to be signed data */
+            ToBeSignedData* ToBeSignedData_()
+            {
+                return tbsData;
+            }
+            /* get the root data structure */
+            Ieee1609Dot2Data *Data_()
+            {
+                return data;
+            }
             /* encode the data*/
             void encode();
             void encode_content(bool cont = true);
@@ -178,6 +207,55 @@ namespace ctp
             void print(const char* file="data.txt");
             void print_decoded(const char* file);
     };
+
+
+    class TP:public std::enable_shared_from_this<TP>
+    {
+        //private:
+        tp_cfg *cfg;
+        std::map<int, psid_tp_client*> psid_clients;
+        std::vector<client_msg*> q_in_msg;
+        std::vector<client_msg*> q_out_msg;
+        bool init_done;
+        bool stop_;
+
+        /*FIXME, for the time being, keep the self-signed certificate as private member 
+          of trusted platform. It will eventually goto the cert-manager 
+        */
+       std::shared_ptr<Ieee1609Certs> certs;
+        
+
+        // std::vector<std::shared_ptr<TP_Client>> clients;
+        public:
+            void enrol_mgr();
+            void cert_mgr();
+            void crl_mgr();
+            void report_mgr();
+            TP(); /* private constructor */
+        public:
+            void cfg_mgr();
+            int verify();
+            int verify(void *buf, size_t length);
+            int sign();
+            /* let this be the blocking call */
+            int sign(const int psid, const uint8_t *buf, size_t len,
+                  uint8_t **signedData, size_t *signedDataLen);
+            int encrypt();
+            int decrypt();
+            TP_PTR instance_get();
+            static TP_PTR init();
+            void start();
+            void stop();
+            ~TP();
+            void psid_list();
+            void curves_list();
+            /* register a  client with the given psid */
+            void client_register(const int psid, std::shared_ptr<tp_client> obj);
+            /* process clients */
+            void process_clients();
+    };
+
+
 
 
 
