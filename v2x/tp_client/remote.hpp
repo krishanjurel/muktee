@@ -149,8 +149,8 @@ namespace remote
         {
             std::cout << "client thread handler" << std::endl;
             std::string msg("this is test messgae ");
-            int count = 0;
-            int data_socket=0;
+            // int count = 0;
+            // int data_socket=0;
             int ret = 0;
             bool connected = false;
 
@@ -168,7 +168,7 @@ namespace remote
                         std::this_thread::sleep_for(std::chrono::seconds(5));
                         continue;
                     }
-                    connected == true;
+                    connected = true;
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -189,9 +189,9 @@ namespace remote
         {
             std::cout << "server thread handler" << std::endl;
             std::string msg("this is test messgae ");
-            int count = 0;
-            int data_socket=0;
-            int ret = 0;
+            // int count = 0;
+            // int data_socket=0;
+            // int ret = 0;
             struct sockaddr_un peer_addr;
             socklen_t peer_addr_len;
             std::thread _thread;
@@ -231,6 +231,10 @@ namespace remote
             while(!stop_)
             {
                 int ret = select(nfd,&rd, NULL, NULL, NULL);
+                if(ret == -1)
+                {
+                    stop_=1;
+                }
                 /* fd is set set in rd descriptor*/
                 if(FD_ISSET(fd, &rd))
                 {

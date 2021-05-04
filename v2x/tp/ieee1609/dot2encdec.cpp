@@ -2,16 +2,15 @@
     file to encode/decode 1609.2 packets, C-OER only 
 */
 
-#include "ieee1609dot2.hpp"
-#include "ieee1609dot2cert.hpp"
-#include <stdio.h>
-#include <string.h>
-#include <algorithm>
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <string>
-#include <unistd.h>
+#include "dot2cert.hpp"
+// #include <stdio.h>
+// #include <string.h>
+// #include <algorithm>
+// #include <iostream>
+// #include <fstream>
+// #include <sstream>
+// #include <string>
+// #include <unistd.h>
 
 
 
@@ -515,7 +514,6 @@ namespace ctp
     {
 
         uint32_t numBits = 0;
-        size_t len_ = 0; /* totatl encoding length for this number */
 
         std::stringstream log_;
         log_ << "Ieee1609Encode::NumBytes enter " << encLen << " number " << num << std::endl;
@@ -555,7 +553,6 @@ namespace ctp
     {
         uint32_t numBits = 0;
         uint32_t len = 0; /* 1 byte to encode the number of sequences */
-        size_t len_ = 0; /* totatl encoding length for this number */
         // int lenBytes = 0;
         std::stringstream log_;
         log_ << "Ieee1609Encode::Length enter " << encLen << " number " << num << std::endl;
@@ -595,8 +592,6 @@ namespace ctp
         log_ << "Ieee1609Encode::Length number of bytes " << std::dec << (int) len << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
-
-        len_ = len;
 
         encBuf = (uint8_t *)buf_realloc(encBuf, (len+encLen));
         if(len > 1)
@@ -787,7 +782,7 @@ namespace ctp
         data.content.type = (Ieee1609Dot2ContentType)choice;
         if(choice == Ieee1609Dot2ContentUnsecuredData)
         {
-            int lenBytes = 0;
+            size_t lenBytes = 0;
             int len_ = 0;
             /* get the encoded length bytes */
             lenBytes = Length((uint8_t*)&len_, sizeof(int));
@@ -879,7 +874,7 @@ namespace ctp
             throw ctp::Exception("Unsupported Header Options");
         }
         int len_ = 0;
-        int numBytes = Length((uint8_t*)&len_, sizeof(int));
+        Length((uint8_t*)&len_, sizeof(int));
         uint8_t *ptr = (uint8_t *)&header.psid;
         while (len_)
         {
@@ -970,9 +965,6 @@ namespace ctp
 
     int Ieee1609Decode::SignedData(Ieee1609Dot2Data& data)
     {
-        uint8_t *srcBuf, *dstBuf;
-        size_t bufLen = 0;
-
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
         os << " Ieee1609Decode::SignedData enter " <<  len << " offset " << offset << std::endl;
@@ -1086,7 +1078,7 @@ namespace ctp
             throw Exception(log_.str());
         }
 
-        int i=0;
+        size_t i=0;
         while(i < len_)
         {
             hash[i] = buf[offset++];
@@ -1127,7 +1119,6 @@ namespace ctp
     int Ieee1609Decode::CertId(CertificateId& id)
     {
         int len_=0;
-        uint8_t *tempBuf;
         std::stringbuf log_(std::ios_base::out | std::ios_base::ate);
         std::ostream os(&log_);
         os << " Ieee1609Decode::CertId enter " <<  len << " offset " << offset << std::endl;
@@ -1174,7 +1165,7 @@ namespace ctp
         delete this->buf;
         this->buf = nullptr;
         this->buf = (uint8_t *)buf_realloc(this->buf, len);
-        for (int i =0; i < len; i++)
+        for (size_t i =0; i < len; i++)
         {
             this->buf[i] = buf[i];
         }

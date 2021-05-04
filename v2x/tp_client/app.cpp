@@ -27,16 +27,9 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
-
-#include "ieee1609dot2common.hpp"
-#include "ieee1609dot2.hpp"
-#include "ieee1609dot2cert.hpp"
-#include "ieee1609dot2data.hpp"
+#include "../tp/tp.hpp"
 #include "remote.hpp"
-
-
 #define MODULE 4 //test
-
 
 #define TEST(_x_) test ## _x_
 void TEST(data_encoding)();
@@ -247,11 +240,11 @@ int main()
 
 class tp_test_client: public ctp::tp_client
 {
+    int psid; /* client for this psid */
     /* count the number of packets*/
     int packets;
-    int psid; /* client for this psid */
     public:
-        tp_test_client():packets(0),psid(32),ctp::tp_client(){};
+        tp_test_client():psid(32),packets(0),ctp::tp_client(){};
         /* define the callback routine */
         void callback(void *data, size_t len)
         {
@@ -272,7 +265,8 @@ class tp_test_client: public ctp::tp_client
 void TEST(tp_test_client)()
 {
     /* create and get trust pointer object */
-    ctp::TP_PTR tp = ctp::TP::init();
+    // ctp::TP_PTR tp = ctp::TP::init();
+    ctp::TP_PTR tp = ctp::TP_PTR(new ctp::TP());
     /* create a new object tp_test_client */
     std::shared_ptr<tp_test_client> tpTestClient = std::shared_ptr<tp_test_client>(new tp_test_client());
     /* register the clients */
@@ -319,7 +313,8 @@ void TEST(config)()
 {
     try
     {
-        ctp::TP_PTR tp = ctp::TP::init();
+        // ctp::TP_PTR tp = ctp::TP::init();
+        ctp::TP_PTR tp = std::shared_ptr<ctp::TP>(new ctp::TP());
         tp->start();
         tp->psid_list();
         tp->curves_list();
@@ -465,7 +460,7 @@ void TEST(data_decoding)()
 void TEST(certs_encoding)()
 {
     std::cout << "certs_encoding " << std::endl;
-    ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
+    // ctp::Ieee1609Certs *pcerts = new ctp::Ieee1609Certs();
     // pcerts->encode();
     // pcerts->print();
     // raise(SIGKILL);

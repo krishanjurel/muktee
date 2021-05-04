@@ -1,538 +1,22 @@
-#include "ieee1609dot2.hpp"
-#include "ieee1609dot2cert.hpp"
-#include "ieee1609dot2data.hpp"
+#include "dot2cert.hpp"
+// #include "dot2data.hpp"
 
-#include <stdio.h>
-#include <string.h>
-#include <algorithm>
-#include <iostream>
-#include <fstream>
-#include <iomanip>
+// #include <stdio.h>
+// #include <string.h>
+// #include <algorithm>
+// #include <iostream>
+// #include <fstream>
+// #include <iomanip>
 
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-    /* function returns the number of seconds from V2X start epoch
-    till the give time
-*/         
-time_t start_time(struct tm *tm)
-{
-    // struct tm epoch;
-    struct tm epoch={0};
-    // = {
-    //     .tm_sec = 0,
-    //     .tm_min=0,
-    //     .tm_hour = 0,
-    //     .tm_mday=1,
-    //     .tm_mon = 0,
-    //     .tm_year = 2004,
-    //     .tm_isdst = 0
-    // };
-    time_t t1 = mktime(&epoch);
-    time_t t2 = mktime(tm);
-
-    if(t1 < 0 || t2 < 0)
-    {
-        perror("start_time:mktime");
-        t1  = -1;
-    }else
-    {
-        t1 = t2-t1;
-    }
-    return t1;
-}
-#if 0
-void *buf_alloc(size_t num)
-{
-    /* return the num blocks of size 1 */ 
-    return calloc(num,1);
-}
-void *buf_realloc(void *ptr, size_t len)
-{
-    std::cout << "buf_realloc " << len << std::endl;
-    return realloc(ptr, len);
-}
-
-void *buf_calloc(size_t num, size_t size)
-{
-    return calloc(num,size);
-}
-#endif
-#ifdef __cplusplus
-}
-#endif
-
-void print_data(const char* file, const uint8_t *buf, size_t len)
-{
-    int i = 0, j = 0;
-    std::ostream os(std::cout.rdbuf());
-    std::ofstream ofs;
-    /* open the file in text mode */
-    if(file != nullptr)
-    {
-        ofs.open(file);
-        /* set the buffer */
-        os.rdbuf(ofs.rdbuf());
-    }
-    //std::ostream os(ofs.rdbuf());
-    os << std::hex;
-    for(i=0; i < len; i++)
-    {
-        // char c[2];
-        // istram >> c[0] >> c[1];
-        int c = (int)(buf[i]);
-        //snprintf((char *)&c, sizeof(int), "%c", buf[i]);
-        os << std::setw(2) << std::setfill('0') << std::hex << c;
-        os << ':';
-        j++;
-        if(j % 16 == 0)
-        {
-            os << std::endl;
-            j = 0;
-        }
-    }
-    std::cout << std::endl;
-    os.flush();
-    if(file != nullptr)
-    {
-        ofs.close();
-    }
-}
-
-
-
-namespace ctp
-{
-    #define DC_CERTS_IP     "certs.ip"
-    #define DC_CERTS_PORT   "certs.port"
-    #define DC_CRLS_IP      "crls.ip"
-    #define DC_CRLS_PORT    "crls.port"
-    #define DC_CTLS_IP      "ctls.ip"
-    #define DC_CTLS_PORT    "ctls.port"
-
-    #define DC_SETTINGS     "app.components.DC"
-    #define RA_SETTINGS     "app.components.RA"
-    #define DCM_SETTINGS    "app.components.DCM"
-    #define CERT_SETTINGS   "app.components.CERTS"
-
-
-    #define CERTS_CURVES    "curves"
-    #define CERTS_PSIDS     "psids"
-
-
-
-
-    /* read the configuration file */
-    tp_cfg::tp_cfg(const char *filename)
-    {
-        using itr = libconfig::Setting::iterator;
-        std::stringstream log_(std::ios_base::out);
-        libconfig::Config config;
-        FILE *fp = fopen(filename, "r");
-        curves.clear();
-        psids.clear();
-        if(fp != nullptr)
-        {
-            try
-            {
-                config.read(fp);
-                /* get the setting handle to the Distribution center */
-                libconfig::Setting& dcSetting = config.lookup(DC_SETTINGS);
-                if(dcSetting.getLength() == 0)
-                {
-                    std::stringstream log_(std::ios_base::out);
-                    log_ << " tp_cfg::tp_cfg::config.lookup(\"app.component.DC\") not specified " << std::endl;
-                    LOG_ERR(log_.str(), MODULE);
-                }else{
-                    /* read the cert distribution remote parameters */
-                    dcSetting.lookupValue(DC_CERTS_IP, dc.certs.ip);
-                    dcSetting.lookupValue(DC_CERTS_PORT, dc.certs.port);
-                    /* remoe crl distribution parameters */
-                    dcSetting.lookupValue(DC_CRLS_IP, dc.crls.ip);
-                    dcSetting.lookupValue(DC_CRLS_PORT, dc.crls.port);
-
-                    /* remoe ctl distribution parameters */
-                    dcSetting.lookupValue(DC_CTLS_IP, dc.ctls.ip);
-                    dcSetting.lookupValue(DC_CTLS_PORT, dc.ctls.port);
-                }
-                /* get the curves settinsgs */
-                libconfig::Setting& certSettings = config.lookup(CERT_SETTINGS);
-                if(dcSetting.getLength() == 0)
-                {
-                    log_ << " tp_cfg::tp_cfg::config.lookup( " << CERT_SETTINGS << ")" <<  " not specified " << std::endl;
-                    LOG_ERR(log_.str(), MODULE);
-                }else{
-                    /* get the curve setting objects */
-                    libconfig::Setting& curvesSetting = certSettings.lookup(CERTS_CURVES);
-                    if(curvesSetting.getLength() == 0)
-                    {
-                        log_ << " tp_cfg::tp_cfg::config.lookup( " << CERT_SETTINGS << CERTS_CURVES << ")" <<  " not specified " << std::endl;
-                    }else{
-                        itr itr_ = curvesSetting.begin();
-                        while(itr_ != curvesSetting.end())
-                        {
-                            std::string str_ = *itr_;
-                            log_ << " tp_cfg::tp_cfg::config.lookup( " << CERT_SETTINGS << CERTS_CURVES << ")" << str_ << std::endl;
-                            log_info(log_.str(), MODULE);
-                            log_.str("");
-                            curves.push_back(str_);
-                            itr_++;
-                        }
-                    }
-                    libconfig::Setting& psidsSetting = certSettings.lookup(CERTS_PSIDS);
-                    if(curvesSetting.getLength() == 0)
-                    {
-                        log_ << " tp_cfg::tp_cfg::config.lookup( " << CERT_SETTINGS << CERTS_PSIDS << ")" <<  " not specified " << std::endl;
-                    }else{
-                        itr itr_ = psidsSetting.begin();
-                        while(itr_ != psidsSetting.end())
-                        {
-                            psids.push_back(*itr_);
-                            itr_++;
-                        }
-                    }
-                }
-            }
-            catch(const std::exception& e)
-            {
-                log_ << "tp_cfg::tp_cfg (" << filename << ")" << e.what() << std::endl;
-                LOG_ERR(log_.str(), MODULE);
-            }
-            fclose(fp);
-        }else
-        {
-            log_ << " tp_cfg::tp_cfg::fopen(\"" << filename << "\")" << " failed " << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-        }
-    }
-}//namespace ctp
+// #include <fcntl.h>
+// #include <unistd.h>
+// #include <stdio.h>
+// #include <stdlib.h>
 
     
 namespace ctp
 {
-    /* TP message queue locks */
-    static std::mutex q_in_mutex;
-    static std::mutex q_out_mutex;
-
-    void TP::cert_mgr()
-    {
-        LOG_INFO("cert_mgr", 1);
-    }
-
-    void TP::cfg_mgr()
-    {
-        LOG_INFO("cfg_mgr", 1);
-    }
-
-    void TP::enrol_mgr()
-    {
-        LOG_INFO("enrol_mgr", 1);
-    }
-
-    void TP::crl_mgr()
-    {
-        LOG_INFO("crll_mgr", 1);
-    }
-
-    void TP::report_mgr()
-    {
-        LOG_INFO("log_mgr", 1);
-    }
-
-    int TP::sign()
-    {
-        log_info("sign", 1);
-        return 0;
-    }
-
-    TP::TP()
-    {
-        init_done = false;
-        cfg = nullptr;
-        std::stringstream log_(std::ios_base::out);
-        log_ << "TP::TP() enter " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-        try
-        {
-            /* create instances of cert and data manager */
-            certs = std::shared_ptr<Ieee1609Certs>(new Ieee1609Certs(),[](const Ieee1609Certs *p){delete p;});
-            
-        }catch(Exception& e)
-        {
-            log_ << "TP::TP() " << e.what() << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-        }
-        log_ << "TP::TP() exit " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-
-    }
-
-    TP::~TP()
-    {
-        /* assign certs to nullptr, it will free it */
-        std::cout << "TP::~TP()  enter " << std::endl;
-         certs.reset();
-        // delete pData;
-    }
-
-    void TP::start()
-    {
-        std::stringstream log_ (std::ios_base::out);
-        log_ << " TP::start() enter " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-        if(init_done == false)
-        {
-            init_done = true;
-            /* call out the config manager */
-            cfg = new tp_cfg("./config.file");
-            /* default create a certificate for nist256P and for bsm psid 0x20*/ 
-            certs->create();
-        }
-        log_ << " TP::start() exit " << std::endl;
-        log_info(log_.str(), MODULE);
-
-        std::thread _thread = std::thread(&TP::process_clients, this);
-        _thread.detach();
-        stop_ = false;
-
-    }
-
-    /* every client must be calling this routine */
-    TP_PTR TP::instance_get()
-    {
-        return shared_from_this();
-    }
-
-    TP_PTR TP::init()
-    {
-        static TP_PTR pObj = nullptr;
-        static TP obj; /* need this for private constructor */
-        if(pObj == nullptr)
-        {
-            pObj = std::make_shared<TP>(obj);
-        }
-        return pObj;
-    }
-
-    void TP::psid_list()
-    {
-        std::stringstream log_(std::ios_base::out);
-        log_ << " TP::psid_list() "; 
-        std::vector<int>::iterator itr = cfg->psids.begin();
-        while(itr != cfg->psids.end())
-        {
-            int n = *itr;
-            log_ << std::hex << n << " ";
-            itr++;
-        }
-        log_ << std::endl;
-        log_info( log_.str(), MODULE);
-    }
-
-
-    void TP::curves_list()
-    {
-        std::stringstream log_(std::ios_base::out);
-        log_ << " TP::curves_list() "; 
-        std::vector<std::string>::iterator itr = cfg->curves.begin();
-        while(itr != cfg->curves.end())
-        {
-            log_ << *itr << " ";
-            itr++;
-        }
-        log_ << std::endl;
-        log_info(log_.str(), MODULE);
-    }
-
-    /* sign the given buffer and psid */
-    int TP::sign(const int psid, const uint8_t *buf, size_t len,
-                uint8_t **signedData, size_t *signedDataLen)
-    {
-        int ret = 1;
-        ctp::Ieee1609Data *pdata = new ctp::Ieee1609Data();
-        std::stringstream log_(std::ios_base::out);
-        log_ << "TP::sign enter (psid:data length) " << psid <<":"<< len << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-
-        try
-        {
-            pdata = new ctp::Ieee1609Data();
-            pdata->sign(psid, (uint8_t *)buf, len, signedData, signedDataLen,certs.get());
-        }catch(Exception& e)
-        {
-            ret = 0;
-            log_ << "TP::sign failed " << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-            LOG_ERR(e.what(), MODULE);
-        }
-        log_ << "TP::sign exit " << ret << std::endl;
-        log_info(log_.str(),MODULE);
-        delete pdata;
-        return ret;
-    }
-
-    int TP::verify()
-    {
-        log_info("verify", 1);
-        return 0;
-    }
-
-    int TP::verify(void *buf, size_t length)
-    {
-        int ret = 0;
-        std::stringstream log_(std::ios_base::out);
-        log_ << "TP::verify enter" << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-        std::lock_guard<std::mutex> lock_(q_in_mutex);
-        {
-            // client_msg *msg_ = new client_msg(buf, length);
-            {
-                // q_in_msg.push_back(msg_);
-                q_in_msg.emplace_back(new client_msg(buf, length));
-            }
-        }
-
-        log_ << " TP::verify exit " << ret << std::endl;
-        log_info(log_.str(), MODULE);
-        return ret;
-    }
-
-    /* process the clients */
-    void TP::process_clients()
-    {
-        std::stringstream log_(std::ios_base::out);
-        while(stop_ == false)
-        {
-            std::lock_guard<std::mutex> lock_(q_in_mutex);
-            {
-                std::vector<client_msg *>::iterator _itr = q_in_msg.begin();
-                /*process all elements of vector */
-                while(_itr != q_in_msg.end())
-                {
-                    /* get the client message */
-                    client_msg *msg = *_itr;
-                    Ieee1609Data *ieee1609DataObj = new ctp::Ieee1609Data();
-                    try
-                    {
-                        unlink("process_clients_data.txt");
-                        print_data("process_clients_data.txt",(const uint8_t *)msg->buf, msg->len);
-                        /* decode the message */
-                        ieee1609DataObj->decode((const uint8_t *)msg->buf, msg->len);
-                        /* verify the given data */
-                        ieee1609DataObj->verify();
-                        /* if all good, get the psid of this data and call the associated callback function */
-                        HeaderInfo* hdrInfo = ieee1609DataObj->HeaderInfo_();
-                        int psid = hdrInfo->psid;
-                        /*get the root data */
-                        Ieee1609Dot2Data *dot2data = ieee1609DataObj->Data_();
-                        ToBeSignedData *tbs = ieee1609DataObj->ToBeSignedData_();
-                        Ieee1609Dot2Data *data = nullptr; 
-                        if(dot2data->content.type == Ieee1609Dot2ContentSignedData)
-                        {
-                            data = tbs->payload.data;
-                        }else{
-                            data=dot2data;
-                        }
-
-                        std::cout << "header info psid " << hdrInfo->psid << std::endl;
-                        /* since we only supports signed data */
-                        /* get the client object associated with the given psid */
-                        auto keyobj = psid_clients.find(psid);
-                        if(keyobj != psid_clients.end())
-                        {
-                            std::cout << "registered client found " << std::endl;
-                            std::vector<std::shared_ptr<tp_client>> clients = keyobj->second->clients;
-                            /* go thru all the clients */
-                            for(auto itr = clients.begin(); itr != clients.end(); itr++)
-                            {
-                                std::cout << "called the client " << std::endl;
-                                std::shared_ptr<tp_client>_tpclient = *itr;
-                                _tpclient->callback(data->content.content.unsecuredData.octets, data->content.content.unsecuredData.length);
-                            }
-                        }
-                    }catch(Exception& e)
-                    {
-                        /* handle the exception and process the next message in queue */
-                        log_ << " TP::process_clients() ";
-                        log_ << e.what() << std::endl;
-                        LOG_ERR(log_.str(), MODULE);
-                        delete ieee1609DataObj;
-                    }
-                    /* move the iterator to the next client message */
-                    _itr = q_in_msg.erase(_itr);
-                }
-            }
-        } /* while(stop == false )*/
-    }
-
-    void TP::stop()
-    {
-        stop_= true;
-    }
-    void TP::client_register(const int psid, std::shared_ptr<tp_client> obj)
-    {
-        std::stringstream log_(std::ios_base::out);
-        log_ << "TP::client_register enter " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-
-        /* psid tp client object */
-        // psid_tp_client* client = nullptr;
-        /* checks if there is a psid_tp_client object for this psid */
-        auto search = psid_clients.find(psid);
-        if (search == psid_clients.end())
-        {
-            log_ << "create a new client for psid  " << psid << std::endl;
-            log_info(log_.str(),MODULE);
-            log_.str("");
-            psid_clients.emplace(std::make_pair(psid,new psid_tp_client(psid)));
-
-        }
-        // client = psid_clients[psid];
-        log_ << "clients exists for psid  " << psid << "" << psid_clients[psid]->clients.size() << std::endl;
-        log_info(log_.str(),MODULE);
-        log_.str("");
-
-        log_ << "TP::client_register enter1 " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-
-        /* create one more reference */
-        // std::shared_ptr<tp_client> _obj(obj);
-        // client->clients.push_back(_obj);
-        psid_clients[psid]->clients.emplace_back(std::shared_ptr<tp_client>(obj));
-        log_ << "TP::client_register exit " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-
-    }
-
     
-
-    int TP::encrypt ()
-    {
-        log_info("encrypt", 1);
-        return 0;
-    }
-
-     int TP::decrypt()
-     {
-         log_info("decrypt",1);
-         return 0;
-     }
-
 
 /* cert class implementation.
    the main purpose of this class is to store and keep certs, together with hashid 
@@ -591,8 +75,9 @@ namespace ctp
         pEncObj->clear();
         if(base->issuer.type == IssuerIdentifierTypeSelf)
         {
-            const uint8_t *nullstr = (const uint8_t*)"\0";
-            ret = Hash256((uint8_t *)nullptr, 0, &hash2);
+            // const uint8_t *nullstr = (const uint8_t*)"\0";
+            const std::string nullstr{};
+            ret = Hash256((uint8_t *)nullstr.c_str(), nullstr.size(), &hash2);
         }else if(base->issuer.type == IssuerIdentifierTypeHashId)
         {
             ret = Hash256((uint8_t *)base->issuer.issuer.hashId.x, sizeof(hashid8), &hash2);
@@ -620,7 +105,7 @@ namespace ctp
     {
         int ret = 0;
         BIGNUM *r, *s;
-        EC_POINT *point;
+        // EC_POINT *point;
         uint8_t *sign_r, *sign_s;
 
 
@@ -1064,6 +549,8 @@ namespace ctp
         return pEncObj->get(buf);
     }
 
+    
+
     /* decode tToBeSignedCertificate structure, 6.4.8 */
     int Ieee1609Cert::DecodeToBeSigned(bool cont)
     {
@@ -1191,7 +678,7 @@ namespace ctp
 
     int Ieee1609Cert::print_decoded(const std::string filename)
     {
-        size_t len;
+        // size_t len;
         /* open the file in text mode */
         std::ofstream os(filename.c_str(), std::ios::binary);
 
@@ -1215,7 +702,7 @@ namespace ctp
     /* gets the public key from the key object */
     int Ieee1609Cert::public_key_get(point_conversion_form_t conv)
     {
-        int i = 0;
+        size_t i = 0;
         uint8_t *keyBuf = nullptr;
         size_t keylen = 0;
         std::stringstream log_(std::ios_base::out);
@@ -1284,7 +771,6 @@ namespace ctp
     /* create a certificate */
     void Ieee1609Cert::create(int nid)
     {
-        int ret = 0;
         ecKey = EC_KEY_new_by_curve_name(nid);
         if (ecKey == nullptr)
         {
@@ -1342,6 +828,174 @@ namespace ctp
         /* have the signature option */
         base->options = 0x80;
     }
+
+    Ieee1609Certs::Ieee1609Certs()
+    {
+        quantity = 0; 
+        cert = new Ieee1609Cert();
+        enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){ delete p;});
+        dec = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode, [](Ieee1609Decode *p){delete p;});
+    }
+
+    void Ieee1609Certs::create(int nid)
+    {
+        try
+        {
+            cert->create(nid);
+            quantity++;
+        }catch( std::exception& e){
+            LOG_ERR("Ieee1609Certs::Ieee1609Certs()::create()", MODULE);
+            std::cout << " exception " << e.what() << std::endl;
+            delete cert;
+        }
+    }
+
+
+    /* encoded file */
+    Ieee1609Certs::Ieee1609Certs(std::string& file)
+    {
+        /* default */
+        quantity = 0;
+        cert = new Ieee1609Cert();
+    }
+    /* encoded buffer */
+    Ieee1609Certs::Ieee1609Certs(const uint8_t *buffer)
+    {
+        quantity = 0;
+        cert = new Ieee1609Cert();
+    }
+    Ieee1609Certs::~Ieee1609Certs()
+    {
+        enc.reset();
+        dec.reset();
+        enc = nullptr;
+        dec = nullptr;
+        delete cert;
+    }
+
+    const Ieee1609Cert* Ieee1609Certs::get() const
+    {
+        return cert;
+    }
+
+    /* encoded message of the signer, 
+        used to create a Signature of the data packet 
+    */
+    int Ieee1609Certs::encode_signer(uint8_t **buf)
+    {
+        return cert->encode(buf);
+    }
+
+    int Ieee1609Certs::encode(uint8_t **buf){
+
+        size_t len = 0;
+        try{
+            /* encode the sequence of certs */
+            enc->clear();
+            /* only 1 byte is needed to encode the number seuqnce */
+            enc->SequenceOf(quantity);
+            cert->encode(enc);
+            len = enc->get(buf);
+        }catch(Exception& e)
+        {
+            LOG_ERR(e.what(), MODULE);
+            len = 0;
+
+        }
+        return len;
+    }
+
+    /* decode the buffer */
+    int Ieee1609Certs::decode(const uint8_t *buf, size_t len)
+    {
+        int ret = 1;
+        try
+        {
+            dec->clear();
+            dec->set(buf, len);
+            dec->SequenceOf((uint8_t*)&quantity, 4);
+            /* decode the certificate with the given decoder */
+            cert->decode(dec);
+        }catch(Exception& e)
+        {
+            LOG_ERR(e.what(), MODULE);
+            ret = 0;
+
+        }
+        return ret;
+    }
+    int Ieee1609Certs::decode (std::shared_ptr<Ieee1609Decode> ptr)
+    {
+        std::shared_ptr<Ieee1609Decode> temp = dec->GetPtr();
+        /* clear the exisiting pointer */
+        dec.reset();
+        dec = ptr->GetPtr();
+        try
+        {
+            // dec->SignerIdentifier_(std::ref(signerIdentifier));
+            /* maximmum 4 bytes */
+            dec->SequenceOf((uint8_t *)&quantity, 4);
+            for(int i =0; i < quantity; i++)
+            {
+                // Ieee1609Cert *pcert = new Ieee1609Cert();
+                /* passed the decode buffer to the cert */
+                cert->decode(dec);
+            }
+
+        }catch(Exception& e)
+        {
+            std::cout << "Exception " << e.what() << std::endl;
+
+        }
+        dec = temp;
+        temp = nullptr;
+        return 0;                
+
+    }
+
+    int Ieee1609Certs::Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash)
+    {
+        return cert->Hash256(tbHash, len, hash);
+    }
+
+    int Ieee1609Certs::verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature)
+    {
+        return cert->verify(dgst, dgst_len, signature);
+    }
+
+    int Ieee1609Certs::verify(const uint8_t *dgst, size_t dgst_len)
+    {
+        return cert->verify(dgst, dgst_len);
+    }
+
+    const ECDSA_SIG* Ieee1609Certs::SignData(const uint8_t *buf, size_t len, SignatureType type)
+    {
+        return cert->SignData(buf, len, type);
+    }
+    int Ieee1609Certs::SigToSignature(const ECDSA_SIG* sig, Signature& signature)
+    {
+        return cert->SigToSignature(sig, signature);
+    }
+    int Ieee1609Certs::ConsistencyCheck(const HeaderInfo& header)
+    {
+        return cert->ConsistencyCheck(header);
+
+    }
+
+    void Ieee1609Certs::print()
+    {
+        uint8_t *buf = nullptr;
+        size_t len = enc->get(&buf);
+        print_data("certs.txt", buf, len);
+    }
+
+
+
+
+
+
+
+
 } //namespace ctp
 
 

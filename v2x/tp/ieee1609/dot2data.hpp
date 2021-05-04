@@ -1,9 +1,10 @@
-#ifndef __IEEE_1609DOT2DATA_HPP__
-#define __IEEE_1609DOT2DATA_HPP__
+#ifndef __DOT2DATA_HPP__
+#define __DOT2DATA_HPP__
 
-#include "ieee1609dot2common.hpp"
-#include "ieee1609dot2cert.hpp"
-#include "ieee1609dot2.hpp"
+#include "dot2common.hpp"
+#include "dot2cert.hpp"
+#include "../tp.hpp"
+// #include "dot2encdec.hpp"
 #include <string.h>
 
 namespace ctp
@@ -84,7 +85,7 @@ namespace ctp
                 uint8_t *hash1; /* hash of the tbsData */
                 uint8_t *hash2; /* hash of the certificate (not sequence of certificate, rather hash of the signer) */
                 uint8_t *hashBuf = nullptr;
-                size_t hash1Len, hash2Len;
+                size_t hash2Len;
                 try
                 {
                     Ieee1609Dot2Data *data_ = tbsData->payload.data;
@@ -207,74 +208,5 @@ namespace ctp
             void print(const char* file="data.txt");
             void print_decoded(const char* file);
     };
-
-
-    class TP:public std::enable_shared_from_this<TP>
-    {
-        //private:
-        tp_cfg *cfg;
-        std::map<int, psid_tp_client*> psid_clients;
-        std::vector<client_msg*> q_in_msg;
-        std::vector<client_msg*> q_out_msg;
-        bool init_done;
-        bool stop_;
-
-        /*FIXME, for the time being, keep the self-signed certificate as private member 
-          of trusted platform. It will eventually goto the cert-manager 
-        */
-       std::shared_ptr<Ieee1609Certs> certs;
-        
-
-        // std::vector<std::shared_ptr<TP_Client>> clients;
-        public:
-            void enrol_mgr();
-            void cert_mgr();
-            void crl_mgr();
-            void report_mgr();
-            TP(); /* private constructor */
-        public:
-            void cfg_mgr();
-            int verify();
-            int verify(void *buf, size_t length);
-            int sign();
-            /* let this be the blocking call */
-            int sign(const int psid, const uint8_t *buf, size_t len,
-                  uint8_t **signedData, size_t *signedDataLen);
-            int encrypt();
-            int decrypt();
-            TP_PTR instance_get();
-            static TP_PTR init();
-            void start();
-            void stop();
-            ~TP();
-            void psid_list();
-            void curves_list();
-            /* register a  client with the given psid */
-            void client_register(const int psid, std::shared_ptr<tp_client> obj);
-            /* process clients */
-            void process_clients();
-    };
-
-
-
-
-
-}/* namespace ctp */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}//namespace ctp
 #endif //__IEEE_1609DOT2DATA_HPP__

@@ -1,11 +1,11 @@
-#include "ieee1609dot2data.hpp"
-#include <stdlib.h>
-#include <string.h>
-#include <memory>
-#include <iostream>
-#include <string>
-#include <fstream>
-#include <iomanip>
+#include "dot2data.hpp"
+// #include <stdlib.h>
+// #include <string.h>
+// #include <memory>
+// #include <iostream>
+// #include <string>
+// #include <fstream>
+// #include <iomanip>
 
 
 
@@ -27,7 +27,7 @@ namespace ctp
         payload->data->content.UNSECUREDDATA.length = len;
         payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* copy the data into unsecured buffer */
-        for(int i = 0; i < len; i++)
+        for(size_t i = 0; i < len; i++)
         {
             payload->data->content.UNSECUREDDATA.octets[i] = tbsData[i];
         }
@@ -70,7 +70,7 @@ namespace ctp
         /* create a local copy of the certificate */
         this->certs = certs;
         /* copy the data into unsecured buffer */
-        for(int i = 0; i < len; i++)
+        for(size_t i = 0; i < len; i++)
         {
             payload->data->content.UNSECUREDDATA.octets[i] = buf[i];
         }
@@ -297,7 +297,7 @@ namespace ctp
 
     int Ieee1609Data::decode_content()
     {
-        int ret = 0;
+        int ret = 1;
         try
         {
             dec->Ieee1609Dot2Data_(std::ref(*data));
@@ -313,9 +313,10 @@ namespace ctp
         catch(const Exception& e)
         {
             std::cerr << e.what() << '\n';
+            ret = 0;
         }
         
-        return 0;
+        return ret;
     }
     int Ieee1609Data::decode_signeridentifier()
     {
@@ -342,29 +343,4 @@ namespace ctp
     {
         return 0;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 }//namespace ctp 
