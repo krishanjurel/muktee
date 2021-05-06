@@ -108,9 +108,10 @@ namespace ctp
         // EC_POINT *point;
         uint8_t *sign_r, *sign_s;
 
-
         ECDSA_SIG *sig = ECDSA_SIG_new();
-
+        EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
+        /* set the group point as compressed form */
+        EC_GROUP_set_point_conversion_form(group,POINT_CONVERSION_COMPRESSED);
         /* get r and s from octet encoded signature values */
         sign_r = (uint8_t *)signature_.signature.ecdsaP256Signature.r.point.octets.x;
         sign_s = (uint8_t *)&signature_.signature.ecdsaP256Signature.s.x[0];
@@ -140,14 +141,20 @@ namespace ctp
             throw Exception("Ieee1609Cert::verify::BN_bin2bn::s");
         }
 
+
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
         ret = ECDSA_SIG_set0(sig, r, s);
         if(ret == 0 )
         {
             throw Exception("Ieee1609Cert::verify::ECDSA_SIG_set0");
         }
-
+#else
+        sig->r = r;
+        sig->s = s;
+#endif
         /* now get the public key of the signer */
-        EC_KEY *key = nullptr;
+        EC_KEY *key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+        EC_KEY_set_conv_form(key, POINT_CONVERSION_COMPRESSED);
         /* allocate the temporary buffer to specify the comporessed point of the key */
         /* allocate the max buffer including the compressed notification */
         size_t buf_len = SHA256_DIGEST_LENGTH*2+1;
@@ -186,9 +193,16 @@ namespace ctp
                 memcpy(&buf2_[1], buf1_, buf_len);
 
                 buf_len +=1;
-                /* now get the point from the octet encode buffer */
-                // if (key == nullptr ) std::cout << "no key " << std::endl;
+#if (OPENSSL_VERSION_NUMBER == 0x1010106fL)
                 ret = EC_KEY_oct2key(key, buf2_, buf_len, nullptr);
+#else
+                EC_POINT *point = EC_POINT_new(group);
+                ret = EC_POINT_oct2point(group, point, buf2_, buf_len, nullptr);
+                if(ret == 1)
+                {
+                    EC_KEY_set_public_key(key, point);
+                }
+#endif
                 if(ret == 0)
                 {
                     std::cout << "the key has failed " << std::endl;
@@ -717,7 +731,6 @@ namespace ctp
             LOG_ERR(log_.str(), MODULE);
             throw Exception(log_.str());
         }
-
         log_ << "public key length " << keylen << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");

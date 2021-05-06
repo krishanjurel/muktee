@@ -12,9 +12,13 @@
 #include <condition_variable>
 #include <libconfig.h++>
 
-#include "ieee1609/dot2common.hpp"
-#include "ieee1609/dot2cert.hpp"
-#include "ieee1609/dot2data.hpp"
+// #include "ieee1609/dot2common.hpp"
+// #include "ieee1609/dot2cert.hpp"
+// #include "ieee1609/dot2data.hpp"
+
+#include "dot2common.hpp"
+#include "dot2cert.hpp"
+#include "dot2data.hpp"
 
 
 void print_data(const char* file, const uint8_t *buf, size_t len);

@@ -1,21 +1,25 @@
 cmake_minimum_required(VERSION 2.8.12)
-
-set(TARGET tp_client)
-PROJECT(${TARGET})
+# set(TARGET tp_client)
+# PROJECT(${TARGET})
 SET(CMAKE_CXX_STANDARD 11)
-# set(CMAKE_C_COMPILER /bin/x86_64-linux-gnu-gcc-9)
-# set(CMAKE_CXX_COMPILER /bin/x86_64-linux-gnu-g++-9)
+SET(CMAKE_CXX_COMPILER /usr/bin/g++)
+# message(${PROJECT_BINARY_DIR})
+# message(${CMAKE_BINARY_DIR})
 
-#add_executable(${TARGET}  ieee1609dot2.cpp ieee1609dot2cert.cpp ieee1609dot2encdec.cpp ieee1609dot2data.cpp)
 add_compile_options(-O3 -fpermissive -Wunused-variable)
-set(CMAKE_BINARY_DIR ${pwd})
-# target_include_directories(${TARGET} PUBLIC ${pwd})
-# target_include_directories(${TARGET} PUBLIC /usr/include)
-# target_include_directories(${TARGET} PUBLIC /usr/include/openssl)
+include(GNUInstallDirs)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
-# target_link_libraries(${TARGET} crypto ssl pthread rt config++)
+
+set(CMAKE_BINARY_DIR ${pwd})
+
 add_subdirectory(tp_client ${CMAKE_BINARY_DIR})
+add_subdirectory(tp_test ${CMAKE_BINARY_DIR})
 add_subdirectory(tp ${CMAKE_BINARY_DIR})
+# file(COPY tp/config.file DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+# file(COPY tp/config.file DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
 
 

@@ -3,7 +3,7 @@
 
 #include "dot2common.hpp"
 #include "dot2cert.hpp"
-#include "../tp.hpp"
+#include "tp.hpp"
 // #include "dot2encdec.hpp"
 #include <string.h>
 

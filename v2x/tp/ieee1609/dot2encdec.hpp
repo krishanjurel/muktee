@@ -3,7 +3,7 @@
 #include <iostream>
 #include "dot2common.hpp"
 #include "dot2cert.hpp"
-#include "../tp.hpp"
+#include "tp.hpp"
 #include <map>
 #include <vector>
 #include <iostream>
