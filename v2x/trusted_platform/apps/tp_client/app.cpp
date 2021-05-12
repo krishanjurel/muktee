@@ -3,7 +3,7 @@
 
 #include <signal.h> /* for signal */
 #include "signal.h"
-#include "../tp/tp.hpp"
+#include "tp.hpp"
 #define MODULE 4 //test
 
 static int stop_=0;

@@ -3,6 +3,6 @@ add_library(tp tp_util.cpp tp.cpp)
 
 target_include_directories(tp PUBLIC ${PROJECT_SOURCE_DIR})
 target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ieee1609)
+target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dot2)
 
-add_subdirectory(ieee1609)
+add_subdirectory(dot2)

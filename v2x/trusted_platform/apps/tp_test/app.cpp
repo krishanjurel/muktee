@@ -27,7 +27,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
-#include "../tp/tp.hpp"
+#include "tp.hpp"
 #include "remote.hpp"
 #define MODULE 4 //test
 
