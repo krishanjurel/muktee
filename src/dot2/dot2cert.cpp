@@ -205,7 +205,7 @@ namespace ctp
 #endif
                 if(ret == 0)
                 {
-                    std::cout << "the key has failed " << std::endl;
+                    // std::cout << "the key has failed " << std::endl;
                     BN_free(r);
                     BN_free(s);
                     EC_KEY_free(key);
@@ -216,7 +216,7 @@ namespace ctp
                 ret = ECDSA_do_verify(dgst, dgst_len, sig, key);
                 if(ret == 0)
                 {
-                    perror("Ieee1609Cert::verify::ECDSA_do_verify");
+                    // perror("Ieee1609Cert::verify::ECDSA_do_verify");
                     BN_free(r);
                     BN_free(s);
                     EC_KEY_free(key);
@@ -829,7 +829,7 @@ namespace ctp
         /* psid psidssp only contains the psid , with no ssp */
         seqOfPsidSsp->psidSsp = (PsidSsp *)buf_alloc(seqOfPsidSsp->quantity * sizeof(PsidSsp));
         /* FIXME, hardcoded psid, BSM */
-        seqOfPsidSsp->psidSsp->psid = 0x20;
+        seqOfPsidSsp->psidSsp->psid = PSID_BSM;
         /* No optional mask */
         seqOfPsidSsp->psidSsp->optionalMask = 0;
         /* no ssp */

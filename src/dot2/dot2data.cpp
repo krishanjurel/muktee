@@ -298,24 +298,28 @@ namespace ctp
     int Ieee1609Data::decode_content()
     {
         int ret = 1;
+        std::stringstream log_(std::ios_base::out);
         try
         {
             dec->Ieee1609Dot2Data_(std::ref(*data));
-            decode_signeridentifier();
-            if(signer->type == SignerIdentifierTypeCert)
+            if(data->content.type == Ieee1609Dot2ContentSignedData)
             {
-                
-                /* decode the sequence of certs */
-                certs->decode(dec);
-                dec->Signature_(std::ref(*signature));
+                decode_signeridentifier();
+                if(signer->type == SignerIdentifierTypeCert)
+                {
+                    /* decode the sequence of certs */
+                    certs->decode(dec);
+                    dec->Signature_(std::ref(*signature));
+                }
             }
         }
         catch(const Exception& e)
         {
-            std::cerr << e.what() << '\n';
-            ret = 0;
+            log_ << "Ieee1609Data::decode_content() ";
+            log_ << e.what() << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw;
         }
-        
         return ret;
     }
     int Ieee1609Data::decode_signeridentifier()

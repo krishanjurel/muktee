@@ -86,6 +86,10 @@ namespace ctp
                 uint8_t *hash2; /* hash of the certificate (not sequence of certificate, rather hash of the signer) */
                 uint8_t *hashBuf = nullptr;
                 size_t hash2Len;
+                std::stringstream log_(std::ios_base::out);
+                log_ << "Ieee1609Data::verify() enter " << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
                 try
                 {
                     Ieee1609Dot2Data *data_ = tbsData->payload.data;
@@ -99,11 +103,11 @@ namespace ctp
                     ret = certs->ConsistencyCheck(std::ref(*headerInfo));
                     if(ret == 0)
                     {
-                        std::stringstream err_( std::ios_base::out);
-                        err_ << "Ieee1609Data::verify::certs->ConsistencyCheck(const HeaderInfo& header) failed ";
-                        err_ << std::endl;
-                        LOG_ERR(err_.str(), MODULE);
-                        throw Exception(err_.str());
+                        log_.str("");
+                        log_ << "Ieee1609Data::verify::certs->ConsistencyCheck(const HeaderInfo& header) failed ";
+                        log_ << std::endl;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw Exception(log_.str());
                     }
 
                     /* create the hash of the received data */
@@ -111,9 +115,9 @@ namespace ctp
                                     data_->content.content.unsecuredData.length, &hash1);
                     if(ret == 0)
                     {
-                        std::string err_("Ieee1609Data::verify::certs->Hash256:payload");
-                        LOG_ERR(err_, MODULE);
-                        throw Exception(err_);
+                        log_ << "Ieee1609Data::verify::certs->Hash256:payload" << std::endl;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw Exception(log_.str());
                     }
 
                     /* now get the signer's hash */
@@ -127,9 +131,11 @@ namespace ctp
                     ret = certs->Hash256(hashBuf, hash2Len,&hash2);
                     if(ret == 0)
                     {
-                        std::string err_("Ieee1609Data::verify::certs->Hash256:signer");
-                        LOG_ERR(err_, MODULE);
-                        throw Exception(err_);
+                        log_.str("");
+                        log_ << "Ieee1609Data::verify::certs->Hash256:signer";
+                        log_ << std::endl;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw Exception(log_.str());
                     }
                     free(hashBuf);
                     /* combine the hash of payload and signer, 32+32=64 */
@@ -148,26 +154,29 @@ namespace ctp
                     ret = certs->Hash256(hashBuf, 2*SHA256_DIGEST_LENGTH, &hash1);
                     if(ret == 0)
                     {
-                        std::string err_("Ieee1609Data::verify::certs->Hash256:signer and payload");
-                        LOG_ERR(err_, MODULE);
-                        throw Exception(err_);
+                        log_.str("");
+                        log_ << "Ieee1609Data::verify::certs->Hash256:signer and payload";
+                        log_ << std::endl;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw Exception(log_.str());
                     }
                     ret = certs->verify(hash1, SHA256_DIGEST_LENGTH, std::ref(*signature));
                     if(ret != 1)
                     {
-                        std::string msg_("Ieee1609Data::verify::certs->verify failed");
-                        LOG_ERR(msg_, MODULE);
-                        throw Exception(msg_);
+                        log_ << "Ieee1609Data::verify::certs->verify failed";
+                        log_ << std::endl;
+                        LOG_ERR(log_.str(), MODULE);
+                        throw Exception(log_.str());
                     }
-                    return 1;
-
                 }catch(ctp::Exception &e)
                 {
                     free(hashBuf);
-                    LOG_ERR(e.what(), MODULE);
+                    log_.str("");
+                    log_ << "Ieee1609Data::verify " << e.what() << std::endl;
+                    LOG_ERR(log_.str(), MODULE);
                     throw;
-                    return 0;
                 }
+                return ret;
             }
 
             /* exposed apis for clients to access information*/

@@ -1169,8 +1169,8 @@ namespace ctp
         {
             this->buf[i] = buf[i];
         }
-        unlink("testencode.txt");
-        print_data("testencode.txt", this->buf, this->len);
+        // unlink("testencode.txt");
+        // print_data("testencode.txt", this->buf, this->len);
     }
 
 } /*namespace ctp */

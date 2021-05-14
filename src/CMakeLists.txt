@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 2.8.10)
-add_library(tp tp_util.cpp tp.cpp)
+add_library(tp tp_util.cpp tp.cpp tp.hpp tp_util.hpp)
 
-target_include_directories(tp PUBLIC ${PROJECT_SOURCE_DIR})
+message(${CMAKE_CURRENT_SOURCE_DIR})
+
 target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dot2)
 

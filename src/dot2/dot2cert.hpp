@@ -196,7 +196,7 @@ namespace ctp
             Ieee1609Encode():encBuf(nullptr),encLen(0){};
             ~Ieee1609Encode()
             {
-                std::cout << " Ieee1609Encode::Ieee1609Encode " << std::endl;
+                // std::cout << " Ieee1609Encode::Ieee1609Encode " << std::endl;
                 delete encBuf;
                 encBuf = nullptr;
                 encLen = 0;
@@ -264,7 +264,7 @@ namespace ctp
             Ieee1609Decode():buf(nullptr),len(0){};
             ~Ieee1609Decode()
             {
-                std::cout << "Ieee1609Decode::~Ieee1609Decode" << std::endl;
+                // std::cout << "Ieee1609Decode::~Ieee1609Decode" << std::endl;
                 delete buf;
                 len = 0;
             }

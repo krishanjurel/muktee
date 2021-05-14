@@ -16,7 +16,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-// void print_data(const char* file, const uint8_t *buf, size_t len);
 time_t start_time(struct tm *tm);
 
 #ifdef __cplusplus

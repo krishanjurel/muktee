@@ -12,6 +12,12 @@
 /* common structures with c++ linkage */
 namespace ctp
 {
+    enum {
+        PSID_BSM = 0x20,
+        /* use this to test the unspported psid */
+        PSID_FAIL=0xAABB
+    };
+
     struct _remote_host
     {
         /* ip address */
@@ -240,6 +246,8 @@ namespace ctp
 #define LOG_WARN(msg, mod) ctp::log_mgr::log(ctp::LOG_LVL_WARN,mod,msg)
 #define log_info(msg, mod) LOG_INFO(msg, mod)
 #define log_dbg(msg, mod) LOG_DBG(msg, mod)
+
+
 } //namespace ctp
 
 

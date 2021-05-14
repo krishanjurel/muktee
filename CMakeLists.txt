@@ -16,9 +16,7 @@ if(NOT USE_COSMO_TP)
     add_subdirectory(apps)
 endif()
 add_subdirectory(src)
-# add_subdirectory(tp ${CMAKE_BINARY_DIR})
 file(COPY src/config.file DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
-# file(COPY tp/config.file DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
 
 

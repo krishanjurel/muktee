@@ -28,7 +28,7 @@ void terminate_handler()
 
 
 /* initialize the log lvl */
-ctp::LogLvl ctp::log_mgr::logLvl = ctp::LOG_LVL_DBG;    
+// ctp::LogLvl ctp::log_mgr::logLvl = ctp::LOG_LVL_DBG;
 
 
 int main()

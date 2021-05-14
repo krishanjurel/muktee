@@ -11,23 +11,17 @@
 #include <map>
 #include <condition_variable>
 #if defined(USE_LIB_CONFIG)
-#include <libconfig.h++>
+ #include <libconfig.h++>
 #endif
-
-// #include "ieee1609/dot2common.hpp"
-// #include "ieee1609/dot2cert.hpp"
-// #include "ieee1609/dot2data.hpp"
 
 #include "dot2common.hpp"
 #include "dot2cert.hpp"
 #include "dot2data.hpp"
 
-
 void print_data(const char* file, const uint8_t *buf, size_t len);
 
 namespace ctp
 {
-    
     class TP //:public std::enable_shared_from_this<TP>
     {
         //private:
@@ -53,7 +47,10 @@ namespace ctp
             ~TP();
             void cfg_mgr();
             int verify();
+            /* asynchronous verfication routine */
             int verify(void *buf, size_t length);
+            /* synchronous verification routine */
+            int verify(void *buf, size_t length, uint8_t **out, size_t *outLength);
             int sign();
             /* let this be the blocking call */
             int sign(const int psid, const uint8_t *buf, size_t len,
@@ -74,6 +71,8 @@ namespace ctp
 
             std::mutex q_in_mutex;
             std::mutex q_out_mutex;
+
+            std::thread t_in_thread;
     };
 }/* namespace ctp */
 

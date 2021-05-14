@@ -5,7 +5,7 @@ namespace ctp
 {
 
 
-            /* TP message queue locks */
+    /* TP message queue locks */
     // static std::mutex q_in_mutex;
     // static std::mutex q_out_mutex;
 
@@ -112,7 +112,7 @@ namespace ctp
             log_ << " tp_cfg::tp_cfg::fopen(\"" << filename << "\")" << " failed " << std::endl;
             LOG_ERR(log_.str(), MODULE);
         }
-    #endif        
+    #endif
     }
 } //namespace ctp
 
@@ -151,6 +151,8 @@ namespace ctp
         return 0;
     }
 
+    LogLvl log_mgr::logLvl = ctp::LOG_LVL_DBG;
+
     TP::TP()
     {
         init_done = false;
@@ -172,7 +174,6 @@ namespace ctp
         log_ << "TP::TP() exit " << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
-
     }
 
     TP::~TP()
@@ -200,8 +201,7 @@ namespace ctp
         log_ << " TP::start() exit " << std::endl;
         log_info(log_.str(), MODULE);
 
-        std::thread _thread = std::thread(&TP::process_clients, this);
-        _thread.detach();
+        t_in_thread = std::thread(&TP::process_clients, this);
         stop_ = false;
 
     }
@@ -220,8 +220,7 @@ namespace ctp
         // {
         //     pObj = std::make_shared<TP>(obj);
         // }
-        TP_PTR pObj = std::shared_ptr<TP>(new TP());
-        return pObj;
+        return std::make_shared<TP>();
     }
 
     void TP::psid_list()
@@ -236,7 +235,7 @@ namespace ctp
             itr++;
         }
         log_ << std::endl;
-        log_info( log_.str(), MODULE);
+        log_dbg( log_.str(), MODULE);
     }
 
 
@@ -251,7 +250,7 @@ namespace ctp
             itr++;
         }
         log_ << std::endl;
-        log_info(log_.str(), MODULE);
+        log_dbg(log_.str(), MODULE);
     }
 
     /* sign the given buffer and psid */
@@ -286,6 +285,61 @@ namespace ctp
     {
         log_info("verify", 1);
         return 0;
+    }
+
+    int TP::verify(void *buf, size_t len, uint8_t **out, size_t *outLength)
+    {
+        /* create a data object */
+        std::stringstream log_(std::ios_base::out);
+        log_ << "TP::verify(sync..) enter" << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+
+        Ieee1609Data *ieee1609DataObj = new ctp::Ieee1609Data();
+        try
+        {
+            unlink("in_secured_data.txt");
+            print_data("in_secured_data.txt",(const uint8_t *)buf, len);
+            /* decode the message */
+            ieee1609DataObj->decode((const uint8_t *)buf, len);
+            /* verify the given data */
+            ieee1609DataObj->verify();
+            /* if all good, get the psid of this data and call the associated callback function */
+            HeaderInfo* hdrInfo = ieee1609DataObj->HeaderInfo_();
+            // int psid = hdrInfo->psid;
+            /*get the root data */
+            Ieee1609Dot2Data *dot2data = ieee1609DataObj->Data_();
+            ToBeSignedData *tbs = ieee1609DataObj->ToBeSignedData_();
+            Ieee1609Dot2Data *data = nullptr;
+            if(dot2data->content.type == Ieee1609Dot2ContentSignedData)
+            {
+                data = tbs->payload.data;
+            }else{
+                data=dot2data;
+            }
+            *outLength = data->content.content.unsecuredData.length;
+            log_ << "header info psid " << hdrInfo->psid << std::endl;
+            log_dbg(log_.str(), MODULE);
+            log_.str("");
+            *out = (uint8_t *)malloc(*outLength);
+            memcpy(*out,data->content.content.unsecuredData.octets, *outLength);
+
+            unlink("in_app_data.txt");
+            print_data("in_app_data.txt",(const uint8_t *)*out, *outLength);
+        }catch(Exception& e)
+        {
+            /* handle the exception and process the next message in queue */
+            log_.str("");
+            log_ << " TP::verify(synchronous) ";
+            log_ << e.what() << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            delete ieee1609DataObj;
+            throw;
+        }
+        log_ << "TP::verify(sync..) exit" << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+        return 1;
     }
 
     int TP::verify(void *buf, size_t length)
@@ -380,6 +434,9 @@ namespace ctp
     void TP::stop()
     {
         stop_= true;
+        t_in_thread.join();
+        std::string log_("TP::stop() done\n");
+        log_dbg(log_, MODULE);
     }
     void TP::client_register(const int psid, std::shared_ptr<tp_client> obj)
     {
