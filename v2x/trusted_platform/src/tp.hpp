@@ -10,7 +10,9 @@
 #include <sys/time.h>
 #include <map>
 #include <condition_variable>
+#if defined(USE_LIB_CONFIG)
 #include <libconfig.h++>
+#endif
 
 // #include "ieee1609/dot2common.hpp"
 // #include "ieee1609/dot2cert.hpp"

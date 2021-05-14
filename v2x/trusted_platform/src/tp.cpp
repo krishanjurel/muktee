@@ -32,6 +32,7 @@ namespace ctp
     /* read the configuration file */
     tp_cfg::tp_cfg(const char *filename)
     {
+    #ifdef USE_LIB_CONFIG
         using itr = libconfig::Setting::iterator;
         std::stringstream log_(std::ios_base::out);
         libconfig::Config config;
@@ -111,6 +112,7 @@ namespace ctp
             log_ << " tp_cfg::tp_cfg::fopen(\"" << filename << "\")" << " failed " << std::endl;
             LOG_ERR(log_.str(), MODULE);
         }
+    #endif        
     }
 } //namespace ctp
 
