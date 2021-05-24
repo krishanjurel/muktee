@@ -29,6 +29,7 @@
 #include <algorithm>
 #include "tp.hpp"
 #include "remote.hpp"
+#include <pwd.h>
 #define MODULE 4 //test
 
 #define TEST(_x_) test ## _x_
@@ -43,6 +44,7 @@ void TEST(hashing)();
 void TEST(encoding)();
 void TEST(config)();
 void TEST(tp_test_client)();
+void TEST(FILE)();
 
 
 
@@ -51,7 +53,6 @@ static int stop_=0;
 void signal_handler(int sig)
 {
     std::cout << "signal " << sig <<  " had been caugth" << std::endl;
-    //std::terminate();
     stop_=1;
     return;
 }
@@ -59,7 +60,6 @@ void signal_handler(int sig)
 void terminate_handler()
 {
     std::cout << "terminate has been raised "<< std::endl;
-    std::abort();
     
 }
 
@@ -215,24 +215,28 @@ int main()
     //TEST(ipc_sockets)();
     // TEST(certs_encoding)();
     // TEST(data_encoding)();
-    TEST(data_decoding)();
     // TEST(cert_decoding)();
+    TEST(data_decoding)();
     // TEST(logging)();
     // TEST(hashing)();
     // TEST(encoding)();
-
-    // TEST(config)();
+    TEST(config)();
     TEST(tp_test_client)();
 
-    // while(!stop_)
-    // {
+    TEST(FILE)();
+    /* raise the terminate signal here */
+    raise(SIGTERM);
+
+    while(!stop_)
+    {
         std::this_thread::sleep_for(std::chrono::seconds(5));
         //std::abort();
         std::this_thread::sleep_for(std::chrono::seconds(5));
-    // }
+    }
+    std::cout << "exit " << std::endl;
     // delete pcert;
     // delete pdata;
-    raise(SIGKILL);
+    // raise(SIGKILL);
     return 0;
 }
 
@@ -264,6 +268,10 @@ class tp_test_client: public ctp::tp_client
 
 void TEST(tp_test_client)()
 {
+    std::string log_("TEST(tp_test_client)()\n");
+    log_dbg(log_,MODULE);
+
+
     /* create and get trust pointer object */
     // ctp::TP_PTR tp = ctp::TP::init();
     ctp::TP_PTR tp = ctp::TP_PTR(new ctp::TP());
@@ -297,9 +305,12 @@ void TEST(tp_test_client)()
     catch(const ctp::Exception& e)
     {
         std::cerr << e.what() << '\n';
+        raise(SIGKILL);
     }
-    
-    
+
+    std::this_thread::sleep_for(std::chrono::seconds(20));
+    tp->stop();
+    tp.reset();
 }
 
 typedef void (*ptrTestFunction)();
@@ -311,10 +322,10 @@ ptrTestFunction test_data[]{
 
 void TEST(config)()
 {
+    // ctp::TP_PTR tp = ctp::TP::init();
+    ctp::TP_PTR tp = std::shared_ptr<ctp::TP>(new ctp::TP());
     try
     {
-        // ctp::TP_PTR tp = ctp::TP::init();
-        ctp::TP_PTR tp = std::shared_ptr<ctp::TP>(new ctp::TP());
         tp->start();
         tp->psid_list();
         tp->curves_list();
@@ -322,8 +333,10 @@ void TEST(config)()
     catch(const std::exception& e)
     {
         std::cerr << e.what() << '\n';
+        raise(SIGKILL);
     }
-    
+    tp->stop();
+    tp.reset();
 }
 
 void TEST(hashing)()
@@ -351,11 +364,10 @@ void TEST(hashing)()
 }
 
 
-
 void TEST(data_encoding)()
 {
     printf("data_encoding\n");
-    ctp::Ieee1609Certs *pcert = new ctp::Ieee1609Certs();
+    std::shared_ptr<ctp::Ieee1609Certs> pcert = std::make_shared<ctp::Ieee1609Certs>();
     // pcerts->create();
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
@@ -372,7 +384,7 @@ void TEST(data_encoding)()
     pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcert);
     print_data("data_payload.txt", signedData, signedDataLength);
     std::cout << "number of bytes " << signedDataLength << std::endl;
-    delete pcert;
+    pcert.reset();
     delete pdata;
     raise(SIGKILL);
     return;
@@ -387,14 +399,17 @@ void TEST(data_decoding)()
     size_t signedDataLength = 0;
     ctp::Ieee1609Certs *pcerts = nullptr;
     ctp::Ieee1609Data *pdata2 = nullptr;
+    ctp::TP_PTR tp = nullptr;
     try
     {
+        tp = ctp::TP_PTR(new ctp::TP(), [](const ctp::TP* ptr){std::cout << "TP delete " << std::endl; delete ptr;});
+        tp->start();
     
-        log_ << "data_decoding start " << std::endl;
-        LOG_DBG(log_.str(), MODULE);
-        log_.str("");
-        pcerts = new ctp::Ieee1609Certs();
-        pcerts->create();
+        // log_ << "data_decoding start " << std::endl;
+        // LOG_DBG(log_.str(), MODULE);
+        // log_.str("");
+        // pcerts = new ctp::Ieee1609Certs();
+        // pcerts->create(tp->psid_list());
         // uint8_t *encBuf = nullptr;
         // size_t encLen = 0;
         // encLen = pcerts->encode(&encBuf);
@@ -403,16 +418,15 @@ void TEST(data_decoding)()
         // log_.str("");
         // unlink("data_decoding_enc_cert.txt");
         // print_data("data_decoding_enc_cert.txt",encBuf, encLen);
-        pdata = new ctp::Ieee1609Data();
-        pdata->sign(32, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
-        unlink("data_decoding_enc_data.txt");
-        print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
-        delete pdata;
-        // std::cout << "number of bytes " << signedDataLength << std::endl;
-
+        // pdata = new ctp::Ieee1609Data();
+        // pdata->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
+        // unlink("data_decoding_enc_data.txt");
+        // print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
+        ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_DBG);
+        tp->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.size(), &signedData, &signedDataLength);
         /* decoding section */
-
-
+        log_info(std::string("Start decoding "), MODULE);
+        std::cout <<"data decoding starts " << std::endl;
         pdata2 = new ctp::Ieee1609Data();
         pdata2->decode(signedData,signedDataLength);
         uint8_t *encBuf2 = nullptr;
@@ -420,7 +434,7 @@ void TEST(data_decoding)()
         size_t encLen2 = pdata2->encode(&encBuf2);
 
         unlink("data_decoding_dec_data.txt");
-        // print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
+        print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
         // print_data(nullptr, encBuf2, encLen2);
 
         if(signedDataLength != encLen2)
@@ -443,18 +457,30 @@ void TEST(data_decoding)()
         log_info(log_.str(), MODULE);
         log_.str("");
         /* do the verification */
-        pdata2->verify();
+        // pdata2->verify();
+
+        uint8_t *appData = nullptr;
+        size_t appDataLen = 0;
+
+        tp->verify(signedData, signedDataLength,&appData, &appDataLen);
+        free(appData);
     }catch(ctp::Exception& e)
     {
         log_ << "TEST(data_decoding)() is failed " << std::endl;
         LOG_ERR(log_.str(), MODULE);
         throw;
     }
-    log_ << "TEST(data_decoding)() passed " << std::endl;
-    LOG_DBG(log_.str(), MODULE);
     // delete pcerts;
     // delete pdata;
     delete pdata2;
+    log_.str("");
+    log_ << "stop the TP" << std::endl;
+    log_dbg(log_.str(), MODULE);
+    log_.str("");
+    tp->stop();
+    tp.reset();
+    log_ << "TEST(data_decoding)() passed " << std::endl;
+    log_dbg(log_.str(), MODULE);
     return;
 }
 void TEST(certs_encoding)()
@@ -635,4 +661,62 @@ void TEST(encoding)()
     log_ << " TEST(encdoing) passes " << std::endl;
     LOG_DBG(log_.str(), MODULE);   
     delete enc;
+}
+
+
+
+
+
+void TEST(FILE)()
+{
+    std::ofstream ofs;
+    std::ifstream ifs;
+    std::iostream ios(std::cout.rdbuf());
+    std::ostream os(std::cout.rdbuf());
+    std::istream is(std::cin.rdbuf());
+    std::stringstream out_(std::ios_base::out);
+    std::stringstream in_(std::ios_base::in);
+    uid_t uid = getuid();
+
+    const char *home;// = getcwd()
+    if((home=getenv("HOME"))==nullptr)
+    {
+        home = getpwuid(uid)->pw_dir;
+    }
+    std::string file(home);
+    file.append("/test.txt");
+    std::cout << "filename is " << file << std::endl;
+
+    ofs.open(file.c_str());//, std::ios_base::out | std::ios_base::in);
+    if(ofs.is_open())
+    {
+        std::cout << "file opened "<< std::endl;
+        // ios.rdbuf(ofs.rdbuf());
+        os.rdbuf(ofs.rdbuf());
+        is.rdbuf(ofs.rdbuf());
+
+        out_ << "hi this is krishan" << std::endl;
+
+        out_ << std::dec << 123456 << std::endl;
+        out_ << "this is another line " << std::endl;
+
+        os << out_.str();
+    }
+    // std::cout << "current pointer " << ofs.tellp() << std::endl;
+    // ofs.seekp(0,std::ios_base::beg);
+    // is.seekg(0, std::ios_base::beg);
+    ofs.close();
+    ifs.open(file.c_str());
+    is.rdbuf(ifs.rdbuf());
+
+    char c[64];
+    is.getline(c, sizeof(c));
+    std::cout << c << std::endl;
+    is.getline(c, sizeof(c));
+    std::cout << c << std::endl;
+    std::istringstream istream(std::string(c), std::ios_base::in);
+    int n;
+    istream >> std::dec >> n;
+    std::cout << "integer is " << n << std::endl;
+    ifs.close();
 }

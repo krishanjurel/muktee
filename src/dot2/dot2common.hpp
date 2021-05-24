@@ -18,6 +18,13 @@ namespace ctp
         PSID_FAIL=0xAABB
     };
 
+    struct _cert_cfg
+    {
+        int nid;
+        char *filename1;
+        char *filename2;
+    };
+
     struct _remote_host
     {
         /* ip address */
@@ -25,6 +32,7 @@ namespace ctp
         /* port number */
         int port;
     };
+
 
     /* distribution center */
     struct _dc
@@ -47,7 +55,16 @@ namespace ctp
         _dc  dc;    /* distribution center */
         _remote_host ra; /* registration authority */
         _remote_host dcm; /* device config manager */
+        _cert_cfg certcfg;
         tp_cfg(const char *filename);
+        ~tp_cfg()
+        {
+            psids.clear();
+            curves.clear();
+            std::cout << "tp_cfg::~tp_cfg() " << std::endl;
+        }
+        void tp_cert_cfg(const char *filename);
+
     };
 
 
@@ -97,6 +114,7 @@ namespace ctp
 
             ~Exception()
             {
+                std::cout << "Exception::~Exception() " << std::endl;
                 delete msg;
             }
     };

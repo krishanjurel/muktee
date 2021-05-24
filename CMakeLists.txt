@@ -12,9 +12,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 
 
-if(NOT USE_COSMO_TP)
-    add_subdirectory(apps)
-endif()
+add_subdirectory(apps)
 add_subdirectory(src)
 file(COPY src/config.file DESTINATION ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
 

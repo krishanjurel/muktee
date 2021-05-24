@@ -33,6 +33,27 @@ time_t start_time(struct tm *tm)
     return t1;
 }
 
+
+// void* buf_alloc(size_t s)
+// {
+//     void *addr_ = calloc(s,1);
+//     return addr_;
+// }
+// /* only alloc if addr_ != addr or s >= allocated_ */
+// void *buf_realloc(void *addr, size_t s)
+// {
+//     void *addr_ = realloc(addr, s);
+//     return addr_;
+// }
+// void buf_free(void *addr)
+// {
+//     free (addr);
+// }
+
+
+
+
+
 #ifdef __cplusplus
 }
 #endif

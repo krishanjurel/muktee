@@ -47,7 +47,7 @@ namespace ctp
 
     void Ieee1609Data::sign(int psid, const uint8_t *buf, size_t len,
                   uint8_t **signedData, size_t *signedDataLen,
-                  Ieee1609Certs *certs)
+                  std::shared_ptr<Ieee1609Certs> certs)
     {
         int ret = 0;
         /* for signing, get the encoded certiificate */
@@ -57,7 +57,7 @@ namespace ctp
         uint8_t *tbsBuf = nullptr;
         size_t tbsLen = 0;
 
-        LOG_INFO("Ieee1609Data::sign", MODULE);
+        LOG_INFO("Ieee1609Data::sign\n", MODULE);
         /* create the ToBeSignedData (6.3.6) data structure */
         data->content.type = Ieee1609Dot2ContentSignedData;
         tbsData->headerInfo.psid = psid; /* just use the psid only for now */
@@ -68,6 +68,7 @@ namespace ctp
         payload->data->content.UNSECUREDDATA.length = len;
         payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* create a local copy of the certificate */
+        this->certs.reset();
         this->certs = certs;
         /* copy the data into unsecured buffer */
         for(size_t i = 0; i < len; i++)
@@ -144,7 +145,7 @@ namespace ctp
             if(hash)
                 free (hash);
             if(tbsBuf)
-                free(tbsBuf);
+                buf_free(tbsBuf);
         LOG_INFO("Ieee1609Data::sign Exit", MODULE);
     }
 
@@ -219,6 +220,7 @@ namespace ctp
 
     void Ieee1609Data::encode()
     {
+        log_info(std::string("Ieee1609Data::encode() enter \n"), MODULE);
         /* clear everything */
         enc->clear();
         enc->OctetsFixed(&data->protocolVersion, 1);
@@ -228,6 +230,7 @@ namespace ctp
         // /* since signer is the certificate, we need to pass the object to the certificate */
         // enc->SignerIdentifier_(std::ref(*cert), SignerIdentifierTypeCert); 
         // enc->Signature_(signature);
+        log_info(std::string("Ieee1609Data::encode() exit \n"), MODULE);
     }
 
     void Ieee1609Data::print_encoded(const char *file)

@@ -4,7 +4,6 @@
 #include "dot2common.hpp"
 #include "dot2cert.hpp"
 #include "tp.hpp"
-// #include "dot2encdec.hpp"
 #include <string.h>
 
 namespace ctp
@@ -30,8 +29,8 @@ namespace ctp
         TP_PTR tpPtr;
         Ieee1609Cert *certMgrPtr;
         /* signer for this data */
-        Ieee1609Cert *cert;
-        Ieee1609Certs *certs; /* the sequence of certificate */
+        // Ieee1609Cert *cert;
+        std::shared_ptr<Ieee1609Certs> certs; /* the sequence of certificate */
 
         /* data member */
         Ieee1609Dot2Data *data;
@@ -43,23 +42,37 @@ namespace ctp
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 signedData = (SignedData *)&data->content.content.signedData;
                 tbsData = (ToBeSignedData *)&signedData->toBeSignedData;
+                tbsData->payload.data = nullptr;
                 signature = (Signature *)&signedData->signature;
                 signer = (SignerIdentifier*)&signedData->signer;
                 tbsData->payload.data=(Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
+                tbsData->payload.data->content.content.unsecuredData.octets = nullptr;
                 headerInfo = (HeaderInfo*)&tbsData->headerInfo;
                 data->protocolVersion = 0x03;
                 /* get the certificate manager */
                 //certMgrPtr = tpPtr->cert_mgr();
-                certs = new ctp::Ieee1609Certs();
+                certs = std::make_shared<Ieee1609Certs>();
             }
 
             ~Ieee1609Data()
             {
+                std::cout << "Ieee1609Data::~Ieee1609Data" << std::endl;
                 enc.reset();
                 dec.reset();
-                free(data);
-                free(tbsData->payload.data);
-                // delete certs;
+                Ieee1609Dot2Data *data_ = tbsData->payload.data;
+                if(data_)
+                {
+                    if(data_->content.content.unsecuredData.octets)
+                    {
+                        buf_free(data_->content.content.unsecuredData.octets);
+                    }
+                    buf_free(data_);
+                }
+                buf_free(data);
+                if(certs.operator bool() == true)
+                {
+                    certs = nullptr;
+                }
             }
             /* a method that can be called on recieving signed data */
             void process(const uint8_t *data,size_t len, ...)
@@ -76,7 +89,7 @@ namespace ctp
             /* sign with a supplied certificate */
             void sign(int psid, const uint8_t *buf, size_t len,
                     uint8_t **signedData, size_t *signedDataLen,
-                    Ieee1609Certs *cert);
+                    std::shared_ptr<Ieee1609Certs> cert);
             
             /* verify the received payload */    
             int verify()
@@ -137,7 +150,7 @@ namespace ctp
                         LOG_ERR(log_.str(), MODULE);
                         throw Exception(log_.str());
                     }
-                    free(hashBuf);
+                    buf_free(hashBuf);
                     /* combine the hash of payload and signer, 32+32=64 */
                     hashBuf = (uint8_t*)buf_alloc(64);
                     memcpy((void*)hashBuf, hash1, SHA256_DIGEST_LENGTH);
@@ -158,6 +171,7 @@ namespace ctp
                         log_ << "Ieee1609Data::verify::certs->Hash256:signer and payload";
                         log_ << std::endl;
                         LOG_ERR(log_.str(), MODULE);
+                        buf_free(hashBuf);
                         throw Exception(log_.str());
                     }
                     ret = certs->verify(hash1, SHA256_DIGEST_LENGTH, std::ref(*signature));
@@ -166,16 +180,21 @@ namespace ctp
                         log_ << "Ieee1609Data::verify::certs->verify failed";
                         log_ << std::endl;
                         LOG_ERR(log_.str(), MODULE);
+                        buf_free(hashBuf);
                         throw Exception(log_.str());
                     }
                 }catch(ctp::Exception &e)
                 {
-                    free(hashBuf);
+                    buf_free(hashBuf);
                     log_.str("");
-                    log_ << "Ieee1609Data::verify " << e.what() << std::endl;
+                    log_ << "Ieee1609Data::verify exit" << e.what() << std::endl;
                     LOG_ERR(log_.str(), MODULE);
                     throw;
                 }
+                buf_free(hashBuf);
+                log_ << "Ieee1609Data::verify() exit " << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
                 return ret;
             }
 

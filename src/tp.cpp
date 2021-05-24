@@ -1,5 +1,8 @@
 #include "tp.hpp"
-
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdlib.h>
 
 namespace ctp
 {
@@ -25,9 +28,6 @@ namespace ctp
 
     #define CERTS_CURVES    "curves"
     #define CERTS_PSIDS     "psids"
-
-
-
 
     /* read the configuration file */
     tp_cfg::tp_cfg(const char *filename)
@@ -164,7 +164,7 @@ namespace ctp
         try
         {
             /* create instances of cert and data manager */
-            certs = std::shared_ptr<Ieee1609Certs>(new Ieee1609Certs(),[](const Ieee1609Certs *p){delete p;});
+            certs = std::shared_ptr<Ieee1609Certs>(new Ieee1609Certs(),[](const Ieee1609Certs *p){std::cout << "Delete TP::certs " << std::endl;delete p;});
             
         }catch(Exception& e)
         {
@@ -180,8 +180,8 @@ namespace ctp
     {
         /* assign certs to nullptr, it will free it */
         std::cout << "TP::~TP()  enter " << std::endl;
-         certs.reset();
-        // delete pData;
+        certs.reset();
+        delete cfg;
     }
 
     void TP::start()
@@ -193,10 +193,26 @@ namespace ctp
         if(init_done == false)
         {
             init_done = true;
-            /* call out the config manager */
-            cfg = new tp_cfg("./config.file");
+            try
+            {
+                /* call out the config manager */
+                cfg = new tp_cfg("./bin/config.file");
+
+
+
+
+            }
+            catch(const std::exception& e)
+            {
+                /* in case of exception, only create the the self signed certificate with BSM psid */
+                log_ << " TP::start() " << e.what() << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+            }
             /* default create a certificate for nist256P and for bsm psid 0x20*/ 
-            certs->create();
+            if(cfg && cfg->psids.size())
+                certs->create(cfg->psids);
+            else
+                certs->create();
         }
         log_ << " TP::start() exit " << std::endl;
         log_info(log_.str(), MODULE);
@@ -223,7 +239,7 @@ namespace ctp
         return std::make_shared<TP>();
     }
 
-    void TP::psid_list()
+    const std::vector<int>& TP::psid_list() const
     {
         std::stringstream log_(std::ios_base::out);
         log_ << " TP::psid_list() "; 
@@ -236,6 +252,7 @@ namespace ctp
         }
         log_ << std::endl;
         log_dbg( log_.str(), MODULE);
+        return cfg->psids;
     }
 
 
@@ -266,8 +283,8 @@ namespace ctp
 
         try
         {
-            pdata = new ctp::Ieee1609Data();
-            pdata->sign(psid, (uint8_t *)buf, len, signedData, signedDataLen,certs.get());
+            // pdata = new ctp::Ieee1609Data();
+            pdata->sign(psid, (uint8_t *)buf, len, signedData, signedDataLen,certs);
         }catch(Exception& e)
         {
             ret = 0;
@@ -336,6 +353,7 @@ namespace ctp
             delete ieee1609DataObj;
             throw;
         }
+        delete ieee1609DataObj;
         log_ << "TP::verify(sync..) exit" << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
@@ -367,6 +385,9 @@ namespace ctp
     void TP::process_clients()
     {
         std::stringstream log_(std::ios_base::out);
+        log_ << " TP::process_clients() enter " << std::endl;
+        log_dbg(log_.str(), MODULE);
+        log_.str("");
         while(stop_ == false)
         {
             std::lock_guard<std::mutex> lock_(q_in_mutex);
@@ -429,6 +450,9 @@ namespace ctp
                 }
             }
         } /* while(stop == false )*/
+        log_ << " TP::process_clients() exit " << std::endl;
+        log_dbg(log_.str(), MODULE);
+        log_.str("");
     }
 
     void TP::stop()

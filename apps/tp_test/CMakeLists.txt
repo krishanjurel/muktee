@@ -7,6 +7,7 @@ add_executable(tp_test  ${SRCS})
 
 list(APPEND EXTRA_LIBS tp)
 list(APPEND EXTRA_LIBS dot2)
+# list(APPEND EXTRA_LIBS config_cpp)
 
 list(APPEND EXTRA_HDRS ${PROJECT_BINARY_DIR})
 list(APPEND EXTRA_HDRS ${CMAKE_CURRENT_SOURCE_DIR}/../src)

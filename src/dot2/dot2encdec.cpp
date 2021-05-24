@@ -24,7 +24,7 @@ namespace ctp
         /* clear whatever was in the encoded buffer */
         if(encBuf)
         {
-            free(encBuf);
+            buf_free(encBuf);
             encBuf = nullptr;
         }
         encLen = 0;
@@ -675,10 +675,11 @@ namespace ctp
         log_ << " Ieee1609Encode::HeaderInfo_ enter " << encLen << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
+
         encBuf = (uint8_t *)buf_realloc(encBuf, len+encLen);
         encBuf[encLen++] = preamble;
         len --;
-        psid_(header.psid,1);
+        psid_(header.psid,4);
         log_ << " Ieee1609Encode::HeaderInfo_ exit " << "rem len " << len << "enc len " << encLen << std::endl;
         log_info(log_.str(), MODULE);
         return encLen;
@@ -699,7 +700,7 @@ namespace ctp
         len += 1; /* for choice opaque */
         // len += 1; /* number of bytes in the lenght */
         // len += 4; /* 4 bytes in the length */
-        len += data.content.UNSECUREDDATA.length;
+        // len += data.content.UNSECUREDDATA.length;
 
         encBuf = (uint8_t *)buf_realloc(encBuf, (encLen + len));
 
@@ -729,6 +730,10 @@ namespace ctp
         //     encBuf[encLen++] = dataBuf[i];
         //     len --;
         // }
+
+        /* allocate the buffer for the data */
+        len = data.content.UNSECUREDDATA.length;
+        encBuf = (uint8_t*)buf_realloc(encBuf, (len + encLen));
         /* copy the data */
         uint8_t *dataBuf = data.content.UNSECUREDDATA.octets;
         while(len)

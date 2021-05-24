@@ -65,9 +65,16 @@ namespace ctp
         int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
         const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
 
+        /*FIXME! cache the encoded cert */
+        // uint8_t *encodedBuf;
+        // size_t encodeBufLen;
+
+
+
         public:
 
             void create(int nid = NID_X9_62_prime256v1);
+            void create(int nid, const std::vector<int> psids);
 
             explicit Ieee1609Cert();
             /* no copy constructure */
@@ -78,10 +85,19 @@ namespace ctp
             Ieee1609Cert(const Ieee1609Cert&&) = delete;
             ~Ieee1609Cert()
             {
+                std::cout << "Ieee1609Cert::~Ieee1609Cert()"<< std::endl;
                 pEncObj.reset();
                 pDecObj.reset();
                 pEncObj = nullptr;
                 pDecObj = nullptr;
+                if(seqOfPsidSsp && seqOfPsidSsp->psidSsp)
+                {
+                    std::cout << "Ieee1609Cert::~Ieee1609Cert()::buf_free(seqOfPsidSsp->psidSsp)"<< std::endl;
+                    buf_free(seqOfPsidSsp->psidSsp);
+                }
+                buf_free(base);
+                if(ecKey)
+                    EC_KEY_free(ecKey);
             }
 
             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
@@ -142,13 +158,17 @@ namespace ctp
             /*constructor */
             /* self-signed signature */
             explicit Ieee1609Certs();
-            void create(int nid = NID_X9_62_prime256v1);
             /* encoded file */
             explicit Ieee1609Certs(std::string& file);
             /* encoded buffer */
             explicit Ieee1609Certs(const uint8_t *buffer);
             ~Ieee1609Certs();
             const Ieee1609Cert *get() const;
+            /* create variants */
+            void create(int nid = NID_X9_62_prime256v1);
+            void create(int nid, std::vector<int> psids);
+            void create(std::vector<int> psids);
+
 
             /* encoded message of the signer, 
                 used to create a Signature of the data packet 
@@ -196,8 +216,9 @@ namespace ctp
             Ieee1609Encode():encBuf(nullptr),encLen(0){};
             ~Ieee1609Encode()
             {
-                // std::cout << " Ieee1609Encode::Ieee1609Encode " << std::endl;
-                delete encBuf;
+                std::cout << " Ieee1609Encode::~Ieee1609Encode " << std::endl;
+                if(encBuf)
+                    buf_free(encBuf);
                 encBuf = nullptr;
                 encLen = 0;
             }
@@ -264,7 +285,7 @@ namespace ctp
             Ieee1609Decode():buf(nullptr),len(0){};
             ~Ieee1609Decode()
             {
-                // std::cout << "Ieee1609Decode::~Ieee1609Decode" << std::endl;
+                std::cout << "Ieee1609Decode::~Ieee1609Decode" << std::endl;
                 delete buf;
                 len = 0;
             }

@@ -2,6 +2,8 @@
 */
 
 #include <signal.h> /* for signal */
+#include <sys/types.h>
+#include <sys/stat.h>
 #include "signal.h"
 #include "tp.hpp"
 #define MODULE 4 //test
@@ -22,13 +24,15 @@ void signal_handler(int sig)
 void terminate_handler()
 {
     std::cout << "terminate has been raised "<< std::endl;
-    std::abort();
+    // std::abort();
     
 }
 
 
 /* initialize the log lvl */
 // ctp::LogLvl ctp::log_mgr::logLvl = ctp::LOG_LVL_DBG;
+/* wait for application data to be precessed */
+static bool _processed=false;
 
 
 int main()
@@ -86,6 +90,7 @@ class tp_test_client: public ctp::tp_client
             std::string _data((const char*)data, len);
             log_ << packets << _data << std::endl;
             std::cout << log_.str();
+            _processed = true;
         }
         const int psid_get() const
         {
@@ -107,6 +112,8 @@ void tp_client()
         /* start the trust pointer*/
         tp->start();
         tp->client_register(tpTestClient->psid_get(),tpTestClient);
+        // umask(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
+        _processed = false;
         
 
         /*call the routine to sign the data */
@@ -129,6 +136,11 @@ void tp_client()
     catch(const ctp::Exception& e)
     {
         std::cerr << e.what() << '\n';
+    }
+    while (true)
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     }
     tpTestClient.reset();
     tp.reset();
