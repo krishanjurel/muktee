@@ -6,11 +6,14 @@ message(${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_include_directories(tp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dot2)
 
+add_definitions(-DUSE_LIB_CONFIG)
 if(USE_COSMO_TP)
-    add_definitions(-DUSE_LIB_CONFIG)
-    target_include_directories(tp PUBLIC ${CMAKE_SOURCE_DIR}/third_part/libconfig/lib)
+    target_include_directories(tp PUBLIC ${CMAKE_SOURCE_DIR}/third_party/libconfig/lib)
     # libconfig is provided by the runtime
     target_link_libraries(tp PUBLIC config_cpp)
+else()
+    target_link_libraries(tp PUBLIC config++)
 endif()
+
 
 add_subdirectory(dot2)

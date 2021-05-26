@@ -69,7 +69,7 @@ namespace ctp
         payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* create a local copy of the certificate */
         this->certs.reset();
-        this->certs = certs;
+        this->certs = SHARED_CERTS(certs);
         /* copy the data into unsecured buffer */
         for(size_t i = 0; i < len; i++)
         {
@@ -99,17 +99,18 @@ namespace ctp
 
             /* get the encoded buffer of the signer */
             hashBufLen = certs->encode_signer(&hashBuf);
-
-            // std::cout << "Ieee1609Data::sign certs->encode_signer" << std::endl;
-            // print_data(nullptr, hashBuf, hashBufLen);
-
+            if(hashBufLen == 0)
+            {
+                LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::encode_signer\n", MODULE);
+                goto done;
+            }
 
             /* get the hash of the  certificate buffer */
             ret = certs->Hash256(hashBuf, hashBufLen, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
-                LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::hash", MODULE);
+                LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::hash\n", MODULE);
                 goto done;
             }
 
@@ -124,7 +125,7 @@ namespace ctp
             /* failure to calculate the hash */
             if(ret == 0)
             {
-                LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::hash", MODULE);
+                LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::hash\n", MODULE);
                 goto done;
             }
 
@@ -146,7 +147,7 @@ namespace ctp
                 free (hash);
             if(tbsBuf)
                 buf_free(tbsBuf);
-        LOG_INFO("Ieee1609Data::sign Exit", MODULE);
+        LOG_INFO("Ieee1609Data::sign Exit\n", MODULE);
     }
 
 

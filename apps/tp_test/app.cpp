@@ -30,7 +30,6 @@
 #include "tp.hpp"
 #include "remote.hpp"
 #include <pwd.h>
-#define MODULE 4 //test
 
 #define TEST(_x_) test ## _x_
 void TEST(data_encoding)();
@@ -85,6 +84,8 @@ typedef union
 
 /* initialize the log lvl */
 // ctp::LogLvl ctp::log_mgr::logLvl = ctp::LOG_LVL_DBG;
+
+static int MODULE = ctp::MODULE_USER;
 
 
 int main()
@@ -269,12 +270,12 @@ class tp_test_client: public ctp::tp_client
 void TEST(tp_test_client)()
 {
     std::string log_("TEST(tp_test_client)()\n");
-    log_dbg(log_,MODULE);
+    log_dbg(log_,ctp::MODULE_USER);
 
 
     /* create and get trust pointer object */
     // ctp::TP_PTR tp = ctp::TP::init();
-    ctp::TP_PTR tp = ctp::TP_PTR(new ctp::TP());
+    ctp::SHARED_TP tp = ctp::SHARED_TP(new ctp::TP());
     /* create a new object tp_test_client */
     std::shared_ptr<tp_test_client> tpTestClient = std::shared_ptr<tp_test_client>(new tp_test_client());
     /* register the clients */
@@ -311,6 +312,8 @@ void TEST(tp_test_client)()
     std::this_thread::sleep_for(std::chrono::seconds(20));
     tp->stop();
     tp.reset();
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
 }
 
 typedef void (*ptrTestFunction)();
@@ -323,7 +326,7 @@ ptrTestFunction test_data[]{
 void TEST(config)()
 {
     // ctp::TP_PTR tp = ctp::TP::init();
-    ctp::TP_PTR tp = std::shared_ptr<ctp::TP>(new ctp::TP());
+    ctp::SHARED_TP tp = std::shared_ptr<ctp::TP>(new ctp::TP(), [](const ctp::PTR_TP p){delete p;});
     try
     {
         tp->start();
@@ -337,6 +340,9 @@ void TEST(config)()
     }
     tp->stop();
     tp.reset();
+
+    std::this_thread::sleep_for(std::chrono::seconds(10));
+
 }
 
 void TEST(hashing)()
@@ -394,15 +400,17 @@ void TEST(data_decoding)()
 {
     std::stringstream log_(std::ios_base::out);
     std::string tbsData("this is dummy test data!!!");
-    ctp::Ieee1609Data *pdata = nullptr;
+    // ctp::Ieee1609Data *pdata = nullptr;
     uint8_t *signedData = nullptr;
     size_t signedDataLength = 0;
-    ctp::Ieee1609Certs *pcerts = nullptr;
+    // ctp::Ieee1609Certs *pcerts = nullptr;
     ctp::Ieee1609Data *pdata2 = nullptr;
-    ctp::TP_PTR tp = nullptr;
+    ctp::SHARED_TP tp = nullptr;
     try
     {
-        tp = ctp::TP_PTR(new ctp::TP(), [](const ctp::TP* ptr){std::cout << "TP delete " << std::endl; delete ptr;});
+        ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_DBG);
+
+        tp = ctp::SHARED_TP(new ctp::TP(), [](const ctp::PTR_TP ptr){std::cout << "TP delete " << std::endl; delete ptr;});
         tp->start();
     
         // log_ << "data_decoding start " << std::endl;
@@ -422,7 +430,6 @@ void TEST(data_decoding)()
         // pdata->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
         // unlink("data_decoding_enc_data.txt");
         // print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
-        ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_DBG);
         tp->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.size(), &signedData, &signedDataLength);
         /* decoding section */
         log_info(std::string("Start decoding "), MODULE);
@@ -481,6 +488,8 @@ void TEST(data_decoding)()
     tp.reset();
     log_ << "TEST(data_decoding)() passed " << std::endl;
     log_dbg(log_.str(), MODULE);
+
+    std::this_thread::sleep_for(std::chrono::seconds(10));
     return;
 }
 void TEST(certs_encoding)()

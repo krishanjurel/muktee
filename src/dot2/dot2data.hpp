@@ -8,16 +8,15 @@
 
 namespace ctp
 {
-    class TP; /* forward declaration */
-    using TP_PTR = std::shared_ptr<TP>;
+    class Ieee1609Data;
+    using SHARED_DATA = std::shared_ptr<Ieee1609Data>;
+    using PTR_DATA = Ieee1609Data *;
 
     class Ieee1609Data:public mem_mgr
     {
         /* create an instance of encode object */
-        std::shared_ptr<Ieee1609Encode> enc;
-        std::shared_ptr<Ieee1609Decode> dec;
-        /* FIXME, create an instance of decode object */
-        //decode *decode;
+        SHARED_ENC enc;
+        SHARED_DEC dec;
 
         // HashAlgorithmType *hashId;
         HeaderInfo *headerInfo;
@@ -26,19 +25,20 @@ namespace ctp
         Signature *signature;
         SignedData *signedData;
         const ECDSA_SIG* sig;
-        TP_PTR tpPtr;
-        Ieee1609Cert *certMgrPtr;
+        Ieee1609Cert *cert;
         /* signer for this data */
         // Ieee1609Cert *cert;
-        std::shared_ptr<Ieee1609Certs> certs; /* the sequence of certificate */
-
+        SHARED_CERTS certs; /* the sequence of certificate */
         /* data member */
         Ieee1609Dot2Data *data;
+
+        /* every module must have this */
+        const int MODULE=MODULE_DATA;
+
         public:
             Ieee1609Data(){
-                enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *ptr){delete ptr;});
-                dec =  std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode(), [](Ieee1609Decode *ptr){delete ptr;});
-                tpPtr = nullptr; //TP::init();
+                enc = SHARED_ENC(new Ieee1609Encode(), [](PTR_ENC ptr){delete ptr;});
+                dec =  SHARED_DEC(new Ieee1609Decode(), [](PTR_DEC ptr){delete ptr;});
                 data = (Ieee1609Dot2Data *)buf_alloc(sizeof(Ieee1609Dot2Data));
                 signedData = (SignedData *)&data->content.content.signedData;
                 tbsData = (ToBeSignedData *)&signedData->toBeSignedData;
@@ -50,7 +50,6 @@ namespace ctp
                 headerInfo = (HeaderInfo*)&tbsData->headerInfo;
                 data->protocolVersion = 0x03;
                 /* get the certificate manager */
-                //certMgrPtr = tpPtr->cert_mgr();
                 certs = std::make_shared<Ieee1609Certs>();
             }
 

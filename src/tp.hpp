@@ -22,10 +22,14 @@
 
 namespace ctp
 {
+    class TP;
+    using PTR_TP = TP *;
+    using SHARED_TP = std::shared_ptr<TP>;
+
     class TP //:public std::enable_shared_from_this<TP>
     {
-        using TP_PTR = std::shared_ptr<TP>;
-        tp_cfg *cfg;
+
+        std::shared_ptr<tp_cfg> cfg;
         bool init_done;
         bool stop_;
 
@@ -35,8 +39,14 @@ namespace ctp
         std::mutex q_out_mutex;
         std::thread t_in_thread;
 
-        std::shared_ptr<Ieee1609Certs> certs;
         std::map<int, psid_tp_client*> psid_clients;
+
+
+        /* cert manager */
+        SHARED_CERTMGR certMgr;
+        SHARED_CERTS certs;
+
+        const int MODULE = MODULE_TP;
 
 
 
@@ -54,9 +64,9 @@ namespace ctp
             ~TP();
             void cfg_mgr();
             /* control blocks */
-            TP_PTR instance_get();
+            SHARED_TP instance_get();
             // static TP_PTR init();
-            TP_PTR  init();
+            SHARED_TP  init();
             void start();
             void stop();
 

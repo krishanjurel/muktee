@@ -3,6 +3,7 @@ if(NOT USE_COSMO_TP)
     SET(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_EXTENSIONS OFF)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
+    add_definitions(-DUSE_LIB_CONFIG)
 endif()
 
 add_compile_options(-O3 -fpermissive -Wunused-variable)

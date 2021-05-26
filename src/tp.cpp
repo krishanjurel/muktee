@@ -152,6 +152,8 @@ namespace ctp
     }
 
     LogLvl log_mgr::logLvl = ctp::LOG_LVL_DBG;
+    int ctp::CertMgr::_initDone = 0;
+    SHARED_CERTMGR ctp::CertMgr::pCertMgr = nullptr;
 
     TP::TP()
     {
@@ -159,20 +161,12 @@ namespace ctp
         cfg = nullptr;
         std::stringstream log_(std::ios_base::out);
         log_ << "TP::TP() enter " << std::endl;
-        log_info(log_.str(), MODULE);
+        log_dbg(log_.str(), MODULE);
         log_.str("");
-        try
-        {
-            /* create instances of cert and data manager */
-            certs = std::shared_ptr<Ieee1609Certs>(new Ieee1609Certs(),[](const Ieee1609Certs *p){std::cout << "Delete TP::certs " << std::endl;delete p;});
-            
-        }catch(Exception& e)
-        {
-            log_ << "TP::TP() " << e.what() << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-        }
-        log_ << "TP::TP() exit " << std::endl;
-        log_info(log_.str(), MODULE);
+        // certMgr = ctp::CertMgr::init();
+        certMgr = std::make_shared<CertMgr>();
+        log_ << "TP::TP() exit " << certMgr.use_count() << std::endl;
+        log_dbg(log_.str(), MODULE);
         log_.str("");
     }
 
@@ -180,15 +174,16 @@ namespace ctp
     {
         /* assign certs to nullptr, it will free it */
         std::cout << "TP::~TP()  enter " << std::endl;
-        certs.reset();
-        delete cfg;
+        certs=nullptr;
+        cfg = nullptr;
+        certMgr= nullptr;
     }
 
     void TP::start()
     {
         std::stringstream log_ (std::ios_base::out);
         log_ << " TP::start() enter " << std::endl;
-        log_info(log_.str(), MODULE);
+        log_dbg(log_.str(), MODULE);
         log_.str("");
         if(init_done == false)
         {
@@ -196,39 +191,33 @@ namespace ctp
             try
             {
                 /* call out the config manager */
-                cfg = new tp_cfg("./bin/config.file");
-
-
-
-
+                log_ << "TP::start() ";
+                cfg = std::shared_ptr<tp_cfg>(new tp_cfg("./bin/config.file"),[this](const tp_cfg* p){ log_dbg(" TP::start() delete tp_cfg\n", MODULE); delete p;});
             }
             catch(const std::exception& e)
             {
+                log_.str("");
                 /* in case of exception, only create the the self signed certificate with BSM psid */
                 log_ << " TP::start() " << e.what() << std::endl;
                 LOG_ERR(log_.str(), MODULE);
+                cfg = nullptr;
             }
-            /* default create a certificate for nist256P and for bsm psid 0x20*/ 
-            if(cfg && cfg->psids.size())
-                certs->create(cfg->psids);
-            else
-                certs->create();
+            certMgr->start(cfg);
         }
-        log_ << " TP::start() exit " << std::endl;
-        log_info(log_.str(), MODULE);
 
         t_in_thread = std::thread(&TP::process_clients, this);
         stop_ = false;
-
+        log_ << " TP::start() exit " << std::endl;
+        log_dbg(log_.str(), MODULE);
     }
 
     /* every client must be calling this routine */
-    TP_PTR TP::instance_get()
+    SHARED_TP TP::instance_get()
     {
-        return nullptr;//shared_from_this();
+        return SHARED_TP(this);
     }
 
-    TP_PTR TP::init()
+    SHARED_TP TP::init()
     {
         // static TP_PTR pObj = nullptr;
         // static TP obj; /* need this for private constructor */
@@ -236,6 +225,8 @@ namespace ctp
         // {
         //     pObj = std::make_shared<TP>(obj);
         // }
+        /* initialize the cert manager */
+        certMgr = ctp::CertMgr::init();
         return std::make_shared<TP>();
     }
 
@@ -281,6 +272,16 @@ namespace ctp
         log_info(log_.str(), MODULE);
         log_.str("");
 
+        certs = certMgr->operator[](psid);
+        if(certs == nullptr)
+        {
+            log_.str("");
+            log_ << "TP::sign() psid" << psid << " is not supported " << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw Exception(log_.str());
+
+        }
+
         try
         {
             // pdata = new ctp::Ieee1609Data();
@@ -295,6 +296,8 @@ namespace ctp
         log_ << "TP::sign exit " << ret << std::endl;
         log_info(log_.str(),MODULE);
         delete pdata;
+        // std::cout << "delete certs shared object " << certs.use_count() << std::endl;
+        // certs.reset();
         return ret;
     }
 
@@ -459,6 +462,7 @@ namespace ctp
     {
         stop_= true;
         t_in_thread.join();
+        certMgr->stop();
         std::string log_("TP::stop() done\n");
         log_dbg(log_, MODULE);
     }

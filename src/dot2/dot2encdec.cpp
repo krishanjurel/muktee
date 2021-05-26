@@ -51,7 +51,8 @@ namespace ctp
                 len += 1; /* length encoding */
                 break;
             default:
-                LOG_ERR("Ieee1609Encode::CertId: unsupported cert id", MODULE);
+                log_ << "Ieee1609Encode::CertId: unsupported cert id " << std::endl;
+                LOG_ERR(log_.str(), MODULE);
                 throw Exception(log_.str());
                 break;
         }

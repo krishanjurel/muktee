@@ -12,6 +12,22 @@
 /* common structures with c++ linkage */
 namespace ctp
 {
+
+/* define modules */
+    enum
+    {
+        MODULE_TP = 0,
+        MODULE_CERT,
+        MODULE_CERTS,
+        MODULE_CERTMGR,
+        MODULE_DATA,
+        MODULE_ENC,
+        MODULE_DEC,
+        MODULE_MEM,
+        MODULE_CFG,
+        MODULE_USER     /* test programs use from here */
+    };
+
     enum {
         PSID_BSM = 0x20,
         /* use this to test the unspported psid */
@@ -64,6 +80,8 @@ namespace ctp
             std::cout << "tp_cfg::~tp_cfg() " << std::endl;
         }
         void tp_cert_cfg(const char *filename);
+
+        const int MODULE=MODULE_CFG;
 
     };
 

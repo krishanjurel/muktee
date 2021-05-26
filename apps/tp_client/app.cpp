@@ -103,7 +103,7 @@ void tp_client()
 {
     /* create and get trust pointer object */
     // ctp::TP_PTR tp = ctp::TP::init();
-    ctp::TP_PTR tp = ctp::TP_PTR(new ctp::TP());
+    ctp::SHARED_TP tp = ctp::SHARED_TP(new ctp::TP(), [](const ctp::PTR_TP tp){delete tp;});
     /* create a new object tp_test_client */
     std::shared_ptr<tp_test_client> tpTestClient = std::shared_ptr<tp_test_client>(new tp_test_client(),[](const tp_test_client *obj){delete obj;});
     /* register the clients */

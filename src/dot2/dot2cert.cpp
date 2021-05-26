@@ -563,6 +563,7 @@ namespace ctp
 
     int Ieee1609Cert::encode(uint8_t **buf)
     {
+        int ret = 0;
         /* clear whatever was there */
         pEncObj->clear();
         /* encode the preamble for signature optional component */
@@ -570,11 +571,15 @@ namespace ctp
         // {
         //     pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
         // }
-        EncodeCertBase(true);
-        /* only encode the signature if it is of type explicit */
-        if(base->certType == CertTypeExplicit &&  signature != nullptr)
-            pEncObj->Signature_(std::ref(*signature));
-        return pEncObj->get(buf);
+        ret = EncodeCertBase(true);
+        if(ret != 0)
+        {
+            /* only encode the signature if it is of type explicit */
+            if(base->certType == CertTypeExplicit &&  signature != nullptr)
+                pEncObj->Signature_(std::ref(*signature));
+            ret = pEncObj->get(buf);
+        }
+        return ret;
     }
 
     
@@ -664,12 +669,13 @@ namespace ctp
             std::cout << "Ieee1609Cert::EncodeToBeSigned() exception "  << e.what() << std::endl;
             throw;
         }
-        return 0;
+        return 1;
     }
 
     /* encode the toBeSigned field of the explicit certicate*/
     int Ieee1609Cert::EncodeCertBase(bool cont)
     {
+        int ret = 1;
         /* reset the encoded buffer and length */
         if(cont == false)
             pEncObj->clear();
@@ -684,15 +690,15 @@ namespace ctp
         }
         catch (std::logic_error& e)
         {
+            ret = 0;
             std::cout << e.what() << '\n';
-
         }
         catch(const std::exception& e)
         {
+            ret = 0;
             std::cout << e.what() << '\n';
         }
-        
-        return 0;
+        return ret;
     }
 
     /* print the certificate into the file */
@@ -880,9 +886,9 @@ namespace ctp
     Ieee1609Certs::Ieee1609Certs()
     {
         quantity = 0; 
-        cert = new Ieee1609Cert();
-        enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){ delete p;});
-        dec = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode, [](Ieee1609Decode *p){delete p;});
+        cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
+        enc = SHARED_ENC(new Ieee1609Encode(), [this](const PTR_ENC p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete enc\n", MODULE); delete p;});
+        dec = SHARED_DEC(new Ieee1609Decode, [this](const PTR_DEC p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete dec\n", MODULE);delete p;});
     }
 
     void Ieee1609Certs::create(int nid)
@@ -897,7 +903,7 @@ namespace ctp
         {
             log_ << e.what() << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            delete cert;
+            cert.reset();
             throw;
         }
     }
@@ -941,9 +947,9 @@ namespace ctp
 
         /* default */
         quantity = 0;
-        cert = new Ieee1609Cert();
-        enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){ delete p;});
-        dec = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode, [](Ieee1609Decode *p){delete p;});
+        cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
+        enc = SHARED_ENC(new Ieee1609Encode(), [](const PTR_ENC p){ delete p;});
+        dec = SHARED_DEC(new Ieee1609Decode, [](const PTR_DEC p){delete p;});
 
         log_ << "Ieee1609Certs::Ieee1609Certs(std::string& file) exit " << std::endl;
         log_info(log_.str(), MODULE);
@@ -958,9 +964,9 @@ namespace ctp
         log_.str("");
 
         quantity = 0;
-        cert = new Ieee1609Cert();
-        enc = std::shared_ptr<Ieee1609Encode>(new Ieee1609Encode(), [](Ieee1609Encode *p){ delete p;});
-        dec = std::shared_ptr<Ieee1609Decode>(new Ieee1609Decode, [](Ieee1609Decode *p){delete p;});
+        cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
+        enc = SHARED_ENC(new Ieee1609Encode(), [](const PTR_ENC p){ delete p;});
+        dec = SHARED_DEC(new Ieee1609Decode, [](const PTR_DEC p){delete p;});
 
         log_ << "Ieee1609Certs::Ieee1609Certs(const uint8_t *buffer) exit" << std::endl;
         log_info(log_.str(), MODULE);
@@ -969,16 +975,14 @@ namespace ctp
     Ieee1609Certs::~Ieee1609Certs()
     {
         std::cout << "Ieee1609Certs::~Ieee1609Certs()" << std::endl;
-        enc.reset();
-        dec.reset();
         enc = nullptr;
         dec = nullptr;
-        delete cert;
+        cert = nullptr;
     }
 
     const Ieee1609Cert* Ieee1609Certs::get() const
     {
-        return cert;
+        return cert.get();
     }
 
     /* encoded message of the signer, 
@@ -1029,7 +1033,7 @@ namespace ctp
     }
     int Ieee1609Certs::decode (std::shared_ptr<Ieee1609Decode> ptr)
     {
-        std::shared_ptr<Ieee1609Decode> temp = dec->GetPtr();
+        SHARED_DEC temp = dec->GetPtr();
         /* clear the exisiting pointer */
         dec.reset();
         dec = ptr->GetPtr();
@@ -1091,14 +1095,6 @@ namespace ctp
         size_t len = enc->get(&buf);
         print_data("certs.txt", buf, len);
     }
-
-
-
-
-
-
-
-
 } //namespace ctp
 
 
