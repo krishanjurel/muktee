@@ -886,19 +886,22 @@ namespace ctp
     Ieee1609Certs::Ieee1609Certs()
     {
         quantity = 0; 
-        cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
         enc = SHARED_ENC(new Ieee1609Encode(), [this](const PTR_ENC p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete enc\n", MODULE); delete p;});
         dec = SHARED_DEC(new Ieee1609Decode, [this](const PTR_DEC p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete dec\n", MODULE);delete p;});
+        certs.clear();
     }
 
     void Ieee1609Certs::create(int nid)
     {
+        SHARED_CERT cert = nullptr;
         std::stringstream log_(std::ios_base::out);
         log_ << " Ieee1609Certs::create( " << std::dec << nid ;
         try
         {
+            cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
             cert->create(nid);
             quantity++;
+            certs.push_back(cert);
         }catch(ctp::Exception& e)
         {
             log_ << e.what() << std::endl;
@@ -917,6 +920,7 @@ namespace ctp
 
     void Ieee1609Certs::create(int nid, std::vector<int> psids)
     {
+        SHARED_CERT cert = nullptr;
         std::stringstream log_(std::ios_base::out);
         log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) enter" << std::endl;
         log_info(log_.str(), MODULE);
@@ -924,14 +928,18 @@ namespace ctp
 
         try
         {
+            /* clear any existing certs here */
+            certs.clear();
+            cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
             cert->create(nid, psids);
             quantity++;
+            certs.emplace_back(cert);
         }catch( std::exception& e){
             log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) " << e.what() << std::endl;
             LOG_ERR(log_.str(), MODULE);
             throw;
         }
-        log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) exit";
+        log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) exit" << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
     }
@@ -947,7 +955,7 @@ namespace ctp
 
         /* default */
         quantity = 0;
-        cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
+        // cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
         enc = SHARED_ENC(new Ieee1609Encode(), [](const PTR_ENC p){ delete p;});
         dec = SHARED_DEC(new Ieee1609Decode, [](const PTR_DEC p){delete p;});
 
@@ -964,7 +972,6 @@ namespace ctp
         log_.str("");
 
         quantity = 0;
-        cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
         enc = SHARED_ENC(new Ieee1609Encode(), [](const PTR_ENC p){ delete p;});
         dec = SHARED_DEC(new Ieee1609Decode, [](const PTR_DEC p){delete p;});
 
@@ -977,12 +984,12 @@ namespace ctp
         std::cout << "Ieee1609Certs::~Ieee1609Certs()" << std::endl;
         enc = nullptr;
         dec = nullptr;
-        cert = nullptr;
+        certs.clear();
     }
 
     const Ieee1609Cert* Ieee1609Certs::get() const
     {
-        return cert.get();
+        return certs[0].get();
     }
 
     /* encoded message of the signer, 
@@ -990,7 +997,8 @@ namespace ctp
     */
     int Ieee1609Certs::encode_signer(uint8_t **buf)
     {
-        return cert->encode(buf);
+        /* just take the first certificate */
+        return certs[0]->encode(buf);
     }
 
     int Ieee1609Certs::encode(uint8_t **buf){
@@ -1001,7 +1009,11 @@ namespace ctp
             enc->clear();
             /* only 1 byte is needed to encode the number seuqnce */
             enc->SequenceOf(quantity);
-            cert->encode(enc);
+            /* get all the certificates in this chain */
+            for(auto cert:certs)
+            {
+                cert->encode(enc);
+            }
             len = enc->get(buf);
         }catch(Exception& e)
         {
@@ -1021,8 +1033,13 @@ namespace ctp
             dec->clear();
             dec->set(buf, len);
             dec->SequenceOf((uint8_t*)&quantity, 4);
-            /* decode the certificate with the given decoder */
-            cert->decode(dec);
+            for(int i= 0; i < quantity; i++)
+            {
+                SHARED_CERT cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
+                /* decode the certificate with the given decoder */
+                cert->decode(dec);
+                certs.push_back(cert);
+            }
         }catch(Exception& e)
         {
             LOG_ERR(e.what(), MODULE);
@@ -1044,9 +1061,10 @@ namespace ctp
             dec->SequenceOf((uint8_t *)&quantity, 4);
             for(int i =0; i < quantity; i++)
             {
-                // Ieee1609Cert *pcert = new Ieee1609Cert();
-                /* passed the decode buffer to the cert */
+                SHARED_CERT cert = SHARED_CERT(new Ieee1609Cert(), [](const PTR_CERT p){delete p;});
+                /* decode the certificate with the given decoder */
                 cert->decode(dec);
+                certs.push_back(cert);
             }
 
         }catch(Exception& e)
@@ -1062,30 +1080,30 @@ namespace ctp
 
     int Ieee1609Certs::Hash256(const uint8_t* tbHash, size_t len, uint8_t **hash)
     {
-        return cert->Hash256(tbHash, len, hash);
+        return certs[0]->Hash256(tbHash, len, hash);
     }
 
     int Ieee1609Certs::verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature)
     {
-        return cert->verify(dgst, dgst_len, signature);
+        return certs[0]->verify(dgst, dgst_len, signature);
     }
 
     int Ieee1609Certs::verify(const uint8_t *dgst, size_t dgst_len)
     {
-        return cert->verify(dgst, dgst_len);
+        return certs[0]->verify(dgst, dgst_len);
     }
 
     const ECDSA_SIG* Ieee1609Certs::SignData(const uint8_t *buf, size_t len, SignatureType type)
     {
-        return cert->SignData(buf, len, type);
+        return certs[0]->SignData(buf, len, type);
     }
     int Ieee1609Certs::SigToSignature(const ECDSA_SIG* sig, Signature& signature)
     {
-        return cert->SigToSignature(sig, signature);
+        return certs[0]->SigToSignature(sig, signature);
     }
     int Ieee1609Certs::ConsistencyCheck(const HeaderInfo& header)
     {
-        return cert->ConsistencyCheck(header);
+        return certs[0]->ConsistencyCheck(header);
 
     }
 

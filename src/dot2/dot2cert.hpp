@@ -15,7 +15,11 @@
 #include <memory>
 #include <string>
 #include <cstring>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include "tp_util.hpp"
+#include <condition_variable>
 
 
 void print_data(const char* file, const uint8_t *buf, size_t len);
@@ -49,6 +53,7 @@ namespace ctp
     {
         // std::vector<CertificateBase *> certs;
         // std::map<int, ctp::Ieee1609Cert*> certsPsidMap;
+
         // std::map<std::string, ctp::Ieee1609Cert*> certsHashIdMap;
 
 
@@ -117,6 +122,8 @@ namespace ctp
                 buf_free(base);
                 if(ecKey)
                     EC_KEY_free(ecKey);
+
+                std::cout << "Ieee1609Cert::~Ieee1609Cert() exit"<< std::endl;
             }
 
             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
@@ -166,9 +173,8 @@ namespace ctp
     class Ieee1609Certs : public mem_mgr
     {
         int quantity;
-        SHARED_CERT cert;
-        // Ieee1609Decode *dec;
-        // Ieee1609Encode *enc;
+        /* list of certificates under this certs */
+        std::vector<SHARED_CERT> certs;
         SHARED_ENC enc;
         SHARED_DEC dec;
         SignerIdentifier signerIdentifier;
@@ -204,6 +210,13 @@ namespace ctp
             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
             int SigToSignature(const ECDSA_SIG* sig, Signature& signature);
             int ConsistencyCheck(const HeaderInfo& header);
+            const std::vector<SHARED_CERT>& CertList(){ return certs;};
+            void CertAdd(SHARED_CERT cert){
+                /* increase the quantity */
+                quantity++;
+                certs.push_back(cert);
+                return;
+            }
             void print();
     };
 
@@ -677,16 +690,17 @@ namespace ctp
         static SHARED_CERTMGR pCertMgr;
         std::shared_ptr<tp_cfg> cfg;
 
-        /* shared certs objects*/
-
-        SHARED_CERTS certs;
-
+        /* list of certificates*/
+        std::vector<SHARED_CERT> certList;
 
         std::thread validThread; /* thread checking the validity of the certs */
         std::thread remoteThread; /* thread communicating with remote host */
         std::thread localThread; /* thread to create and load the local certs */
 
+        int certReady;
         std::mutex hashdMapMutex;
+        // std::condtional_variable cv;
+        std::condition_variable cv;
 
         // /* only one instance of the certificate manager at all costs */
         // explicit CertMgr():mem_mgr(),_stop(0)
@@ -716,39 +730,61 @@ namespace ctp
                 std::stringstream log_(std::ios_base::out);
                 log_ << "CertMgr::CertMgr() enter" << std::endl;
                 log_dbg(log_.str(), MODULE);
-                try
-                {
-                    /* create instances of cert and data manager */
-                    certs = SHARED_CERTS(new Ieee1609Certs(),[this](const PTR_CERTS p){log_dbg(std::string("CertMgr::CertMgr delete CertMgr::certs \n"),this->MODULE);delete p;});
-                }catch(Exception& e)
-                {
-                    log_.str("");
-                    log_ << " CertMgr::CertMgr() " << e.what() << std::endl;
-                    LOG_ERR(log_.str(), MODULE);
-                }
+                // try
+                // {
+                //     /* create instances of cert and data manager */
+                //     certs = SHARED_CERTS(new Ieee1609Certs(),[this](const PTR_CERTS p){log_dbg(std::string("CertMgr::CertMgr delete CertMgr::certs \n"),this->MODULE);delete p;});
+                // }catch(Exception& e)
+                // {
+                //     log_.str("");
+                //     log_ << " CertMgr::CertMgr() " << e.what() << std::endl;
+                //     LOG_ERR(log_.str(), MODULE);
+                // }
+                certReady = 0;
+                cfg = std::shared_ptr<tp_cfg>(nullptr);
+                certList.clear();
             }
             CertMgr(const CertMgr& ) = delete;
             CertMgr(const CertMgr&& ) = delete;
 
+            CertMgr& operator=(const CertMgr& ) = delete;
+            CertMgr& operator=(const CertMgr&& ) = delete;
+
             ~CertMgr()
             {
                 log_dbg("CertMgr::~CertMgr\n", MODULE);
-                certs = nullptr;
+                certList.clear();
                 _initDone = 0;
                 pCertMgr = nullptr;
                 cfg = nullptr;
             }
             /* get the certificate for the sepcified psid */
-            SHARED_CERTS operator[](const int psid)
+            SHARED_CERT operator[](const int psid)
             {
-                /*FIXME, for now hard coded */
-                return certs;
+                SHARED_CERT _cert = nullptr;
+                std::unique_lock<std::mutex> lck(hashdMapMutex);
+                cv.wait(lck, [this](){ return certReady == 1;});
+                for (SHARED_CERT cert : certList)
+                {
+                    const SequenceOfPsidSsp& psids = cert->psid_get();
+                    for(int i =0; i < psids.quantity; i++)
+                    {
+                        PsidSsp *psidSsp = psids.psidSsp;
+                        if(psid == psidSsp->psid)
+                        {
+                            _cert = cert;
+                            break;
+                        }
+                    }
+                }
+                return _cert;
             }
             /* get the certificate for the specified hashId */
-            SHARED_CERTS operator[](HashedId8 hashId)
+            SHARED_CERT operator[](HashedId8 hashId)
             {
-                /*FIXME, for now hard coded */
-                return certs;
+                std::unique_lock<std::mutex> lck(hashdMapMutex);
+                cv.wait(lck, [this](){ return certReady == 1;});
+                return certList[0];
             }
 
             void start(std::shared_ptr<tp_cfg> tpcfg)
@@ -758,12 +794,6 @@ namespace ctp
                 validThread = std::thread(&CertMgr::cert_mgr_valid_handler, this);
                 localThread = std::thread(&CertMgr::cert_mgr_local_handler, this);
                 hashIdMap.clear();
-
-                if(cfg.operator bool() == true && cfg->psids.size())
-                    certs->create(cfg->psids);
-                else
-                    certs->create();
-
             }
 
             void stop()
@@ -814,16 +844,88 @@ namespace ctp
                 log_dbg(std::string("CertMgr::cert_mgr_remote_handler exit\n"), MODULE);
 
             }
+
             void cert_mgr_local_handler()
             {
-                log_dbg(std::string("CertMgr::cert_mgr_local_handler enter\n"), MODULE);
+                std::vector<std::string> files;
+                struct stat stat_;
+
+                SHARED_CERTS certs = nullptr;
+                /* actual certificates */
+                std::vector<SHARED_CERTS> certsList;
+                {
+                    std::lock_guard<std::mutex> lck(hashdMapMutex);
+                    int fd;
+                    dirent *dent;
+                    log_dbg(std::string("CertMgr::cert_mgr_local_handler enter\n"), MODULE);
+                    /* open the certs directory */
+                    DIR *dir = opendir(cfg->certcfg.path1);
+                    if(dir != nullptr)
+                    {
+                        while((dent = readdir(dir)) != nullptr)
+                        {
+                            files.emplace_back(dent->d_name, dent->d_reclen);
+                        }
+                    }
+
+                    for(auto& file: files)
+                    {
+                        file  = cfg->certcfg.path1 + file;
+                        fd = open(file.c_str(), O_RDONLY);
+                        if(fd  == -1) continue;
+                        if(fstat(fd, &stat_) != -1)
+                        {
+                            uint8_t *buf_ = (uint8_t *)buf_alloc(stat_.st_size);
+                            if(buf_ == nullptr) continue;
+                            certs = std::make_shared<ctp::Ieee1609Certs>();
+                            try
+                            {
+                                /* decode the buffer */
+                                certs->decode(buf_, stat_.st_size);
+                                certsList.push_back(certs);
+                            }
+                            catch(const std::exception& e)
+                            {
+                                std::cerr << e.what() << '\n';
+                            }
+                            certs = nullptr;
+                        }
+                    }
+                    if(certsList.size() == 0)
+                    {
+                        certs = std::make_shared<ctp::Ieee1609Certs>();
+                        try
+                        {
+                            if(cfg && cfg->psids.size())
+                                certs->create(cfg->psids);
+                            else
+                                certs->create();
+                            certsList.push_back(certs);
+                        }catch(ctp::Exception& e)
+                        {
+                            std::stringstream log_(std::ios_base::out);
+                            log_ << "CertMgr::cert_mgr_local_handler() " << e.what() << std::endl;
+                            LOG_ERR(log_.str(), MODULE);
+                        }
+                    }
+                }
+
+                /* create the list of certificates */
+                for(auto _certs:certsList)
+                {
+                    for(auto _cert: _certs->CertList())
+                    {
+                        certList.push_back(_cert);
+                    }
+                }
+                certReady = 1;
+                cv.notify_all();
 
                 while(!_stop)
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 }
                 log_dbg(std::string("CertMgr::cert_mgr_local_handler exit\n"), MODULE);
-
             }
     };
 

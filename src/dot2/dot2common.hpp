@@ -37,8 +37,8 @@ namespace ctp
     struct _cert_cfg
     {
         int nid;
-        char *filename1;
-        char *filename2;
+        char *path1;
+        char *path2;
     };
 
     struct _remote_host

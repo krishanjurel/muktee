@@ -25,7 +25,7 @@ namespace ctp
         Signature *signature;
         SignedData *signedData;
         const ECDSA_SIG* sig;
-        Ieee1609Cert *cert;
+        SHARED_CERT cert;
         /* signer for this data */
         // Ieee1609Cert *cert;
         SHARED_CERTS certs; /* the sequence of certificate */
@@ -51,6 +51,7 @@ namespace ctp
                 data->protocolVersion = 0x03;
                 /* get the certificate manager */
                 certs = std::make_shared<Ieee1609Certs>();
+                cert = std::make_shared<Ieee1609Cert>();
             }
 
             ~Ieee1609Data()
@@ -88,7 +89,7 @@ namespace ctp
             /* sign with a supplied certificate */
             void sign(int psid, const uint8_t *buf, size_t len,
                     uint8_t **signedData, size_t *signedDataLen,
-                    std::shared_ptr<Ieee1609Certs> cert);
+                    SHARED_CERT cert);
             
             /* verify the received payload */    
             int verify()
@@ -110,9 +111,14 @@ namespace ctp
                     print_data(nullptr, data_->content.content.unsecuredData.octets,
                                         data_->content.content.unsecuredData.length);
 #endif
+                    /* FIXME, for now take the last certificate in the chain, as
+                       last one is tha data signer,
+                    */
+                    std::vector<SHARED_CERT> _certs = certs->CertList();
+                    cert = _certs[_certs.size()-1];
                     /* check the signing capability of the signer */
                     /* consistency check of the certificate */
-                    ret = certs->ConsistencyCheck(std::ref(*headerInfo));
+                    ret = cert->ConsistencyCheck(std::ref(*headerInfo));
                     if(ret == 0)
                     {
                         log_.str("");
@@ -123,7 +129,7 @@ namespace ctp
                     }
 
                     /* create the hash of the received data */
-                    ret = certs->Hash256(data_->content.content.unsecuredData.octets, 
+                    ret = cert->Hash256(data_->content.content.unsecuredData.octets, 
                                     data_->content.content.unsecuredData.length, &hash1);
                     if(ret == 0)
                     {
@@ -134,13 +140,13 @@ namespace ctp
 
                     /* now get the signer's hash */
                     /* get the encoded buffer of the signer */
-                    hash2Len = certs->encode_signer(&hashBuf);
+                    hash2Len = cert->encode(&hashBuf);
 #ifdef __VERBOSE__
                     std::cout << "Ieee1609Data::verify certs->encode_signer" << std::endl;
                     print_data(nullptr, hashBuf, hash2Len);
 #endif                    
 
-                    ret = certs->Hash256(hashBuf, hash2Len,&hash2);
+                    ret = cert->Hash256(hashBuf, hash2Len,&hash2);
                     if(ret == 0)
                     {
                         log_.str("");
@@ -163,7 +169,7 @@ namespace ctp
 #endif                    
 
                     /* calculate the hash of payload and signer */
-                    ret = certs->Hash256(hashBuf, 2*SHA256_DIGEST_LENGTH, &hash1);
+                    ret = cert->Hash256(hashBuf, 2*SHA256_DIGEST_LENGTH, &hash1);
                     if(ret == 0)
                     {
                         log_.str("");
@@ -173,7 +179,7 @@ namespace ctp
                         buf_free(hashBuf);
                         throw Exception(log_.str());
                     }
-                    ret = certs->verify(hash1, SHA256_DIGEST_LENGTH, std::ref(*signature));
+                    ret = cert->verify(hash1, SHA256_DIGEST_LENGTH, std::ref(*signature));
                     if(ret != 1)
                     {
                         log_ << "Ieee1609Data::verify::certs->verify failed";

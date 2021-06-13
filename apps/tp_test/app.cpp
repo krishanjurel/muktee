@@ -309,10 +309,10 @@ void TEST(tp_test_client)()
         raise(SIGKILL);
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(20));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     tp->stop();
     tp.reset();
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
 }
 
@@ -341,7 +341,7 @@ void TEST(config)()
     tp->stop();
     tp.reset();
 
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 
 }
 
@@ -373,7 +373,7 @@ void TEST(hashing)()
 void TEST(data_encoding)()
 {
     printf("data_encoding\n");
-    std::shared_ptr<ctp::Ieee1609Certs> pcert = std::make_shared<ctp::Ieee1609Certs>();
+    std::shared_ptr<ctp::Ieee1609Cert> pcert = std::make_shared<ctp::Ieee1609Cert>();
     // pcerts->create();
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
@@ -408,10 +408,12 @@ void TEST(data_decoding)()
     ctp::SHARED_TP tp = nullptr;
     try
     {
-        ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_DBG);
+        ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_INFO);
 
         tp = ctp::SHARED_TP(new ctp::TP(), [](const ctp::PTR_TP ptr){std::cout << "TP delete " << std::endl; delete ptr;});
         tp->start();
+        /* wait for a while for certs to be processed */
+        std::this_thread::sleep_for(std::chrono::seconds(5));
     
         // log_ << "data_decoding start " << std::endl;
         // LOG_DBG(log_.str(), MODULE);
@@ -489,7 +491,7 @@ void TEST(data_decoding)()
     log_ << "TEST(data_decoding)() passed " << std::endl;
     log_dbg(log_.str(), MODULE);
 
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     return;
 }
 void TEST(certs_encoding)()
@@ -706,7 +708,7 @@ void TEST(FILE)()
 
         out_ << "hi this is krishan" << std::endl;
 
-        out_ << std::dec << 123456 << std::endl;
+        out_ << std::dec << 123456 << " " << 789 << std::endl;
         out_ << "this is another line " << std::endl;
 
         os << out_.str();
@@ -718,14 +720,62 @@ void TEST(FILE)()
     ifs.open(file.c_str());
     is.rdbuf(ifs.rdbuf());
 
-    char c[64];
-    is.getline(c, sizeof(c));
-    std::cout << c << std::endl;
-    is.getline(c, sizeof(c));
-    std::cout << c << std::endl;
-    std::istringstream istream(std::string(c), std::ios_base::in);
-    int n;
-    istream >> std::dec >> n;
-    std::cout << "integer is " << n << std::endl;
+    while(1)
+    {
+        std::string line;
+        std::getline(is, line);
+        if (is.eof() == true ||
+            is.bad() == true ||
+            is.fail() == true)
+            break;
+        std::cout << "first line is:" << line << std::endl;
+        std::stringstream strstream(std::ios_base::out |  std::ios_base::in);
+        // int numTests;
+        // strstream.str(line);
+        // strstream >> std::dec >> numTests;
+        // std::cout << "number of tests " << numTests << std::endl;
+        // for(int i = 0; i < numTests; i)
+        // std::cout << "first string: " << line << std::endl;
+
+        std::getline(is, line);
+        if (is.eof() == true ||
+            is.bad() == true ||
+            is.fail() == true)
+            break;
+
+        strstream.str(line);
+        int num1, num2;
+
+        strstream >> std::dec >> num1 >> num2;
+        std::cout << "num1:num2 " << num1 <<":"<<num2 << std::endl;
+
+        std::getline(is, line);
+        if (is.eof() == true ||
+            is.bad() == true ||
+            is.fail() == true)
+            break;
+        std::cout << "last line is : " << line << std::endl;
+
+
+        // char c[64];
+        // is.getline(c, sizeof(c));
+        // std::cout << c << std::endl;
+        // is.getline(c, sizeof(c));
+        // std::cout << c << std::endl;
+        // std::istringstream istream(std::string(c), std::ios_base::in);
+        // int n;
+        // istream >> std::dec >> n;
+        // std::cout << "integer is " << n << std::endl;
+    }
+
+    /* alternate methid to read lines */
+    /* set the seek pointer at the beginning */
+    ifs.seekg(std::ios_base::beg);
+
+    char _line[256];
+    while(ifs.getline(_line, 256))
+    {
+        std::cout << "Line is : " << _line << std::endl;
+    }
     ifs.close();
 }

@@ -106,6 +106,9 @@ namespace ctp
                 log_ << "tp_cfg::tp_cfg (" << filename << ")" << e.what() << std::endl;
                 LOG_ERR(log_.str(), MODULE);
             }
+
+            certcfg.path1 = "./bin/certs";
+            certcfg.path2 = nullptr;
             fclose(fp);
         }else
         {
@@ -174,7 +177,7 @@ namespace ctp
     {
         /* assign certs to nullptr, it will free it */
         std::cout << "TP::~TP()  enter " << std::endl;
-        certs=nullptr;
+        cert=nullptr;
         cfg = nullptr;
         certMgr= nullptr;
     }
@@ -217,18 +220,18 @@ namespace ctp
         return SHARED_TP(this);
     }
 
-    SHARED_TP TP::init()
-    {
-        // static TP_PTR pObj = nullptr;
-        // static TP obj; /* need this for private constructor */
-        // if(pObj == nullptr)
-        // {
-        //     pObj = std::make_shared<TP>(obj);
-        // }
-        /* initialize the cert manager */
-        certMgr = ctp::CertMgr::init();
-        return std::make_shared<TP>();
-    }
+    // SHARED_TP TP::init()
+    // {
+    //     // static TP_PTR pObj = nullptr;
+    //     // static TP obj; /* need this for private constructor */
+    //     // if(pObj == nullptr)
+    //     // {
+    //     //     pObj = std::make_shared<TP>(obj);
+    //     // }
+    //     /* initialize the cert manager */
+    //     certMgr = ctp::CertMgr::init();
+    //     return std::make_shared<TP>();
+    // }
 
     const std::vector<int>& TP::psid_list() const
     {
@@ -272,8 +275,8 @@ namespace ctp
         log_info(log_.str(), MODULE);
         log_.str("");
 
-        certs = certMgr->operator[](psid);
-        if(certs == nullptr)
+        cert = certMgr->operator[](psid);
+        if(cert == nullptr)
         {
             log_.str("");
             log_ << "TP::sign() psid" << psid << " is not supported " << std::endl;
@@ -285,7 +288,7 @@ namespace ctp
         try
         {
             // pdata = new ctp::Ieee1609Data();
-            pdata->sign(psid, (uint8_t *)buf, len, signedData, signedDataLen,certs);
+            pdata->sign(psid, (uint8_t *)buf, len, signedData, signedDataLen,cert);
         }catch(Exception& e)
         {
             ret = 0;

@@ -47,7 +47,7 @@ namespace ctp
 
     void Ieee1609Data::sign(int psid, const uint8_t *buf, size_t len,
                   uint8_t **signedData, size_t *signedDataLen,
-                  std::shared_ptr<Ieee1609Certs> certs)
+                  std::shared_ptr<Ieee1609Cert> cert)
     {
         int ret = 0;
         /* for signing, get the encoded certiificate */
@@ -68,8 +68,8 @@ namespace ctp
         payload->data->content.UNSECUREDDATA.length = len;
         payload->data->content.UNSECUREDDATA.octets = (uint8_t *)buf_alloc(len);
         /* create a local copy of the certificate */
-        this->certs.reset();
-        this->certs = SHARED_CERTS(certs);
+        this->cert.reset();
+        this->cert = SHARED_CERT(cert);
         /* copy the data into unsecured buffer */
         for(size_t i = 0; i < len; i++)
         {
@@ -79,7 +79,7 @@ namespace ctp
         {
             tbsLen = 0;
            /* get the hash the data */
-            ret = certs->Hash256(buf, len, &hash);
+            ret = cert->Hash256(buf, len, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -98,7 +98,7 @@ namespace ctp
             hash = nullptr;
 
             /* get the encoded buffer of the signer */
-            hashBufLen = certs->encode_signer(&hashBuf);
+            hashBufLen = cert->encode(&hashBuf);
             if(hashBufLen == 0)
             {
                 LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::encode_signer\n", MODULE);
@@ -106,7 +106,7 @@ namespace ctp
             }
 
             /* get the hash of the  certificate buffer */
-            ret = certs->Hash256(hashBuf, hashBufLen, &hash);
+            ret = cert->Hash256(hashBuf, hashBufLen, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -121,7 +121,7 @@ namespace ctp
             free(hash);
             hash = nullptr;
             /* calculate the hash of hash(tbsData) || hash(signer) */
-            ret = certs->Hash256(tbsBuf, tbsLen, &hash);
+            ret = cert->Hash256(tbsBuf, tbsLen, &hash);
             /* failure to calculate the hash */
             if(ret == 0)
             {
@@ -133,15 +133,19 @@ namespace ctp
             //  print_data(nullptr, tbsBuf, tbsLen);
 
             /* sign the data */
-            sig = certs->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
+            sig = cert->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
             if(signature == nullptr)
                 signature = (Signature *)buf_alloc(sizeof(Signature));
             /* get the signature from sig */
-            certs->SigToSignature(sig, std::ref(*signature));
+            cert->SigToSignature(sig, std::ref(*signature));
         }
+
+        /* before encoding, add the signing certificate into certs to encode correctly */
+        certs->CertAdd(cert);
         encode();
         /* get the encoded buffer */
         *signedDataLen = enc->get(signedData);
+        std::cout << "Ieee1609Data::sign encoded length" << *signedDataLen << std::endl;
         done:
             if(hash)
                 free (hash);

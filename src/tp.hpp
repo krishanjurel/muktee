@@ -44,7 +44,7 @@ namespace ctp
 
         /* cert manager */
         SHARED_CERTMGR certMgr;
-        SHARED_CERTS certs;
+        SHARED_CERT cert;
 
         const int MODULE = MODULE_TP;
 
@@ -66,7 +66,7 @@ namespace ctp
             /* control blocks */
             SHARED_TP instance_get();
             // static TP_PTR init();
-            SHARED_TP  init();
+            // SHARED_TP  init();
             void start();
             void stop();
 
