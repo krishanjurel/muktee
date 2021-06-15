@@ -476,6 +476,53 @@ namespace ctp
         return ret;
     }
 
+    int Ieee1609Cert::decode(std::string certFile, std::string keyFile)
+    {
+        int ret = 0;
+        /* these are binary files */
+        /* read the key */
+        uint8_t *keyBuf_ = nullptr;
+        size_t keyBufLen_ = 0;
+        if(!keyFile.empty())
+        {
+            file_read(keyFile, &keyBuf_,&keyBufLen_);
+            if(keyBufLen_ == 0)
+            {
+                return keyBufLen_;
+            }
+        }
+
+        /* read the cert buffer */
+        uint8_t *certBuf_ = nullptr;
+        size_t certBufLen_ = 0;
+
+        file_read(certFile, &certBuf_, &certBufLen_)
+
+        if(certBufLen_ == 0)
+        {
+            free(keyBuf_);
+            return certBufLen_;
+        }
+        try
+        {
+            ret = decode(certBuf_, certBufLen_);
+        }catch(ctp::Exception& e)
+        {
+            ret = 0;
+        }
+
+        if(ret && keyBufLen_)
+        {
+            ret = private_key_set(keyBuf_, keyBufLen_);
+        }
+
+        if(certBuf_)
+            free(certBuf_);
+        if(keyBuf_)
+            free(keyBuf_);
+        return ret;
+    }
+
 
     /* to utilize the previously created decode object */
     int Ieee1609Cert::decode(std::shared_ptr<Ieee1609Decode> ptr)
@@ -508,6 +555,7 @@ namespace ctp
 
     int Ieee1609Cert::decode(const uint8_t *buf, size_t len)
     {
+
         std::stringstream log_(std::ios_base::out);
         pDecObj->set(buf, len);
         try
@@ -541,7 +589,7 @@ namespace ctp
             LOG_ERR(log_.str(), MODULE);
             throw; /*throw again from here */
         }
-        return 0;
+        return 1;
     }
 
     int Ieee1609Cert::encode(std::shared_ptr<Ieee1609Encode> ptr)
@@ -633,7 +681,7 @@ namespace ctp
         }
         /* decode verification key indicator */
         pDecObj->Vki(std::ref(tbs->verifyKeyIndicator));
-        return 0;
+        return 1;
     }
 
     /* the flag to control , whether to clear the memory or continue encoding */
@@ -731,6 +779,55 @@ namespace ctp
         os << " options " << std::to_string(tbs->optionsComps) << std::endl;
         os << " hashId " << std::to_string(tbs->cracaId.x[0]) << std::to_string(tbs->cracaId.x[1]) << std::to_string(tbs->cracaId.x[2]) << std::endl;
         return 0;
+    }
+
+
+    /* set the private key, this is only called after successfully decoding the certificate body */
+    int Ieee1609Cert::private_key_set(const uint8_t *keyBuf, size_t keyBufLen)
+    {
+        std::stringstream log_(std::ios_base::out);
+        log_ << "Ieee1609Cert::private_key_set(...) enter " << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+        int nid = -1;
+
+        switch(signature->type)
+        {
+            case ecdsaNistP256Signature:
+                nid = NID_X9_62_prime256v1;
+                break;
+            case ecdsaBrainpoolP256r1Signature:
+                nid = NID_brainpoolP256r1;
+            default:
+                log_ << "Ieee1609Cert::private_key_set(...) invalid signature-type  " << signature->type << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+        }
+
+        if( nid == -1)
+        {
+            return 0;
+        }
+
+        ecKey = EC_KEY_new_by_curve_name(nid);
+        if (ecKey == nullptr)
+        {
+            log_ << "Ieee1609Cert::create(...) " <<  "EC_KEY_new_by_curve_name(nid)" << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw Exception(log_.str());
+        }
+
+        EC_KEY_set_private_key(EC_KEY *key, const BIGNUM *prv);
+        
+        if(EC_KEY_generate_key(ecKey) != 1)
+        {
+            EC_KEY_free(ecKey);
+            log_ << "Ieee1609Cert::create(...) " <<  "EC_KEY_generate_key" << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            throw Exception(log_.str());
+        }
+        ecGroup = EC_KEY_get0_group(ecKey);
+
+
     }
 
     /* gets the public key from the key object */
@@ -907,6 +1004,7 @@ namespace ctp
             log_ << e.what() << std::endl;
             LOG_ERR(log_.str(), MODULE);
             cert.reset();
+            certs.clear();
             throw;
         }
     }

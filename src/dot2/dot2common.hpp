@@ -7,6 +7,8 @@
 #include <condition_variable>
 #include <thread>
 #include <sys/time.h>
+#include <sys/prctl.h>
+#include <unistd.h>
 
 
 /* common structures with c++ linkage */
@@ -305,7 +307,7 @@ extern "C"
 
 typedef struct 
 {
-    uint8_t length;
+    size_t length;
     uint8_t *octets;
 }OctetString;
 

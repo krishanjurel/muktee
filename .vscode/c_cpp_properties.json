@@ -7,6 +7,8 @@
                 "${workspaceFolder}/src",
                 "${workspaceFolder}/src/dot2"
             ],
+            "defines": ["-DUSE_LIB_CONFIG"],
+            "compilerArgs": ["-DUSE_LIB_CONFIG"],
             "intelliSenseMode": "linux-gcc-x64",
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "gnu11",

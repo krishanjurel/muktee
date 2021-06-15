@@ -50,13 +50,34 @@ time_t start_time(struct tm *tm)
 //     free (addr);
 // }
 
-
-
-
-
 #ifdef __cplusplus
 }
 #endif
+
+int file_read(const char *file, uint8_t **buf, size_t *len)
+{
+    std::ifstream ifs(file, std::ios_base::binary | std::ios_base::in);
+    std::stringstream _contents(std::ios_base::out);
+    /* read in the chunks of 256 */
+    char c;
+    while(ifs.get(c))
+    {
+        _contents << c; 
+    }
+    *len = _contents.str().size();
+    *buf = (uint8_t *)malloc(*len);
+    memcpy(*buf, _contents.str().c_str(),*len);
+    ifs.close();
+    return *len;
+}
+
+void file_write(const char *file, const uint8_t *buf, size_t len)
+{
+    /* open the file into binary mode */
+    std::ofstream ofs(file, std::ios_base::out | std::ios_base::binary);
+    ofs.write((const char *)buf, len);
+    ofs.close();
+}
 
 void print_data(const char* file, const uint8_t *buf, size_t len)
 {

@@ -79,6 +79,7 @@ namespace ctp
         HashedId8 hashid8;
         int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_COMPRESSED);
         int private_key_get();
+        int private_key_set(const uint8_t *keyBuf, size_t keyBufLen);
         int _sign(const uint8_t *buf, size_t len, SignatureType type);
         /* encode the certificate */
 
@@ -86,7 +87,6 @@ namespace ctp
         int sign(); /* sign the certificate, this is valid only for self-signed */
         int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
         const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
-
         /*FIXME! cache the encoded cert */
         // uint8_t *encodedBuf;
         // size_t encodeBufLen;
@@ -99,6 +99,7 @@ namespace ctp
 
             void create(int nid = NID_X9_62_prime256v1);
             void create(int nid, const std::vector<int> psids);
+
 
             explicit Ieee1609Cert();
             /* no copy constructure */
@@ -154,6 +155,9 @@ namespace ctp
             /* cert decoder */
             int decode(const uint8_t* buf, size_t len);
             int decode(std::shared_ptr<Ieee1609Decode> ptr);
+            /* cert signer from file */
+            int decode(std::string certFile, std::string keyFile);
+
             int DecodeToBeSigned(bool cont = true); /* decode to be sined */
             
             void set(Ieee1609Cert *cert)
@@ -691,7 +695,8 @@ namespace ctp
         std::shared_ptr<tp_cfg> cfg;
 
         /* list of certificates*/
-        std::vector<SHARED_CERT> certList;
+        std::vector<SHARED_CERT> signerList;
+        std::vector<SHARED_CERT> caList;
 
         std::thread validThread; /* thread checking the validity of the certs */
         std::thread remoteThread; /* thread communicating with remote host */
@@ -742,7 +747,7 @@ namespace ctp
                 // }
                 certReady = 0;
                 cfg = std::shared_ptr<tp_cfg>(nullptr);
-                certList.clear();
+                signerList.clear();
             }
             CertMgr(const CertMgr& ) = delete;
             CertMgr(const CertMgr&& ) = delete;
@@ -753,7 +758,7 @@ namespace ctp
             ~CertMgr()
             {
                 log_dbg("CertMgr::~CertMgr\n", MODULE);
-                certList.clear();
+                signerList.clear();
                 _initDone = 0;
                 pCertMgr = nullptr;
                 cfg = nullptr;
@@ -764,7 +769,7 @@ namespace ctp
                 SHARED_CERT _cert = nullptr;
                 std::unique_lock<std::mutex> lck(hashdMapMutex);
                 cv.wait(lck, [this](){ return certReady == 1;});
-                for (SHARED_CERT cert : certList)
+                for (SHARED_CERT cert : signerList)
                 {
                     const SequenceOfPsidSsp& psids = cert->psid_get();
                     for(int i =0; i < psids.quantity; i++)
@@ -784,7 +789,7 @@ namespace ctp
             {
                 std::unique_lock<std::mutex> lck(hashdMapMutex);
                 cv.wait(lck, [this](){ return certReady == 1;});
-                return certList[0];
+                return signerList[0];
             }
 
             void start(std::shared_ptr<tp_cfg> tpcfg)
@@ -848,11 +853,8 @@ namespace ctp
             void cert_mgr_local_handler()
             {
                 std::vector<std::string> files;
-                struct stat stat_;
 
-                SHARED_CERTS certs = nullptr;
-                /* actual certificates */
-                std::vector<SHARED_CERTS> certsList;
+                SHARED_CERT cert = nullptr;
                 {
                     std::lock_guard<std::mutex> lck(hashdMapMutex);
                     int fd;
@@ -870,37 +872,46 @@ namespace ctp
 
                     for(auto& file: files)
                     {
+                        int ret = 0;
+                        uint8_t *certbuf_ = nullptr;
+                        size_t buflen_ = 0;
                         file  = cfg->certcfg.path1 + file;
-                        fd = open(file.c_str(), O_RDONLY);
-                        if(fd  == -1) continue;
-                        if(fstat(fd, &stat_) != -1)
+                        file_read(file.c_str(), &certbuf_, &buflen_);
+                        if(buflen_ == 0 ) continue;
+                        SHARED_CERT cert = std::make_shared<Ieee1609Cert>();
+                        ret = cert->decode(certbuf_, &buflen_);
+                        if(ret)
                         {
-                            uint8_t *buf_ = (uint8_t *)buf_alloc(stat_.st_size);
-                            if(buf_ == nullptr) continue;
-                            certs = std::make_shared<ctp::Ieee1609Certs>();
-                            try
-                            {
-                                /* decode the buffer */
-                                certs->decode(buf_, stat_.st_size);
-                                certsList.push_back(certs);
-                            }
-                            catch(const std::exception& e)
-                            {
-                                std::cerr << e.what() << '\n';
-                            }
-                            certs = nullptr;
+                            certList.push_back(cert);
                         }
                     }
                     if(certsList.size() == 0)
                     {
-                        certs = std::make_shared<ctp::Ieee1609Certs>();
+                        cert = std::make_shared<ctp::Ieee1609Cert>();
+                        std::string _file = cfg->certcfg.path1;
                         try
                         {
                             if(cfg && cfg->psids.size())
-                                certs->create(cfg->psids);
+                                cert->create(cfg->psids);
                             else
-                                certs->create();
-                            certsList.push_back(certs);
+                                cert->create();
+                            
+                            /* store it */
+                            certList.push_back(cert);
+
+                            for(auto& cert: certList)
+                            {
+                                /* since I am creating this, store it */
+                                uint8_t *_buf = 0;
+                                size_t _buflen = certs->encode(&_buf);
+
+                                if(_buflen)
+                                {
+                                    _file += "signer/cert.file";
+                                    file_write(_file, _buf, _buflen);
+                                    
+                                }
+                            }
                         }catch(ctp::Exception& e)
                         {
                             std::stringstream log_(std::ios_base::out);
@@ -915,7 +926,7 @@ namespace ctp
                 {
                     for(auto _cert: _certs->CertList())
                     {
-                        certList.push_back(_cert);
+                        signerList.push_back(_cert);
                     }
                 }
                 certReady = 1;

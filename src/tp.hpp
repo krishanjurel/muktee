@@ -49,7 +49,6 @@ namespace ctp
         const int MODULE = MODULE_TP;
 
 
-
         public:
             void enrol_mgr();
             void cert_mgr();
@@ -60,6 +59,11 @@ namespace ctp
             TP(const TP&) = delete;
             /* delete copy assignment */
             const TP& operator=(const TP&)=delete;
+            /* delete move` constructor */
+            TP(const TP&&) = delete;
+            /* delete move assignment */
+            const TP& operator=(const TP&&)=delete;
+
             TP(); /* private constructor */
             ~TP();
             void cfg_mgr();
@@ -96,6 +100,21 @@ namespace ctp
             /* get the list of supported psids for self-signed certs */
             const std::vector<int>& psid_list() const;
             void curves_list();
+
+            /* to keep track of calling process */
+            const int module_id_get() const { 
+                // char thrdId[16];
+                // pthread_getname_np(pthread_self(), thrdId, 16);
+                // return atoi(thrdId);
+                return MODULE;
+            }
+
+            const void module_id_set(const int id)
+            {
+                char thrdId[16];
+                snprintf(thrdId, sizeof(thrdId), "%d", id);
+                pthread_setname_np(pthread_self(), thrdId);
+            }
     };
 }/* namespace ctp */
 

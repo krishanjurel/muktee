@@ -317,6 +317,7 @@ namespace ctp
         log_ << "TP::verify(sync..) enter" << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
+        int ret = 1; /* success */
 
         Ieee1609Data *ieee1609DataObj = new ctp::Ieee1609Data();
         try
@@ -334,19 +335,34 @@ namespace ctp
             Ieee1609Dot2Data *dot2data = ieee1609DataObj->Data_();
             ToBeSignedData *tbs = ieee1609DataObj->ToBeSignedData_();
             Ieee1609Dot2Data *data = nullptr;
+            uint8_t *_databuf = nullptr;
+            size_t _databuflen = 0;
             if(dot2data->content.type == Ieee1609Dot2ContentSignedData)
             {
                 data = tbs->payload.data;
-            }else{
-                data=dot2data;
-            }
-            *outLength = data->content.content.unsecuredData.length;
-            log_ << "header info psid " << hdrInfo->psid << std::endl;
-            log_dbg(log_.str(), MODULE);
-            log_.str("");
-            *out = (uint8_t *)malloc(*outLength);
-            memcpy(*out,data->content.content.unsecuredData.octets, *outLength);
+                _databuf = data->content.content.unsecuredData.octets;
+                _databuflen = data->content.content.unsecuredData.length;
+            }else if (dot2data->content.type == Ieee1609Dot2ContentUnsecuredData){
 
+                data=dot2data;
+                _databuf = data->content.content.unsecuredData.octets;
+                _databuflen = data->content.content.unsecuredData.length;
+            }else
+            {
+                log_.str("");
+                log_ << " unspoorted data type " <<  dot2data->content.type << std::endl;
+                LOG_ERR(log_.str(), module_id_get());
+            }
+            
+            if(_databuflen != 0)
+            {
+                *outLength = _databuflen;
+                log_ << "header info psid " << hdrInfo->psid << std::endl;
+                log_dbg(log_.str(), module_id_get());
+                log_.str("");
+                *out = (uint8_t *)malloc(*outLength);
+                memcpy(*out,_databuf, *outLength);
+            }
             unlink("in_app_data.txt");
             print_data("in_app_data.txt",(const uint8_t *)*out, *outLength);
         }catch(Exception& e)
@@ -356,14 +372,14 @@ namespace ctp
             log_ << " TP::verify(synchronous) ";
             log_ << e.what() << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            delete ieee1609DataObj;
-            throw;
+            ieee1609DataObj = nullptr;
+            ret = 0;
         }
         delete ieee1609DataObj;
         log_ << "TP::verify(sync..) exit" << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
-        return 1;
+        return ret;
     }
 
     int TP::verify(void *buf, size_t length)

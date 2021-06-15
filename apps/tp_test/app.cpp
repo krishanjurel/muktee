@@ -221,10 +221,10 @@ int main()
     // TEST(logging)();
     // TEST(hashing)();
     // TEST(encoding)();
-    TEST(config)();
-    TEST(tp_test_client)();
+    // TEST(config)();
+    // TEST(tp_test_client)();
 
-    TEST(FILE)();
+    // TEST(FILE)();
     /* raise the terminate signal here */
     raise(SIGTERM);
 
@@ -399,7 +399,7 @@ void TEST(data_encoding)()
 void TEST(data_decoding)()
 {
     std::stringstream log_(std::ios_base::out);
-    std::string tbsData("this is dummy test data!!!");
+    std::string tbsData("this is dummy test data again!!!");
     // ctp::Ieee1609Data *pdata = nullptr;
     uint8_t *signedData = nullptr;
     size_t signedDataLength = 0;
@@ -434,6 +434,15 @@ void TEST(data_decoding)()
         // print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
         tp->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.size(), &signedData, &signedDataLength);
         /* decoding section */
+        file_write("signed.data", signedData,signedDataLength);
+        free(signedData);
+        signedData = nullptr;
+        signedDataLength = 0;
+        file_read("signed.data", &signedData, &signedDataLength);
+        std::cout << "size of the read data " << signedDataLength << std::endl;
+
+
+
         log_info(std::string("Start decoding "), MODULE);
         std::cout <<"data decoding starts " << std::endl;
         pdata2 = new ctp::Ieee1609Data();
