@@ -44,6 +44,7 @@ namespace ctp
         seqOfPsidSsp->quantity = 0;
         seqOfPsidSsp->psidSsp=nullptr;
         ecKey = nullptr;
+        certPath.clear();
 
         // /* encoded buffer is zero */
         // encodedBuf = nullptr;
@@ -882,7 +883,7 @@ namespace ctp
         char *yPtr = point->point.uncompressedy.x;
 
         /* there will always be x-component, so lets copy that */
-        for (i = 1; i < keylen;i++)
+        for (i = 1; i < 32;i++)
         {
             // std::cout << std::hex << (int)keyBuf[i] << ":";
             // if(i%16 ==0)
@@ -977,8 +978,86 @@ namespace ctp
         /* every self-signed certificate is signed by default */
         sign();
         /* have the signature option */
-        base->options = 0x80;
+        base->options = 0x80; /* there is no extentition and signature is always present */
     }
+
+    /* the certs are created in the path, with folder name as the validity date.
+       This is to be called after certificate has been successfully created, acquired
+        and need to be stored for reuse.
+    */
+    int Ieee1609Cert::store(std::string path)
+    {
+        int ret = 1;
+        std::stringstream log_(std::ios_base::out);
+        /* checkk whether certificate is created or not ???*/
+        if(base == nullptr)
+        {
+            ret = 0;
+            return ret;
+        }
+
+        /* get the validity of the current certificate */
+        time_t start = tbs->validityPeriod.start;
+
+        std::string folder(std::to_string(start)) + "-";
+
+
+        DurationType durationType = tbs->validityPeriod.duration.type;
+        uint16_t duration = tbs->validityPeriod.duration.duration;
+
+        size_t validity;
+
+        /* even though the certs are issued weekly, but its ambiguous when the week starts,
+           so we will track the validity by the hours 
+        */
+        if(durationType == DurationTypeMilliSeconds)
+            validity = MILLSEC_TO_HOUR(duration);
+        else if(durationType = DurationTypeSeconds)
+            validity = SEC_TO_HOUR(duration);
+        else if(durationType == DurationTypeMinutes)
+            validity = MIN_TO_HOUR(duration);
+        else if(durationType == DurationTypeSixtyHours)
+            validity = SIXTYHOURS_TO_HOUR(duration);
+        else if(durationType == DurationTypeYears)
+            validity = YEAR_TO_HOUR(duration);
+        else
+            validity = duration;
+
+        folder = folder + std::to_string(validity);
+        mode_t mask = umask(S_IROTH | S_IWOTH | S_IRGRP | S_IWGRP);
+        ret = mkdir(folder.c_str(), S_IRUSR | S_IWUSR);
+        if(ret == -1)
+        {
+            log_ << "Ieee1609Cert::store::mkdir " << strerror(errno) << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            return ret;
+        }
+
+        std::string certfile = folder + "signer.cert";
+
+        int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
+        if(ret == -1)
+        {
+            log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            return ret;
+        }
+
+        certfile = folder + "signer.key";
+        int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
+        if(ret == -1)
+        {
+            log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            return ret;
+        }
+
+        return ret;
+    }
+
+
+
+
 
     Ieee1609Certs::Ieee1609Certs()
     {

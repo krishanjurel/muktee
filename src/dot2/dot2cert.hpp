@@ -68,6 +68,8 @@ namespace ctp
         EC_KEY *ecKey;
         uint8_t keyType;
 
+        std::string certPath; /* where is this certificate to be stored */
+
         CertificateBase *base;
         IssuerIdentifier *issuer;
         ToBeSignedCertificate *tbs;
@@ -98,7 +100,7 @@ namespace ctp
         public:
 
             void create(int nid = NID_X9_62_prime256v1);
-            void create(int nid, const std::vector<int> psids);
+            void create(const std::vector<int> psids, int nid=NID_X9_62_prime256v1);
 
 
             explicit Ieee1609Cert();
@@ -157,7 +159,7 @@ namespace ctp
             int decode(std::shared_ptr<Ieee1609Decode> ptr);
             /* cert signer from file */
             int decode(std::string certFile, std::string keyFile);
-
+            /* decode to be signed */
             int DecodeToBeSigned(bool cont = true); /* decode to be sined */
             
             void set(Ieee1609Cert *cert)
@@ -165,6 +167,9 @@ namespace ctp
                 this->next = cert;
             }
             const SequenceOfPsidSsp& psid_get() const;
+
+            void CertPathSet(std::string path){certPath = path;}
+            int store(std::string path);
 
             /* print to stdout or store in a file */
             int print_encoded(const std::string filename);
@@ -853,20 +858,38 @@ namespace ctp
             void cert_mgr_local_handler()
             {
                 std::vector<std::string> files;
+                std::vector<std::string> dirs; 
 
                 SHARED_CERT cert = nullptr;
                 {
                     std::lock_guard<std::mutex> lck(hashdMapMutex);
                     int fd;
                     dirent *dent;
-                    log_dbg(std::string("CertMgr::cert_mgr_local_handler enter\n"), MODULE);
+                    struct stat sb;
+                    std::stringstream log_(std::ios_base::out);
+                    log_ << "CertMgr::cert_mgr_local_handler enter" << std::endl;
+                    log_dbg(log_.str(), MODULE);
+                    log_.str("");
                     /* open the certs directory */
-                    DIR *dir = opendir(cfg->certcfg.path1);
+                    DIR *dir = opendir(cfg->certcfg.signers);
                     if(dir != nullptr)
                     {
                         while((dent = readdir(dir)) != nullptr)
                         {
-                            files.emplace_back(dent->d_name, dent->d_reclen);
+                            std::string path(cfg->certcfg.signers);
+                            path.append(dent->d_name);
+                            if(stat(path.c_str(), &sb) == -1)
+                            {
+                                log_ << " CertMgr::cert_mgr_local_handler enter " <<  strerror(errno) << std::endl;
+                                LOG_ERR(log_.str(), MODULE);
+                                continue;
+                            }
+                            if(S_ISDIR(sb.st_mode))
+                            {
+                                dirs.push_back(path);
+                            }
+                            if(S_ISREG(sb.st_mode))
+                                files.push_back(path);
                         }
                     }
 
@@ -875,26 +898,29 @@ namespace ctp
                         int ret = 0;
                         uint8_t *certbuf_ = nullptr;
                         size_t buflen_ = 0;
-                        file  = cfg->certcfg.path1 + file;
                         file_read(file.c_str(), &certbuf_, &buflen_);
                         if(buflen_ == 0 ) continue;
-                        SHARED_CERT cert = std::make_shared<Ieee1609Cert>();
-                        ret = cert->decode(certbuf_, &buflen_);
+                        cert = std::make_shared<Ieee1609Cert>();
+                        ret = cert->decode(certbuf_, buflen_);
                         if(ret)
                         {
-                            certList.push_back(cert);
+                            signerList.push_back(cert);
                         }
                     }
-                    if(certsList.size() == 0)
+                    if(signerList.size() == 0)
                     {
                         cert = std::make_shared<ctp::Ieee1609Cert>();
-                        std::string _file = cfg->certcfg.path1;
+                        std::string _file(cfg->certcfg.signers);
+                        /* set the certificate path */
+                        cert->CertPathSet(_file);
                         try
                         {
                             if(cfg && cfg->psids.size())
                                 cert->create(cfg->psids);
                             else
                                 cert->create();
+                            
+                            cert->store(_file);
                             
                             /* store it */
                             certList.push_back(cert);

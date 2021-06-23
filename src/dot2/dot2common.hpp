@@ -39,8 +39,8 @@ namespace ctp
     struct _cert_cfg
     {
         int nid;
-        char *path1;
-        char *path2;
+        char *signers;  /* root directory of signers */
+        char *cas;    /* root directory of CAs */
     };
 
     struct _remote_host
@@ -429,12 +429,25 @@ typedef struct
     char *name;
 }HostName;
 
+
+
 /* 6.4.16 */
+/*FIXME, I dont plan to support the validity of microsecs and milliseconds */
+#define MICROSEC_TO_HOUR(_x_)       (uint32_t) (_x_/1000*1000*60*60)
+#define MILLSEC_TO_HOUR(_x_)        (uint32_t) (_x_/1000*60*60)
+#define SEC_TO_HOUR(_x_)            (uint32_t) (_x_/60*60)
+#define MIN_TO_HOUR(_x_)            (uint32_t) (60)
+#define SIXTYHOURS_TO_HOUR(_x_)     (uint32_t) (_x_*60)
+/*MAX one month */
+#define YEAR_TO_HOUR(_x_)           (uint32_t) (_x_*360*24)
+
+
 typedef enum{
     DurationTypeMicroSeconds,
     DurationTypeMilliSeconds,
     DurationTypeSeconds,
     DurationTypeMinutes,
+    DurationTypeHours,
     DurationTypeSixtyHours,
     DurationTypeYears
 }DurationType;
