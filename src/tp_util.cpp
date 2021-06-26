@@ -71,6 +71,7 @@ int file_read(const char *file, uint8_t **buf, size_t *len)
     return *len;
 }
 
+/* FIXME, take care of the errors */
 void file_write(const char *file, const uint8_t *buf, size_t len)
 {
     /* open the file into binary mode */

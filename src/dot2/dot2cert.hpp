@@ -863,7 +863,6 @@ namespace ctp
                 SHARED_CERT cert = nullptr;
                 {
                     std::lock_guard<std::mutex> lck(hashdMapMutex);
-                    int fd;
                     dirent *dent;
                     struct stat sb;
                     std::stringstream log_(std::ios_base::out);
@@ -892,21 +891,22 @@ namespace ctp
                                 files.push_back(path);
                         }
                     }
-
-                    for(auto& file: files)
+                    /* first process all directories */
+                    for(std::string& _dir: dirs)
                     {
-                        int ret = 0;
-                        uint8_t *certbuf_ = nullptr;
-                        size_t buflen_ = 0;
-                        file_read(file.c_str(), &certbuf_, &buflen_);
-                        if(buflen_ == 0 ) continue;
-                        cert = std::make_shared<Ieee1609Cert>();
-                        ret = cert->decode(certbuf_, buflen_);
-                        if(ret)
+                        _dir =  _dir + cfg->certcfg.signers;
+                        dir = opendir(_dir.c_str());
+                        if(dir != nullptr)
                         {
-                            signerList.push_back(cert);
+                            cert = std::make_shared<Ieee1609Cert>();
+                            /* decode the certificate(s) from the directory */
+                            if(cert->decode(_dir, _dir) == 1)
+                            {
+                                signerList.push_back(cert);
+                            }
                         }
                     }
+
                     if(signerList.size() == 0)
                     {
                         cert = std::make_shared<ctp::Ieee1609Cert>();
@@ -919,40 +919,16 @@ namespace ctp
                                 cert->create(cfg->psids);
                             else
                                 cert->create();
-                            
                             cert->store(_file);
-                            
                             /* store it */
-                            certList.push_back(cert);
+                            signerList.push_back(cert);
 
-                            for(auto& cert: certList)
-                            {
-                                /* since I am creating this, store it */
-                                uint8_t *_buf = 0;
-                                size_t _buflen = certs->encode(&_buf);
-
-                                if(_buflen)
-                                {
-                                    _file += "signer/cert.file";
-                                    file_write(_file, _buf, _buflen);
-                                    
-                                }
-                            }
                         }catch(ctp::Exception& e)
                         {
                             std::stringstream log_(std::ios_base::out);
                             log_ << "CertMgr::cert_mgr_local_handler() " << e.what() << std::endl;
                             LOG_ERR(log_.str(), MODULE);
                         }
-                    }
-                }
-
-                /* create the list of certificates */
-                for(auto _certs:certsList)
-                {
-                    for(auto _cert: _certs->CertList())
-                    {
-                        signerList.push_back(_cert);
                     }
                 }
                 certReady = 1;

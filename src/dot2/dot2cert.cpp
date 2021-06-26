@@ -477,33 +477,53 @@ namespace ctp
         return ret;
     }
 
-    int Ieee1609Cert::decode(std::string certFile, std::string keyFile)
+    int Ieee1609Cert::decode(std::string certdir, std::string keydir)
     {
+        std::stringstream log_(std::ios_base::out);
         int ret = 0;
         /* these are binary files */
         /* read the key */
         uint8_t *keyBuf_ = nullptr;
         size_t keyBufLen_ = 0;
-        if(!keyFile.empty())
-        {
-            file_read(keyFile, &keyBuf_,&keyBufLen_);
-            if(keyBufLen_ == 0)
-            {
-                return keyBufLen_;
-            }
-        }
-
-        /* read the cert buffer */
         uint8_t *certBuf_ = nullptr;
         size_t certBufLen_ = 0;
+        dirent *dent;
 
-        file_read(certFile, &certBuf_, &certBufLen_)
-
-        if(certBufLen_ == 0)
+        log_ << "Ieee1609Cert::decode " << certdir << " enter " << std::endl;
+        log_info(log_.str(), MODULE);
+        DIR *dir = opendir(certdir.c_str());
+        if(dir == nullptr)
         {
-            free(keyBuf_);
-            return certBufLen_;
+            log_ << "Ieee1609Cert::decode error opendir " << certdir << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            return 0;
         }
+
+        while((dent = readdir(dir)) != nullptr)
+        {
+            std::string file_(dent->d_name);
+            size_t off = file_.find("cert", 0, 4);
+            if(off == std::string::npos)
+            {
+                /* this should be key */
+                /*FIXME, should be check ??? no need for now */
+                file_read(file_.c_str(), &keyBuf_, &keyBufLen_);
+            }else{
+                file_read(file_.c_str(), &certBuf_, &certBufLen_);
+            }
+        }
+        log_.str("");
+        /* files are not found, return with error */
+        if(certBuf_ == nullptr ||
+           keyBuf_ == nullptr)
+           {
+               log_ << "Ieee1609Cert::decode invalid or missing files " << std::endl;
+               LOG_ERR(log_.str(), MODULE);
+               if(certBuf_) free(certBuf_);
+               if(keyBuf_) free(keyBuf_);
+               return 0;
+           }
+
         try
         {
             ret = decode(certBuf_, certBufLen_);
@@ -512,7 +532,7 @@ namespace ctp
             ret = 0;
         }
 
-        if(ret && keyBufLen_)
+        if(ret)
         {
             ret = private_key_set(keyBuf_, keyBufLen_);
         }
@@ -556,7 +576,7 @@ namespace ctp
 
     int Ieee1609Cert::decode(const uint8_t *buf, size_t len)
     {
-
+        int ret = 1;
         std::stringstream log_(std::ios_base::out);
         pDecObj->set(buf, len);
         try
@@ -588,9 +608,9 @@ namespace ctp
         {
             log_ << "Exception " << e.what() << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            throw; /*throw again from here */
+            ret = 0;
         }
-        return 1;
+        return ret;
     }
 
     int Ieee1609Cert::encode(std::shared_ptr<Ieee1609Encode> ptr)
@@ -610,6 +630,7 @@ namespace ctp
         return 1;
     }
 
+    /* FIXME, cache it rather encoding everytime */
     int Ieee1609Cert::encode(uint8_t **buf)
     {
         int ret = 0;
@@ -789,7 +810,6 @@ namespace ctp
         std::stringstream log_(std::ios_base::out);
         log_ << "Ieee1609Cert::private_key_set(...) enter " << std::endl;
         log_info(log_.str(), MODULE);
-        log_.str("");
         int nid = -1;
 
         switch(signature->type)
@@ -809,25 +829,28 @@ namespace ctp
             return 0;
         }
 
+        log_.str("");
+
         ecKey = EC_KEY_new_by_curve_name(nid);
         if (ecKey == nullptr)
         {
-            log_ << "Ieee1609Cert::create(...) " <<  "EC_KEY_new_by_curve_name(nid)" << std::endl;
+            log_ << "Ieee1609Cert::private_key_set::EC_KEY_new_by_curve_name(nid)" << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            throw Exception(log_.str());
+            return 0;
         }
 
-        EC_KEY_set_private_key(EC_KEY *key, const BIGNUM *prv);
-        
-        if(EC_KEY_generate_key(ecKey) != 1)
+        log_.str("");
+        if(EC_KEY_oct2priv(ecKey, keyBuf, keyBufLen) == 0)
         {
-            EC_KEY_free(ecKey);
-            log_ << "Ieee1609Cert::create(...) " <<  "EC_KEY_generate_key" << std::endl;
+            log_ << "Ieee1609Cert::private_key_set::EC_KEY_oct2priv " << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            throw Exception(log_.str());
+            return 0;
         }
-        ecGroup = EC_KEY_get0_group(ecKey);
 
+        log_ << "Ieee1609Cert::private_key_set(...) exit " << std::endl;
+        log_info(log_.str(), MODULE);
+
+        return 1;
 
     }
 
@@ -902,11 +925,11 @@ namespace ctp
     void Ieee1609Cert::create(int nid)
     {
         std::vector<int> psids{PSID_BSM};
-        create(nid, psids);
+        create(psids, nid);
     }
 
     /* create a certificate */
-    void Ieee1609Cert::create(int nid, const std::vector<int> psids)
+    void Ieee1609Cert::create(const std::vector<int> psids, int nid)
     {
         std::stringstream log_(std::ios_base::out);
         log_ << "Ieee1609Cert::create(int nid, const std::vector<int> psids) enter " << std::endl;
@@ -996,10 +1019,13 @@ namespace ctp
             return ret;
         }
 
+        certPath = path;
+
         /* get the validity of the current certificate */
         time_t start = tbs->validityPeriod.start;
 
-        std::string folder(std::to_string(start)) + "-";
+        std::string folder(std::to_string(start));
+        folder.append("-");
 
 
         DurationType durationType = tbs->validityPeriod.duration.type;
@@ -1030,33 +1056,82 @@ namespace ctp
         {
             log_ << "Ieee1609Cert::store::mkdir " << strerror(errno) << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            return ret;
+            umask(mask);
+            return 0;
         }
 
-        std::string certfile = folder + "signer.cert";
-
-        int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
-        if(ret == -1)
+        /* encode the certificate and store */
+        uint8_t *buf_ = nullptr;
+        size_t buflen_ = 0;
+        std::string certfile = folder + "cert.file";
+        std::string keyfile = folder + "key.file";
+        try
         {
-            log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-            return ret;
-        }
+            // int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
+            // if(ret == -1)
+            // {
+            //     log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
+            //     LOG_ERR(log_.str(), MODULE);
+            //     return ret;
+            // }
+            buflen_ = encode(&buf_);
+            if(buflen_ == 0)
+            {
+                if(buf_) free(buf_);
+                umask(mask);
+                return 0;
+            }
 
-        certfile = folder + "signer.key";
-        int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
-        if(ret == -1)
+            file_write(certfile.c_str(), buf_, buflen_);
+            free(buf_);
+            buf_ = nullptr;
+
+            buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
+
+            if(buflen_ == 0)
+            {
+                log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
+                /* error computing the key buffer */
+                /* delete the cert file */
+                unlink(certfile.c_str());
+                LOG_ERR(log_.str(), MODULE);
+                umask(mask);
+                return 0;
+            }
+
+            buf_ = (uint8_t *)buf_alloc(buflen_);
+
+            if(buf_ ==  nullptr)
+            {
+                log_ << "Ieee1609Cert::store::EC_KEY_priv2oct::buf_alloc(...) fails " << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+                umask(mask);
+                unlink(certfile.c_str());
+                return 0;
+            }
+            file_write(keyfile.c_str(), buf_, buflen_);
+            free(buf_);
+            buf_ = nullptr;
+        }catch(ctp::Exception& e)
         {
-            log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-            return ret;
+            log_.str("");
+            log_ << "Ieee1609Cert::store " << e.what() << std::endl;
+            unlink(certfile.c_str());
+            unlink(keyfile.c_str());
+            umask(mask);
+            return 0;
         }
-
+        // int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
+        // if(ret == -1)
+        // {
+        //     log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
+        //     LOG_ERR(log_.str(), MODULE);
+        //     return ret;
+        // }
+        /* restore the mask */
+        umask(mask);
         return ret;
     }
-
-
-
 
 
     Ieee1609Certs::Ieee1609Certs()
@@ -1108,7 +1183,7 @@ namespace ctp
             /* clear any existing certs here */
             certs.clear();
             cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
-            cert->create(nid, psids);
+            cert->create(psids, nid);
             quantity++;
             certs.emplace_back(cert);
         }catch( std::exception& e){
