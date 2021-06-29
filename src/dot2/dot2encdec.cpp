@@ -762,9 +762,9 @@ namespace ctp
 
     int Ieee1609Encode::get(uint8_t **buf)
     {
-       /* copy the encoded buffer*/
-       *buf = (uint8_t *)buf_alloc(encLen);
-       memcpy(*buf, encBuf, encLen);
+        /* copy the encoded buffer*/
+        *buf = (uint8_t *)buf_alloc(encLen);
+        memcpy(*buf, encBuf, encLen);
         return encLen;
     }
 
@@ -1139,7 +1139,7 @@ namespace ctp
         {
             case CertificateIdTypeName:
                 /* the length of the name */
-                id.id.hostName.length = buf[offset++];
+                Length(&id.id.hostName.length, 4);
                 id.id.hostName.name = (char *)buf_alloc(id.id.hostName.length+1);
                 while (len_ < id.id.hostName.length)
                 {

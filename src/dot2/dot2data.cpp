@@ -113,7 +113,6 @@ namespace ctp
                 LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::hash\n", MODULE);
                 goto done;
             }
-
             tbsLen += SHA256_DIGEST_LENGTH;
             tbsBuf = (uint8_t *)buf_realloc(tbsBuf, tbsLen);
             /*hash(tbsData) || hash(signer)*/

@@ -47,8 +47,8 @@ namespace ctp
         certPath.clear();
 
         // /* encoded buffer is zero */
-        // encodedBuf = nullptr;
-        // encodeBufLen = 0;
+        encodedBuf = nullptr;
+        encodedBufLen = 0;
     }
 
     const SequenceOfPsidSsp& Ieee1609Cert::psid_get() const
@@ -81,6 +81,7 @@ namespace ctp
             throw Exception(" Ieee1609Cert::sign()::Hash256 ");
  
         }
+		buf_free(buf);
         pEncObj->clear();
         if(base->issuer.type == IssuerIdentifierTypeSelf)
         {
@@ -182,6 +183,8 @@ namespace ctp
             {
                 key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
                 buf2_[0] = (uint8_t )vki->indicator.verificationKey.key.ecdsaNistP256.type;
+				int type = buf2_[0];
+				std::cout << "point type " << std::hex << type << std::endl;
                 if (vki->indicator.verificationKey.key.ecdsaNistP256.type == EccP256CurvPointTypeFill)
                 {
                     buf_len = 0;
@@ -229,7 +232,8 @@ namespace ctp
                 }
                 /* now we got the key, verify the signature */
                 ret = ECDSA_do_verify(dgst, dgst_len, sig, key);
-                if(ret == 0)
+                if(ret == 0 ||
+                   ret ==  -1)
                 {
                     // perror("Ieee1609Cert::verify::ECDSA_do_verify");
                     BN_free(r);
@@ -245,8 +249,6 @@ namespace ctp
             }
         }
         return ret;
-
-
     }
 
     /* verify the signature on the given digest */
@@ -477,7 +479,7 @@ namespace ctp
         return ret;
     }
 
-    int Ieee1609Cert::decode(std::string certdir, std::string keydir)
+    int Ieee1609Cert::decode(std::string certdir, std::vector<SHARED_CERT>& certs)
     {
         std::stringstream log_(std::ios_base::out);
         int ret = 0;
@@ -488,6 +490,9 @@ namespace ctp
         uint8_t *certBuf_ = nullptr;
         size_t certBufLen_ = 0;
         dirent *dent;
+        std::string file_;
+        size_t offset_;
+        SHARED_CERT cert_ = nullptr;
 
         log_ << "Ieee1609Cert::decode " << certdir << " enter " << std::endl;
         log_info(log_.str(), MODULE);
@@ -501,46 +506,70 @@ namespace ctp
 
         while((dent = readdir(dir)) != nullptr)
         {
-            std::string file_(dent->d_name);
-            size_t off = file_.find("cert", 0, 4);
-            if(off == std::string::npos)
+
+            if(dent->d_name[0] == '.') continue;
+            certBuf_ = nullptr;
+            certBufLen_ = 0;
+            keyBuf_ = nullptr;
+            keyBufLen_= 0;
+            if(strstr(dent->d_name, KEY_FILE_EXT) != nullptr) continue;
+
+            if(strstr(dent->d_name, CERT_FILE_EXT) != nullptr)
             {
-                /* this should be key */
-                /*FIXME, should be check ??? no need for now */
-                file_read(file_.c_str(), &keyBuf_, &keyBufLen_);
-            }else{
+                file_ = certdir;
+                file_.append("/");
+                file_.append(dent->d_name);
+                /* a cert has to have an associated key */
                 file_read(file_.c_str(), &certBuf_, &certBufLen_);
+
+                /* find the offset of the file extention in the certfile */
+                /* find the first occurrence of extention marker*/
+
+                offset_ = file_.find(std::string(CERT_FILE_EXT), 0);
+                if(offset_ != std::string::npos)
+                {
+                    file_.erase(file_.begin()+offset_, file_.end());
+                    /* append the .key extention to read the key */
+                    /* for key, itsnamed as <certid>.key, where <certid> is filename without the extention*/
+                    file_.append(KEY_FILE_EXT);
+                    file_read(file_.c_str(), &keyBuf_, &keyBufLen_);
+                }
             }
-        }
-        log_.str("");
-        /* files are not found, return with error */
-        if(certBuf_ == nullptr ||
-           keyBuf_ == nullptr)
-           {
-               log_ << "Ieee1609Cert::decode invalid or missing files " << std::endl;
-               LOG_ERR(log_.str(), MODULE);
-               if(certBuf_) free(certBuf_);
-               if(keyBuf_) free(keyBuf_);
-               return 0;
-           }
 
-        try
-        {
-            ret = decode(certBuf_, certBufLen_);
-        }catch(ctp::Exception& e)
-        {
-            ret = 0;
+            log_.str("");
+            /* files are not found, return with error */
+            if(certBuf_ == nullptr ||
+                keyBuf_ == nullptr)
+            {
+                log_ << "Ieee1609Cert::decode invalid or missing files " << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+                if(certBuf_) free(certBuf_);
+                if(keyBuf_) free(keyBuf_);
+                continue;
+            }
+            cert_ = std::make_shared<Ieee1609Cert>();
+            try
+            {
+                ret = cert_->decode(certBuf_, certBufLen_);
+            }catch(ctp::Exception& e)
+            {
+                ret = 0;
+            }
+            if(ret)
+            {
+                ret = cert_->private_key_set(keyBuf_, keyBufLen_);
+            }
+            /* if all good so far ???*/
+            if(ret >= 1)
+            {
+                certs.push_back(cert_);
+            }
+            if(certBuf_)
+                free(certBuf_);
+            if(keyBuf_)
+                free(keyBuf_);
+            continue;
         }
-
-        if(ret)
-        {
-            ret = private_key_set(keyBuf_, keyBufLen_);
-        }
-
-        if(certBuf_)
-            free(certBuf_);
-        if(keyBuf_)
-            free(keyBuf_);
         return ret;
     }
 
@@ -615,41 +644,84 @@ namespace ctp
 
     int Ieee1609Cert::encode(std::shared_ptr<Ieee1609Encode> ptr)
     {
+		int ret = 1;
+		std::stringstream log_(std::ios_base::out);
+		log_ << "Ieee1609Cert::encode enter " << std::endl;
+		log_info(log_.str(), MODULE);
         /* clear any buffer held by the previous encoder */
         std::shared_ptr<Ieee1609Encode> temp = pEncObj;
         /* acquire the new encoding object*/
         pEncObj = ptr->getPtr();
         /* encode the certificate base */
-        EncodeCertBase(true);
-        /* only encode the signature if it is of type explicit */
-        if(base->certType == CertTypeExplicit &&  signature != nullptr)
+		try
+		{
+			pEncObj->OctetsFixed(&base->options, 1);
+			pEncObj->OctetsFixed(&base->version, 1);
+			pEncObj->OctetsFixed((uint8_t *)&base->certType, 1);
+			pEncObj->IssuerIdentifier_(std::ref(*issuer));
+			/* continuous encoding */
+			EncodeToBeSigned(true);
+			/* only encode the signature if it is of type explicit */
+            if(base->certType == CertTypeExplicit &&  signature != nullptr)
             pEncObj->Signature_(std::ref(*signature));
-
+		}catch (ctp::Exception& e)
+		{
+			ret = 0;
+			log_ << "Ieee1609Cert::encode " << e.what() << std::endl;
+			LOG_ERR(log_.str(), MODULE);
+		}
         /* restore the encoder back */
         pEncObj = temp;
-        return 1;
+        return ret;
     }
 
-    /* FIXME, cache it rather encoding everytime */
-    int Ieee1609Cert::encode(uint8_t **buf)
+    /* dont free the returned buffer */
+    size_t Ieee1609Cert::encode(uint8_t **buf)
     {
         int ret = 0;
-        /* clear whatever was there */
-        pEncObj->clear();
-        /* encode the preamble for signature optional component */
-        // if(base->certType == CertTypeExplicit)
-        // {
-        //     pEncObj->OctetsFixed((uint8_t *)&base->options, 1);
-        // }
-        ret = EncodeCertBase(true);
-        if(ret != 0)
-        {
-            /* only encode the signature if it is of type explicit */
-            if(base->certType == CertTypeExplicit &&  signature != nullptr)
-                pEncObj->Signature_(std::ref(*signature));
-            ret = pEncObj->get(buf);
-        }
-        return ret;
+		std::string log_("Ieee1609Cert::encode");
+		try
+		{
+            /* clear whatever was there */
+            if(encodedBuf == nullptr)
+            {
+                pEncObj->clear();
+                ret = encode(pEncObj);
+                if(ret >= 0)
+                {
+                    encodedBufLen = pEncObj->get(&encodedBuf);
+                }
+            }
+		}catch(ctp::Exception& e)
+		{
+			log_.append(e.what());
+			log_.append("\n");
+			LOG_ERR(log_, MODULE);
+			encodedBufLen = 0;
+		}catch(std::exception& e)
+		{
+			log_.append(e.what());
+			log_.append("\n");
+			LOG_ERR(log_, MODULE);
+			encodedBufLen = 0;
+		}
+
+		if(encodedBufLen == 0 &&
+		   encodedBuf == nullptr)
+		{
+			buf_free(encodedBuf);
+			encodedBuf = nullptr;
+		}
+
+		if(encodedBufLen)
+		{
+			*buf = (uint8_t *)buf_alloc(encodedBufLen);
+			memcpy(*buf, encodedBuf, encodedBufLen);
+		}
+
+		/* no need to allocate a seperate buffer, these calls are supposed to be part of trusted platform only */
+		// *buf = encodedBuf;
+        return encodedBufLen;
     }
 
     
@@ -742,34 +814,34 @@ namespace ctp
         return 1;
     }
 
-    /* encode the toBeSigned field of the explicit certicate*/
-    int Ieee1609Cert::EncodeCertBase(bool cont)
-    {
-        int ret = 1;
-        /* reset the encoded buffer and length */
-        if(cont == false)
-            pEncObj->clear();
-        try
-        {
-            pEncObj->OctetsFixed(&base->options, 1);
-            pEncObj->OctetsFixed(&base->version, 1);
-            pEncObj->OctetsFixed((uint8_t *)&base->certType, 1);
-            pEncObj->IssuerIdentifier_(std::ref(*issuer));
-            /* continuous encoding */
-            EncodeToBeSigned(true);
-        }
-        catch (std::logic_error& e)
-        {
-            ret = 0;
-            std::cout << e.what() << '\n';
-        }
-        catch(const std::exception& e)
-        {
-            ret = 0;
-            std::cout << e.what() << '\n';
-        }
-        return ret;
-    }
+    // /* encode the toBeSigned field of the explicit certicate*/
+    // int Ieee1609Cert::EncodeCertBase(bool cont)
+    // {
+    //     int ret = 1;
+    //     /* reset the encoded buffer and length */
+    //     if(cont == false)
+    //         pEncObj->clear();
+    //     try
+    //     {
+    //         pEncObj->OctetsFixed(&base->options, 1);
+    //         pEncObj->OctetsFixed(&base->version, 1);
+    //         pEncObj->OctetsFixed((uint8_t *)&base->certType, 1);
+    //         pEncObj->IssuerIdentifier_(std::ref(*issuer));
+    //         /* continuous encoding */
+    //         EncodeToBeSigned(true);
+    //     }
+    //     catch (std::logic_error& e)
+    //     {
+    //         ret = 0;
+    //         std::cout << e.what() << '\n';
+    //     }
+    //     catch(const std::exception& e)
+    //     {
+    //         ret = 0;
+    //         std::cout << e.what() << '\n';
+    //     }
+    //     return ret;
+    // }
 
     /* print the certificate into the file */
     int Ieee1609Cert::print_encoded(const std::string filename)
@@ -831,6 +903,8 @@ namespace ctp
 
         log_.str("");
 
+        ecGroup = EC_GROUP_new_by_curve_name(nid);
+
         ecKey = EC_KEY_new_by_curve_name(nid);
         if (ecKey == nullptr)
         {
@@ -838,20 +912,34 @@ namespace ctp
             LOG_ERR(log_.str(), MODULE);
             return 0;
         }
-
-        log_.str("");
-        if(EC_KEY_oct2priv(ecKey, keyBuf, keyBufLen) == 0)
+        BIGNUM *bn = BN_new();
+        bn = BN_bin2bn(keyBuf, keyBufLen, bn);
+        if(bn == nullptr)
         {
-            log_ << "Ieee1609Cert::private_key_set::EC_KEY_oct2priv " << std::endl;
+            log_ << "Ieee1609Cert::private_key_set::BN_bin2bn" << std::endl;
             LOG_ERR(log_.str(), MODULE);
+            BN_free(bn);
             return 0;
         }
 
+        // log_.str("");
+        // if(EC_KEY_oct2priv(ecKey, keyBuf, keyBufLen) == 0)
+        if(EC_KEY_set_private_key(ecKey, bn) == 0 )
+        {
+            log_ << "Ieee1609Cert::private_key_set::EC_KEY_oct2priv " << std::endl;
+            LOG_ERR(log_.str(), MODULE);
+            BN_free(bn);
+            return 0;
+        }
+
+        EC_KEY_set_group(ecKey, ecGroup);
+
+        // public_key_get();
+
         log_ << "Ieee1609Cert::private_key_set(...) exit " << std::endl;
         log_info(log_.str(), MODULE);
-
+        BN_free(bn);
         return 1;
-
     }
 
     /* gets the public key from the key object */
@@ -906,17 +994,18 @@ namespace ctp
         char *yPtr = point->point.uncompressedy.x;
 
         /* there will always be x-component, so lets copy that */
-        for (i = 1; i < 32;i++)
+        for (i = 0; i < 32;i++)
         {
             // std::cout << std::hex << (int)keyBuf[i] << ":";
             // if(i%16 ==0)
             //     std::cout << std::endl;
-            *xPtr++ = keyBuf[i];
+            *xPtr++ = keyBuf[i+1];
         }
         /* copy whatever was there, remaining */
         for(; i < keylen;)
         {
-            *yPtr++ = keyBuf[i++];
+            *yPtr++ = keyBuf[i+1];
+            i++;
         }
         keyType = keyBuf[0];
         buf_free(keyBuf);
@@ -943,6 +1032,8 @@ namespace ctp
             throw Exception(log_.str());
         }
 
+        ecGroup = EC_GROUP_new_by_curve_name(nid);
+
         if(EC_KEY_generate_key(ecKey) != 1)
         {
             EC_KEY_free(ecKey);
@@ -950,8 +1041,7 @@ namespace ctp
             LOG_ERR(log_.str(), MODULE);
             throw Exception(log_.str());
         }
-        ecGroup = EC_KEY_get0_group(ecKey);
-
+        EC_KEY_set_group(ecKey, ecGroup);
         /* set the next tr to next */
         this->next = nullptr;
         /* one cert */
@@ -1002,6 +1092,8 @@ namespace ctp
         sign();
         /* have the signature option */
         base->options = 0x80; /* there is no extentition and signature is always present */
+		encodedBuf = nullptr;
+		encodedBufLen = 0;
     }
 
     /* the certs are created in the path, with folder name as the validity date.
@@ -1019,14 +1111,24 @@ namespace ctp
             return ret;
         }
 
+        log_ << "Ieee1609Cert::store  " << path << " enter " << std::endl;
+        log_info(log_.str(), MODULE);
+
+        log_.str("");
+
         certPath = path;
 
         /* get the validity of the current certificate */
-        time_t start = tbs->validityPeriod.start;
-
-        std::string folder(std::to_string(start));
-        folder.append("-");
-
+        unsigned long start = static_cast<unsigned long>(tbs->validityPeriod.start);
+        std::string folder(path);
+        /* check whether the path has forward slash */
+        if(folder.back() != '/')
+        {
+            folder.append(1, '/');
+        }
+        /* append the start date at the end of the root path */
+        folder.append(std::to_string(start));
+        folder.append(1, '-');
 
         DurationType durationType = tbs->validityPeriod.duration.type;
         uint16_t duration = tbs->validityPeriod.duration.duration;
@@ -1049,45 +1151,43 @@ namespace ctp
         else
             validity = duration;
 
-        folder = folder + std::to_string(validity);
-        mode_t mask = umask(S_IROTH | S_IWOTH | S_IRGRP | S_IWGRP);
-        ret = mkdir(folder.c_str(), S_IRUSR | S_IWUSR);
-        if(ret == -1)
+        folder.append(std::to_string(validity));
+        log_.str("");
+        /* create the file path, only the folders */
+        ret = file_path_create(folder);
+        if(ret  ==  -1)
         {
-            log_ << "Ieee1609Cert::store::mkdir " << strerror(errno) << std::endl;
+            log_.str("");
+            log_ << "Ieee1609Cert::store::file_path_create " << strerror(errno) << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            umask(mask);
+            log_.str("");
+            log_ << "Ieee1609Cert::store::file_path_create " << folder << std::endl;
+            LOG_ERR(log_.str(), MODULE);
             return 0;
         }
-
         /* encode the certificate and store */
         uint8_t *buf_ = nullptr;
         size_t buflen_ = 0;
-        std::string certfile = folder + "cert.file";
-        std::string keyfile = folder + "key.file";
+        std::string certfile = folder + "/cert" + CERT_FILE_EXT;
+        std::string keyfile = folder + "/cert" +  KEY_FILE_EXT;
         try
         {
-            // int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
-            // if(ret == -1)
-            // {
-            //     log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
-            //     LOG_ERR(log_.str(), MODULE);
-            //     return ret;
-            // }
             buflen_ = encode(&buf_);
             if(buflen_ == 0)
             {
-                if(buf_) free(buf_);
-                umask(mask);
+                log_.str("");
+                log_ << "Ieee1609Cert::store::enoce " << std::endl;
+                LOG_ERR(log_.str(), MODULE);
                 return 0;
             }
-
-            file_write(certfile.c_str(), buf_, buflen_);
-            free(buf_);
+            ret = file_write(certfile.c_str(), buf_, buflen_);
             buf_ = nullptr;
-
+            /* check the file_Write status */
+            if(ret == -1){
+                log_ << "Ieee1609Cert::store::file_write " << certfile << " " << strerror(errno) << std::endl;
+                return 0;
+            }
             buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
-
             if(buflen_ == 0)
             {
                 log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
@@ -1095,41 +1195,51 @@ namespace ctp
                 /* delete the cert file */
                 unlink(certfile.c_str());
                 LOG_ERR(log_.str(), MODULE);
-                umask(mask);
                 return 0;
             }
 
             buf_ = (uint8_t *)buf_alloc(buflen_);
-
             if(buf_ ==  nullptr)
             {
                 log_ << "Ieee1609Cert::store::EC_KEY_priv2oct::buf_alloc(...) fails " << std::endl;
                 LOG_ERR(log_.str(), MODULE);
-                umask(mask);
                 unlink(certfile.c_str());
                 return 0;
             }
-            file_write(keyfile.c_str(), buf_, buflen_);
-            free(buf_);
+
+            buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
+            if(buflen_ == 0)
+            {
+                log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
+                /* error computing the key buffer */
+                /* delete the cert file */
+                unlink(certfile.c_str());
+                LOG_ERR(log_.str(), MODULE);
+                buf_free(buf_);
+                return 0;
+            }
+
+            ret = file_write(keyfile.c_str(), buf_, buflen_);
+            buf_free(buf_);
             buf_ = nullptr;
+
+            if(ret == -1){
+                log_.str("");
+                log_ << "Ieee1609Cert::store::file_write " << keyfile << " " << strerror(errno) << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+                return 0;
+            }
         }catch(ctp::Exception& e)
         {
             log_.str("");
             log_ << "Ieee1609Cert::store " << e.what() << std::endl;
+            LOG_ERR(log_.str(), MODULE);
             unlink(certfile.c_str());
             unlink(keyfile.c_str());
-            umask(mask);
             return 0;
         }
-        // int ret = open(certfile.c_str(), O_CREATE,  S_IRUSR | S_IWUSR);
-        // if(ret == -1)
-        // {
-        //     log_ << "Ieee1609Cert::store::open " << strerror(errno) << std::endl;
-        //     LOG_ERR(log_.str(), MODULE);
-        //     return ret;
-        // }
-        /* restore the mask */
-        umask(mask);
+        log_ << "Ieee1609Cert::store  exit " << std::endl;
+        log_info(log_.str(), MODULE);
         return ret;
     }
 

@@ -45,7 +45,8 @@ namespace ctp
     using SHARED_CERTMGR = std::shared_ptr<CertMgr>;
     using PTR_CERTMGR = CertMgr *;
 
-
+    #define CERT_FILE_EXT    ".cert"
+    #define KEY_FILE_EXT    ".key"
 
 
     /* cert class */
@@ -81,28 +82,23 @@ namespace ctp
         HashedId8 hashid8;
         int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_COMPRESSED);
         int private_key_get();
-        int private_key_set(const uint8_t *keyBuf, size_t keyBufLen);
         int _sign(const uint8_t *buf, size_t len, SignatureType type);
         /* encode the certificate */
 
-        int EncodeCertBase(bool cont = true); /* encode certificate base */
+        // int EncodeCertBase(bool cont = true); /* encode certificate base */
         int sign(); /* sign the certificate, this is valid only for self-signed */
         int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
         const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
         /*FIXME! cache the encoded cert */
-        // uint8_t *encodedBuf;
-        // size_t encodeBufLen;
+        uint8_t *encodedBuf;
+        size_t encodedBufLen;
 
-        const int MODULE=MODULE_CERT;
-
-
-
+        const static int MODULE=MODULE_CERT;
         public:
 
             void create(int nid = NID_X9_62_prime256v1);
             void create(const std::vector<int> psids, int nid=NID_X9_62_prime256v1);
-
-
+            int private_key_set(const uint8_t *keyBuf, size_t keyBufLen);
             explicit Ieee1609Cert();
             /* no copy constructure */
             Ieee1609Cert(const Ieee1609Cert&) = delete;
@@ -125,8 +121,10 @@ namespace ctp
                 buf_free(base);
                 if(ecKey)
                     EC_KEY_free(ecKey);
-
-                std::cout << "Ieee1609Cert::~Ieee1609Cert() exit"<< std::endl;
+                if(encodedBuf)
+                    buf_free(encodedBuf);
+                encodedBufLen = 0;
+                std::cout << "Ieee1609Cert::~Ieee1609Cert done" << std::endl;
             }
 
             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
@@ -148,7 +146,7 @@ namespace ctp
                             length of the encoded buffer 
             */
            /* cert encoder */
-            int encode(uint8_t **buf);
+            size_t encode(uint8_t **buf);
             int encode(const uint8_t* buf, size_t len) = delete;
             int encode(SHARED_ENC enc);
             /* encode to be signed data of the certificate */
@@ -158,7 +156,7 @@ namespace ctp
             int decode(const uint8_t* buf, size_t len);
             int decode(std::shared_ptr<Ieee1609Decode> ptr);
             /* cert signer from file */
-            int decode(std::string certFile, std::string keyFile);
+            static int decode(std::string certFile, std::vector<SHARED_CERT>& certs);
             /* decode to be signed */
             int DecodeToBeSigned(bool cont = true); /* decode to be sined */
             
@@ -875,7 +873,11 @@ namespace ctp
                     {
                         while((dent = readdir(dir)) != nullptr)
                         {
+                            /* ignore the default directoies */
+                            if(dent->d_name[0] == '.') continue;
+
                             std::string path(cfg->certcfg.signers);
+                            path.append("/");
                             path.append(dent->d_name);
                             if(stat(path.c_str(), &sb) == -1)
                             {
@@ -885,26 +887,20 @@ namespace ctp
                             }
                             if(S_ISDIR(sb.st_mode))
                             {
-                                dirs.push_back(path);
+                                dirs.emplace_back(dent->d_name);
                             }
                             if(S_ISREG(sb.st_mode))
-                                files.push_back(path);
+                                files.emplace_back(dent->d_name);
                         }
                     }
                     /* first process all directories */
                     for(std::string& _dir: dirs)
                     {
-                        _dir =  _dir + cfg->certcfg.signers;
-                        dir = opendir(_dir.c_str());
-                        if(dir != nullptr)
-                        {
-                            cert = std::make_shared<Ieee1609Cert>();
-                            /* decode the certificate(s) from the directory */
-                            if(cert->decode(_dir, _dir) == 1)
-                            {
-                                signerList.push_back(cert);
-                            }
-                        }
+                        std::string _temp(cfg->certcfg.signers);
+                        _temp.append("/");
+                        _temp.append(_dir);
+                        std::cout << "directory found " << _temp << std::endl;
+                        ctp::Ieee1609Cert::decode(_temp, signerList);
                     }
 
                     if(signerList.size() == 0)
@@ -919,6 +915,7 @@ namespace ctp
                                 cert->create(cfg->psids);
                             else
                                 cert->create();
+
                             cert->store(_file);
                             /* store it */
                             signerList.push_back(cert);

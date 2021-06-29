@@ -44,6 +44,7 @@ void TEST(encoding)();
 void TEST(config)();
 void TEST(tp_test_client)();
 void TEST(FILE)();
+void TEST(dir)();
 
 
 
@@ -225,6 +226,7 @@ int main()
     // TEST(tp_test_client)();
 
     // TEST(FILE)();
+    // TEST(dir)();
     /* raise the terminate signal here */
     raise(SIGTERM);
 
@@ -410,28 +412,9 @@ void TEST(data_decoding)()
     {
         ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_INFO);
 
-        tp = ctp::SHARED_TP(new ctp::TP(), [](const ctp::PTR_TP ptr){std::cout << "TP delete " << std::endl; delete ptr;});
+        tp = ctp::SHARED_TP(new ctp::TP(),
+                    [](const ctp::PTR_TP ptr){std::cout << "TP delete " << std::endl; delete ptr;});
         tp->start();
-        /* wait for a while for certs to be processed */
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-    
-        // log_ << "data_decoding start " << std::endl;
-        // LOG_DBG(log_.str(), MODULE);
-        // log_.str("");
-        // pcerts = new ctp::Ieee1609Certs();
-        // pcerts->create(tp->psid_list());
-        // uint8_t *encBuf = nullptr;
-        // size_t encLen = 0;
-        // encLen = pcerts->encode(&encBuf);
-        // log_ << "encoded buffer length " << std::dec << encLen << std::endl;
-        // LOG_DBG(log_.str(), MODULE);
-        // log_.str("");
-        // unlink("data_decoding_enc_cert.txt");
-        // print_data("data_decoding_enc_cert.txt",encBuf, encLen);
-        // pdata = new ctp::Ieee1609Data();
-        // pdata->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.length(), &signedData, &signedDataLength, pcerts);
-        // unlink("data_decoding_enc_data.txt");
-        // print_data("data_decoding_enc_data.txt", signedData, signedDataLength);
         tp->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.size(), &signedData, &signedDataLength);
         /* decoding section */
         file_write("signed.data", signedData,signedDataLength);
@@ -439,9 +422,6 @@ void TEST(data_decoding)()
         signedData = nullptr;
         signedDataLength = 0;
         file_read("signed.data", &signedData, &signedDataLength);
-        std::cout << "size of the read data " << signedDataLength << std::endl;
-
-
 
         log_info(std::string("Start decoding "), MODULE);
         std::cout <<"data decoding starts " << std::endl;
@@ -787,4 +767,13 @@ void TEST(FILE)()
         std::cout << "Line is : " << _line << std::endl;
     }
     ifs.close();
+}
+
+
+void TEST(dir)()
+{
+    std::string dirPath ="./krishan/veer/singh";
+    int comps = file_path_create(dirPath);
+
+    std::cout << "componets created# " << comps << std::endl;
 }

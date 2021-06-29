@@ -155,9 +155,8 @@ namespace ctp
                         LOG_ERR(log_.str(), MODULE);
                         throw Exception(log_.str());
                     }
-                    buf_free(hashBuf);
                     /* combine the hash of payload and signer, 32+32=64 */
-                    hashBuf = (uint8_t*)buf_alloc(64);
+                    hashBuf = (uint8_t*)buf_alloc(2*SHA256_DIGEST_LENGTH);
                     memcpy((void*)hashBuf, hash1, SHA256_DIGEST_LENGTH);
                     memcpy((void*)&hashBuf[SHA256_DIGEST_LENGTH],hash2, SHA256_DIGEST_LENGTH);
                     /* free the buffers */

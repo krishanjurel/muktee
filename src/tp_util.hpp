@@ -8,11 +8,15 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,6 +32,7 @@ time_t start_time(struct tm *tm);
 #endif
 void print_data(const char* file, const uint8_t *buf, size_t len);
 int file_read(const char *file, uint8_t **buf, size_t *len);
-void file_write(const char *file, const uint8_t *buf, size_t len);
-
+int file_write(const char *file, const uint8_t *buf, size_t len);
+/* returns a vector of strings seperated in the path, strictly for unix systems */
+int file_path_create(std::string path);
 #endif //__TP_UTIL_HPP__

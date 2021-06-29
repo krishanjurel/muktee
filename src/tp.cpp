@@ -107,8 +107,8 @@ namespace ctp
                 LOG_ERR(log_.str(), MODULE);
             }
 
-            certcfg.signers = "./bin/signers";
-            certcfg.cas =  "./bin/cas";
+            certcfg.signers = "./signers";
+            certcfg.cas =  "./cas";
             fclose(fp);
         }else
         {
