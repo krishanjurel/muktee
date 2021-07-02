@@ -39,8 +39,8 @@ namespace ctp
     struct _cert_cfg
     {
         int nid;
-        char *signers;  /* root directory of signers */
-        char *cas;    /* root directory of CAs */
+        std::string signers;  /* root directory of signers */
+        std::string cas;    /* root directory of CAs */
     };
 
     struct _remote_host

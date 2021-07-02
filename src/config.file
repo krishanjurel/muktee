@@ -47,6 +47,9 @@ app:
         /* sign and verify the given psids */
         CERTS:
         {
+            /* location to store ca and signer certs */
+            cas = "./cas1234",
+            signers = "./signers5678",
             /* NIST P-256 and brainpool P-256 r1 */
             curves=["nistp256","brainpoolp256r1"];
             /* for now it only contains the psid */

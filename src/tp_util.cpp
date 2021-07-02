@@ -110,7 +110,7 @@ int file_read(const char *file, uint8_t **buf, size_t *len)
 /* FIXME, take care of the errors */
 int file_write(const char *file, const uint8_t *buf, size_t len)
 {
-    const char *cwd = get_current_dir_name();
+    // const char *cwd = get_current_dir_name();
     // std::cout << "file_write cwd " << cwd << std::endl;
     // std::cout << "file_write " << file << std::endl;
     int fd  = open(file, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IXUSR);
@@ -161,7 +161,7 @@ int file_path_create(std::string path)
         if(stat(_temp.c_str(), &sb) != -1)
         {
             /* goto the current directory */
-            chdir(_temp.c_str());
+            (void)(chdir(_temp.c_str()) == 0);
             if(comps) n++;
             /* remove the current substring from the _path */
             _path.erase(_path.begin(), _path.begin() + n);
@@ -179,7 +179,7 @@ int file_path_create(std::string path)
         }
 
         /* goto the current directory */
-        (void)chdir(_temp.c_str());
+        (void)(chdir(_temp.c_str()) == 0); /* keep the compiler happy */
         if(comps) n++;
         /* remove the current substring from the _path */
         _path.erase(_path.begin(), _path.begin() + n);
@@ -201,7 +201,7 @@ int file_path_create(std::string path)
         }
     }
     /* go back to the original directory */
-    chdir(cwd);
+    void(chdir(cwd)==0);
     free((void *)cwd);
     return comps;
 }

@@ -45,11 +45,12 @@ namespace ctp
     }
 
 
-    void Ieee1609Data::sign(int psid, const uint8_t *buf, size_t len,
+    /* return 1 on success o otherwise */
+    int  Ieee1609Data::sign(int psid, const uint8_t *buf, size_t len,
                   uint8_t **signedData, size_t *signedDataLen,
                   std::shared_ptr<Ieee1609Cert> cert)
     {
-        int ret = 0;
+        int ret = 1;
         /* for signing, get the encoded certiificate */
         uint8_t *hashBuf = nullptr;
         size_t hashBufLen = 0;;
@@ -101,6 +102,7 @@ namespace ctp
             hashBufLen = cert->encode(&hashBuf);
             if(hashBufLen == 0)
             {
+                ret = 0;
                 LOG_ERR("Ieee1609Data::sign::cert->Hash256 cert::encode_signer\n", MODULE);
                 goto done;
             }
@@ -133,12 +135,19 @@ namespace ctp
 
             /* sign the data */
             sig = cert->SignData(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
+
+            if(sig == nullptr)
+            {
+                LOG_ERR("Ieee1609Data::sign::cert->SignData failed\n", MODULE);
+                ret = 0;
+                goto done;
+            }
+
             if(signature == nullptr)
                 signature = (Signature *)buf_alloc(sizeof(Signature));
             /* get the signature from sig */
             cert->SigToSignature(sig, std::ref(*signature));
         }
-
         /* before encoding, add the signing certificate into certs to encode correctly */
         certs->CertAdd(cert);
         encode();
@@ -151,6 +160,7 @@ namespace ctp
             if(tbsBuf)
                 buf_free(tbsBuf);
         LOG_INFO("Ieee1609Data::sign Exit\n", MODULE);
+        return ret;
     }
 
 

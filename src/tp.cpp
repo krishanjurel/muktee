@@ -28,6 +28,8 @@ namespace ctp
 
     #define CERTS_CURVES    "curves"
     #define CERTS_PSIDS     "psids"
+    #define CERTS_CAS       "cas"
+    #define CERTS_SIGNERS   "signers"
 
     /* read the configuration file */
     tp_cfg::tp_cfg(const char *filename)
@@ -65,7 +67,7 @@ namespace ctp
                 }
                 /* get the curves settinsgs */
                 libconfig::Setting& certSettings = config.lookup(CERT_SETTINGS);
-                if(dcSetting.getLength() == 0)
+                if(certSettings.getLength() == 0)
                 {
                     log_ << " tp_cfg::tp_cfg::config.lookup( " << CERT_SETTINGS << ")" <<  " not specified " << std::endl;
                     LOG_ERR(log_.str(), MODULE);
@@ -99,16 +101,17 @@ namespace ctp
                             itr_++;
                         }
                     }
+                    certSettings.lookupValue(CERTS_CAS, certcfg.cas);
+                    certSettings.lookupValue(CERTS_SIGNERS, certcfg.signers);
                 }
             }
             catch(const std::exception& e)
             {
                 log_ << "tp_cfg::tp_cfg (" << filename << ")" << e.what() << std::endl;
                 LOG_ERR(log_.str(), MODULE);
+                certcfg.signers = "./signers";
+                certcfg.cas =  "./cas";
             }
-
-            certcfg.signers = "./signers";
-            certcfg.cas =  "./cas";
             fclose(fp);
         }else
         {
@@ -310,6 +313,8 @@ namespace ctp
         return 0;
     }
 
+
+    /* return 1 on success and 0 on error */
     int TP::verify(void *buf, size_t len, uint8_t **out, size_t *outLength)
     {
         /* create a data object */
@@ -318,6 +323,13 @@ namespace ctp
         log_info(log_.str(), MODULE);
         log_.str("");
         int ret = 1; /* success */
+
+        HeaderInfo* hdrInfo = nullptr;
+        Ieee1609Dot2Data *dot2data = nullptr;
+        ToBeSignedData *tbs = nullptr;
+        Ieee1609Dot2Data *data = nullptr;
+        uint8_t *_databuf = nullptr;
+        size_t _databuflen = 0;
 
         Ieee1609Data *ieee1609DataObj = new ctp::Ieee1609Data();
         try
@@ -329,14 +341,11 @@ namespace ctp
             /* verify the given data */
             ieee1609DataObj->verify();
             /* if all good, get the psid of this data and call the associated callback function */
-            HeaderInfo* hdrInfo = ieee1609DataObj->HeaderInfo_();
+            hdrInfo = ieee1609DataObj->HeaderInfo_();
             // int psid = hdrInfo->psid;
             /*get the root data */
-            Ieee1609Dot2Data *dot2data = ieee1609DataObj->Data_();
-            ToBeSignedData *tbs = ieee1609DataObj->ToBeSignedData_();
-            Ieee1609Dot2Data *data = nullptr;
-            uint8_t *_databuf = nullptr;
-            size_t _databuflen = 0;
+            dot2data = ieee1609DataObj->Data_();
+            tbs = ieee1609DataObj->ToBeSignedData_();
             if(dot2data->content.type == Ieee1609Dot2ContentSignedData)
             {
                 data = tbs->payload.data;
@@ -372,7 +381,6 @@ namespace ctp
             log_ << " TP::verify(synchronous) ";
             log_ << e.what() << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            ieee1609DataObj = nullptr;
             ret = 0;
         }
         delete ieee1609DataObj;

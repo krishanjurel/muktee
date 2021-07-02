@@ -56,7 +56,7 @@ namespace ctp
         return std::ref(*seqOfPsidSsp);
     }
 
-    int Ieee1609Cert::sign()
+    int Ieee1609Cert::sign(SHARED_CERT signer)
     {
         int ret = 0;
         std::stringstream log_(std::ios_base::out);
@@ -74,38 +74,72 @@ namespace ctp
         uint8_t *hash1 = nullptr; /* hash of tobesigned */
         uint8_t *hash2 = nullptr; /* hash of signer idetntifier */
         uint8_t *hash = nullptr;  /* total hash */
-        ret = Hash256(buf, len, &hash1);
-        if(ret == 0)
+        if (len)
         {
-            LOG_ERR(" Ieee1609Cert::sign()::Hash256 ", MODULE);
-            throw Exception(" Ieee1609Cert::sign()::Hash256 ");
- 
+            ret = Hash256(buf, len, &hash1);
+            if(ret == 0)
+            {
+                LOG_ERR(" Ieee1609Cert::sign()::Hash256 ", MODULE);
+            }
         }
-		buf_free(buf);
+
+        log_.str("");
+        len = 0;
+        if(buf) buf_free(buf);
+        buf = nullptr;
         pEncObj->clear();
-        if(base->issuer.type == IssuerIdentifierTypeSelf)
+        if(ret)
         {
-            // const uint8_t *nullstr = (const uint8_t*)"\0";
-            const std::string nullstr{};
-            ret = Hash256((uint8_t *)nullstr.c_str(), nullstr.size(), &hash2);
-        }else if(base->issuer.type == IssuerIdentifierTypeHashId)
+            if(signer.get() == this)
+            {
+                const std::string nullstr{};
+                ret = Hash256((uint8_t *)nullstr.c_str(), nullstr.size(), &hash2);
+                log_ << "Ieee1609Cert::sign()::Hash256 hash nullstr " << std::endl;
+            }else
+            {
+                len = signer->encode(&buf);
+                ret = Hash256(buf, len, &hash2);
+                log_ << "Ieee1609Cert::sign()::Hash256 hash issuer " << std::endl;
+            }
+        }
+
+        if(ret)
         {
-            ret = Hash256((uint8_t *)base->issuer.issuer.hashId.x, sizeof(hashid8), &hash2);
+
+            hash = (uint8_t *)buf_alloc(2*SHA256_DIGEST_LENGTH);
+            /* copy the hash1 */
+            memcpy(hash,hash1, SHA256_DIGEST_LENGTH);
+            /* copy the hash 2*/
+            memcpy(&hash[SHA256_DIGEST_LENGTH], hash2, SHA256_DIGEST_LENGTH);
+
+            ret = Hash256(hash,2*SHA256_DIGEST_LENGTH,&hash2);
+            log_ << "Ieee1609Cert::sign()::Hash256 hash combined " << std::endl;
+        }
+
+        if(ret)
+        {
+            ret  = signer->sign(hash2, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
+            if(ret == 0)
+            {
+                log_ << "Ieee1609Cert::sign()::sign(..)" << std::endl;
+            }
         }
 
         if(ret == 0)
         {
-            LOG_ERR(" Ieee1609Cert::sign()::Hash256 hash nullstr ", MODULE);
-            throw Exception(" Ieee1609Cert::sign()::Hash256 hash nullstr ");
+            LOG_ERR(log_.str(), MODULE);
         }
 
-        hash = (uint8_t *)buf_alloc(2*SHA256_DIGEST_LENGTH);
-        /* copy the hash1 */
-        memcpy(hash,hash1, SHA256_DIGEST_LENGTH);
-        /* copy the hash 2*/
-        memcpy(&hash[SHA256_DIGEST_LENGTH], hash2, SHA256_DIGEST_LENGTH);
-        sign(hash, SHA256_DIGEST_LENGTH,ecdsaNistP256Signature);
-        buf_free(hash);
+        if(buf)
+            buf_free(buf);
+        if(hash)
+            buf_free(hash);
+        if(hash1)
+            buf_free(hash1);
+        if(hash2)
+            buf_free(hash2);
+
+        log_.str("");
         log_ << " Ieee1609Cert::sign() exit " << std::endl;
         log_dbg(log_.str(), MODULE);
         return 1;
@@ -113,13 +147,47 @@ namespace ctp
 
     int Ieee1609Cert::verify(const uint8_t *dgst, size_t dgst_len, const Signature& signature_)
     {
-        int ret = 0;
+        std::stringstream log_(std::ios_base::out);
+        int ret = 1;
         BIGNUM *r, *s;
-        // EC_POINT *point;
         uint8_t *sign_r, *sign_s;
+        int nid = -1;
 
-        ECDSA_SIG *sig = ECDSA_SIG_new();
-        EC_GROUP *group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
+        size_t buf_len = SHA256_DIGEST_LENGTH*2+1;
+        uint8_t *buf1_ = nullptr;
+        uint8_t *buf2_ = nullptr;
+
+        EC_KEY *key = nullptr;
+        ECDSA_SIG *sig = nullptr;
+        EC_GROUP *group = nullptr;
+
+
+        log_ << "Ieee1609Cert::verify(...)" << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+
+        switch(signature_.type)
+        {
+            case ecdsaNistP256Signature:
+                nid = NID_X9_62_prime256v1;
+                break;
+            case ecdsaBrainpoolP256r1Signature:
+                nid = NID_brainpoolP256r1;
+            default:
+                log_ << "Ieee1609Cert::verify(...) invalid signature-type  " << signature->type << std::endl;
+                LOG_ERR(log_.str(), MODULE);
+        }
+
+        if( nid == -1)
+        {
+            ret = 0;
+            goto done;
+        }
+
+        log_.str("");
+
+        sig = ECDSA_SIG_new();
+        group = EC_GROUP_new_by_curve_name(nid);
         /* set the group point as compressed form */
         EC_GROUP_set_point_conversion_form(group,POINT_CONVERSION_COMPRESSED);
         /* get r and s from octet encoded signature values */
@@ -127,32 +195,36 @@ namespace ctp
         sign_s = (uint8_t *)&signature_.signature.ecdsaP256Signature.s.x[0];
 
         // std::cout << "Ieee1609Cert::verify: verification payload " << std::endl;
-        // print_data(nullptr, dgst, dgst_len);
+        // // print_data(nullptr, dgst, dgst_len);
 
         // /* signature */
-        // for(int i = 0; i < 32; i++)
+        // for(int i = 0; i < dgst_len; i++)
         // {
         //     if(i % 16 ==0)
         //         std::cout << std::endl;
-            
         //     std::cout << std::hex << (int)sign_r[i] << ":";
         // }
+        // std::cout << std::endl;
         r = BN_new();
         s = BN_new();
 
         r = BN_bin2bn(sign_r,SHA256_DIGEST_LENGTH, r);
         if(r == nullptr)
         {
+            ret = 0;
             BN_free(r);
             BN_free(s);
-            throw Exception("Ieee1609Cert::verify::BN_bin2bn::r");
+            log_ << "Ieee1609Cert::verify::BN_bin2bn::r" << std::endl;
+            goto done;
         }
         s = BN_bin2bn(sign_s,SHA256_DIGEST_LENGTH, s);
         if(s == nullptr)
         {
+            ret = 0;
             BN_free(r);
             BN_free(s);
-            throw Exception("Ieee1609Cert::verify::BN_bin2bn::s");
+            log_ << "Ieee1609Cert::verify::BN_bin2bn::s" << std::endl;
+            goto done;
         }
 
 
@@ -160,31 +232,29 @@ namespace ctp
         ret = ECDSA_SIG_set0(sig, r, s);
         if(ret == 0 )
         {
+            ret = 0;
             BN_free(r);
             BN_free(s);
-            throw Exception("Ieee1609Cert::verify::ECDSA_SIG_set0");
+            log_ << "Ieee1609Cert::verify::ECDSA_SIG_set0" << std::endl;
         }
 #else
         sig->r = r;
         sig->s = s;
 #endif
-        /* now get the public key of the signer */
-        EC_KEY *key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-        EC_KEY_set_conv_form(key, POINT_CONVERSION_COMPRESSED);
+
         /* allocate the temporary buffer to specify the comporessed point of the key */
         /* allocate the max buffer including the compressed notification */
-        size_t buf_len = SHA256_DIGEST_LENGTH*2+1;
-        uint8_t *buf1_;
-        uint8_t *buf2_ = (uint8_t*)buf_alloc(buf_len);
         
+        buf2_ = (uint8_t*)buf_alloc(buf_len);
         if(vki->type == VerificationKeyIndicatorTypeKey)
         {
             if(vki->indicator.verificationKey.type == PublicVerificationKeyTypEecdsaNistP256S)
             {
-                key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+
+                key = EC_KEY_new_by_curve_name(nid);
+                EC_KEY_set_conv_form(key, POINT_CONVERSION_COMPRESSED);
+
                 buf2_[0] = (uint8_t )vki->indicator.verificationKey.key.ecdsaNistP256.type;
-				int type = buf2_[0];
-				std::cout << "point type " << std::hex << type << std::endl;
                 if (vki->indicator.verificationKey.key.ecdsaNistP256.type == EccP256CurvPointTypeFill)
                 {
                     buf_len = 0;
@@ -200,13 +270,15 @@ namespace ctp
 
                 }
                 /* key is needed */
-                if(buf_len == 0)
+                if(buf_len == 0 || key == nullptr)
                 {
+                    ret = 0;
                     BN_free(r);
                     BN_free(s);
                     EC_KEY_free(key);
                     buf_free(buf2_);
-                    throw Exception("Ieee1609Cert::verify:: public key len 0");
+                    log_ << "Ieee1609Cert::verify:: public key len 0" << std::endl;
+                    goto done;
                 }
                 memcpy(&buf2_[1], buf1_, buf_len);
 
@@ -228,19 +300,22 @@ namespace ctp
                     BN_free(s);
                     EC_KEY_free(key);
                     buf_free(buf2_);
-                    throw Exception("Ieee1609Cert::verify::EC_KEY_oct2key");
+                    log_ << "Ieee1609Cert::verify::EC_KEY_oct2key" << std::endl;
+                    goto done;
                 }
                 /* now we got the key, verify the signature */
                 ret = ECDSA_do_verify(dgst, dgst_len, sig, key);
                 if(ret == 0 ||
                    ret ==  -1)
                 {
+                    ret = 0;
                     // perror("Ieee1609Cert::verify::ECDSA_do_verify");
                     BN_free(r);
                     BN_free(s);
                     EC_KEY_free(key);
                     buf_free(buf2_);
-                    throw Exception("Ieee1609Cert::verify::ECDSA_do_verify");
+                    log_ << "Ieee1609Cert::verify::ECDSA_do_verify" << std::endl;
+                    goto done;
                 }
                 BN_free(r);
                 BN_free(s);
@@ -248,6 +323,13 @@ namespace ctp
                 buf_free(buf2_);
             }
         }
+
+        done:
+
+        if(ret == 0) LOG_ERR(log_.str(), MODULE);
+        log_.str("");
+        log_ << "Ieee1609Cert::verify exit " << std::endl;
+        log_info(log_.str(), MODULE);
         return ret;
     }
 
@@ -381,6 +463,7 @@ namespace ctp
             /*FIXME, try to avoid it */
             goto done;
         }
+
         done:
             return ret;
     }
@@ -389,7 +472,7 @@ namespace ctp
 
     const ECDSA_SIG* Ieee1609Cert::SignData(const uint8_t *buf, size_t len, SignatureType type)
     {
-        // std::cout << "signed data " << std::endl;
+        // std::cout << "signed data " << len << std::endl;
         // for(int i = 0; i < len; i++)
         // {
         //     if(i%16 ==0)
@@ -397,7 +480,6 @@ namespace ctp
         //     std::cout << std::hex << (int)buf[i] << ":";
         // }
         // std::cout << std::endl;
-
         /* use the only key for now */
         return  ECDSA_do_sign(buf,len,ecKey);
     }
@@ -405,7 +487,7 @@ namespace ctp
     /* sign the certificate */
     int Ieee1609Cert::_sign(const uint8_t *buf, size_t len, SignatureType type)
     {
-        int ret = 0;
+        int ret = 1;
         const BIGNUM *r;
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
@@ -420,7 +502,7 @@ namespace ctp
         if (sig == nullptr)
         {
             LOG_ERR("cert::sign : Error signing the message", 1);
-            ret = -1;
+            ret = 0;
             /*FIXME, try to avoid it */
             goto done;
         }
@@ -453,7 +535,7 @@ namespace ctp
         if(BN_bn2bin(r, sign_r) != sizeof(HashedData32))
         {
             LOG_ERR("cert::sign BN_bn2bin(r, sign_r)", 1);
-            ret = -1;
+            ret = 0;
             /*FIXME, try to avoid it */
             goto done;
         }
@@ -463,7 +545,7 @@ namespace ctp
         if(BN_bn2bin(s, sign_s) != sizeof(HashedData32))
         {
             LOG_ERR("cert::sign BN_bn2bin(r, sign_r)", 1);
-            ret = -1;
+            ret = 0;
             /*FIXME, try to avoid it */
             goto done;
         }
@@ -562,6 +644,10 @@ namespace ctp
             /* if all good so far ???*/
             if(ret >= 1)
             {
+                /* set the encoded buffer*/
+                // encodedBufLen = certBufLen_;
+                // encodedBuf = (uint8_t *)buf_alloc(encodedBufLen);
+                // memcpy(encodedBuf, certBuf_, encodedBufLen);
                 certs.push_back(cert_);
             }
             if(certBuf_)
@@ -663,7 +749,9 @@ namespace ctp
 			EncodeToBeSigned(true);
 			/* only encode the signature if it is of type explicit */
             if(base->certType == CertTypeExplicit &&  signature != nullptr)
-            pEncObj->Signature_(std::ref(*signature));
+            {
+                pEncObj->Signature_(std::ref(*signature));
+            }
 		}catch (ctp::Exception& e)
 		{
 			ret = 0;
@@ -875,14 +963,13 @@ namespace ctp
         return 0;
     }
 
-
     /* set the private key, this is only called after successfully decoding the certificate body */
     int Ieee1609Cert::private_key_set(const uint8_t *keyBuf, size_t keyBufLen)
     {
         std::stringstream log_(std::ios_base::out);
+        int nid = -1;
         log_ << "Ieee1609Cert::private_key_set(...) enter " << std::endl;
         log_info(log_.str(), MODULE);
-        int nid = -1;
 
         switch(signature->type)
         {
@@ -904,6 +991,7 @@ namespace ctp
         log_.str("");
 
         ecGroup = EC_GROUP_new_by_curve_name(nid);
+        EC_GROUP_set_point_conversion_form(ecGroup,POINT_CONVERSION_COMPRESSED);
 
         ecKey = EC_KEY_new_by_curve_name(nid);
         if (ecKey == nullptr)
@@ -912,6 +1000,9 @@ namespace ctp
             LOG_ERR(log_.str(), MODULE);
             return 0;
         }
+        EC_KEY_set_conv_form(ecKey, POINT_CONVERSION_COMPRESSED);
+        EC_KEY_set_group(ecKey, ecGroup);
+
         BIGNUM *bn = BN_new();
         bn = BN_bin2bn(keyBuf, keyBufLen, bn);
         if(bn == nullptr)
@@ -922,8 +1013,6 @@ namespace ctp
             return 0;
         }
 
-        // log_.str("");
-        // if(EC_KEY_oct2priv(ecKey, keyBuf, keyBufLen) == 0)
         if(EC_KEY_set_private_key(ecKey, bn) == 0 )
         {
             log_ << "Ieee1609Cert::private_key_set::EC_KEY_oct2priv " << std::endl;
@@ -931,11 +1020,6 @@ namespace ctp
             BN_free(bn);
             return 0;
         }
-
-        EC_KEY_set_group(ecKey, ecGroup);
-
-        // public_key_get();
-
         log_ << "Ieee1609Cert::private_key_set(...) exit " << std::endl;
         log_info(log_.str(), MODULE);
         BN_free(bn);
@@ -1011,35 +1095,31 @@ namespace ctp
         buf_free(keyBuf);
         return keylen;
     }
-    void Ieee1609Cert::create(int nid)
-    {
-        std::vector<int> psids{PSID_BSM};
-        create(psids, nid);
-    }
 
-    /* create a certificate */
-    void Ieee1609Cert::create(const std::vector<int> psids, int nid)
+    int Ieee1609Cert::_create(const std::vector<int> psids, int nid)
     {
         std::stringstream log_(std::ios_base::out);
-        log_ << "Ieee1609Cert::create(int nid, const std::vector<int> psids) enter " << std::endl;
+        log_ << "Ieee1609Cert::_create(int nid, const std::vector<int> psids) enter " << std::endl;
         log_info(log_.str(), MODULE);
         log_.str("");
         ecKey = EC_KEY_new_by_curve_name(nid);
         if (ecKey == nullptr)
         {
-            log_ << "Ieee1609Cert::create(...) " <<  "EC_KEY_new_by_curve_name(nid)" << std::endl;
+            log_ << "Ieee1609Cert::_create(...) " <<  "EC_KEY_new_by_curve_name(nid)" << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            throw Exception(log_.str());
+            return 0;
         }
 
+
         ecGroup = EC_GROUP_new_by_curve_name(nid);
+        EC_GROUP_set_point_conversion_form(ecGroup,POINT_CONVERSION_COMPRESSED);
 
         if(EC_KEY_generate_key(ecKey) != 1)
         {
             EC_KEY_free(ecKey);
-            log_ << "Ieee1609Cert::create(...) " <<  "EC_KEY_generate_key" << std::endl;
+            log_ << "Ieee1609Cert::_create(...) " <<  "EC_KEY_generate_key" << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            throw Exception(log_.str());
+            return 0;
         }
         EC_KEY_set_group(ecKey, ecGroup);
         /* set the next tr to next */
@@ -1066,7 +1146,7 @@ namespace ctp
         vki->indicator.verificationKey.type = PublicVerificationKeyTypEecdsaNistP256S;
         /* default is uncompressed */
         public_key_get();
-        
+
         /* there is only item in this sequence */
         /* get the size of the psids array */
         seqOfPsidSsp->quantity = psids.size();
@@ -1085,15 +1165,48 @@ namespace ctp
             /* move to the new psid ssp */
             psidSsp++;
         }
+        log_.str("");
+        log_ << "Ieee1609Cert::_create(int nid, const std::vector<int> psids) exit " << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+        return 1;
+    }
 
-        /* default, self-signed */
-        issuer->type = IssuerIdentifierTypeSelf;
-        /* every self-signed certificate is signed by default */
-        sign();
+
+    int Ieee1609Cert::create(SHARED_CERT signer, int nid)
+    {
+        std::vector<int> psids{PSID_BSM};
+        return create(psids,signer, nid);
+    }
+
+    int Ieee1609Cert::create(const std::vector<int> psids, SHARED_CERT signer, int nid)
+    {
+        int ret = 0;
+        std::stringstream log_(std::ios_base::out);
+        log_ << "Ieee1609Cert::create(int nid, const std::vector<int> psids) enter " << std::endl;
+        log_info(log_.str(), MODULE);
+        log_.str("");
+
+        /* if this is a self signed certificate */
+        if(signer.get() == this)
+        {
+            issuer->type = IssuerIdentifierTypeSelf;
+        }else
+        {
+            issuer->type = IssuerIdentifierTypeHashId;
+        }
+
+        /* create the cert */
+        ret = _create(psids, nid);
+        if(ret == 1)
+        {
+            ret = sign(signer);
+        }
+
         /* have the signature option */
-        base->options = 0x80; /* there is no extentition and signature is always present */
-		encodedBuf = nullptr;
-		encodedBufLen = 0;
+        if(ret == 1 && base->certType == CertTypeExplicit)
+            base->options = 0x80; /* there is no extentition and signature is always present */
+        return ret;
     }
 
     /* the certs are created in the path, with folder name as the validity date.
@@ -1252,59 +1365,59 @@ namespace ctp
         certs.clear();
     }
 
-    void Ieee1609Certs::create(int nid)
-    {
-        SHARED_CERT cert = nullptr;
-        std::stringstream log_(std::ios_base::out);
-        log_ << " Ieee1609Certs::create( " << std::dec << nid ;
-        try
-        {
-            cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
-            cert->create(nid);
-            quantity++;
-            certs.push_back(cert);
-        }catch(ctp::Exception& e)
-        {
-            log_ << e.what() << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-            cert.reset();
-            certs.clear();
-            throw;
-        }
-    }
+    // void Ieee1609Certs::create(int nid)
+    // {
+    //     SHARED_CERT cert = nullptr;
+    //     std::stringstream log_(std::ios_base::out);
+    //     log_ << " Ieee1609Certs::create( " << std::dec << nid ;
+    //     try
+    //     {
+    //         cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
+    //         cert->create(nid);
+    //         quantity++;
+    //         certs.push_back(cert);
+    //     }catch(ctp::Exception& e)
+    //     {
+    //         log_ << e.what() << std::endl;
+    //         LOG_ERR(log_.str(), MODULE);
+    //         cert.reset();
+    //         certs.clear();
+    //         throw;
+    //     }
+    // }
 
 
-    void Ieee1609Certs::create(std::vector<int> psids)
-    {
-        create(NID_X9_62_prime256v1, psids);
-    }
+    // void Ieee1609Certs::create(std::vector<int> psids)
+    // {
+    //     create(NID_X9_62_prime256v1, psids);
+    // }
 
 
-    void Ieee1609Certs::create(int nid, std::vector<int> psids)
-    {
-        SHARED_CERT cert = nullptr;
-        std::stringstream log_(std::ios_base::out);
-        log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) enter" << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
+    // void Ieee1609Certs::create(int nid, std::vector<int> psids)
+    // {
+    //     SHARED_CERT cert = nullptr;
+    //     std::stringstream log_(std::ios_base::out);
+    //     log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) enter" << std::endl;
+    //     log_info(log_.str(), MODULE);
+    //     log_.str("");
 
-        try
-        {
-            /* clear any existing certs here */
-            certs.clear();
-            cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
-            cert->create(psids, nid);
-            quantity++;
-            certs.emplace_back(cert);
-        }catch( std::exception& e){
-            log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) " << e.what() << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-            throw;
-        }
-        log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) exit" << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-    }
+    //     try
+    //     {
+    //         /* clear any existing certs here */
+    //         certs.clear();
+    //         cert = SHARED_CERT(new Ieee1609Cert(), [this](const PTR_CERT p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete cert\n", MODULE);delete p;});
+    //         cert->create(psids, nullptr, nid);
+    //         quantity++;
+    //         certs.emplace_back(cert);
+    //     }catch( std::exception& e){
+    //         log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) " << e.what() << std::endl;
+    //         LOG_ERR(log_.str(), MODULE);
+    //         throw;
+    //     }
+    //     log_ << "Ieee1609Certs::create(int nid, std::vector<int> psids) exit" << std::endl;
+    //     log_info(log_.str(), MODULE);
+    //     log_.str("");
+    // }
 
 
     /* encoded file */

@@ -56,7 +56,7 @@ namespace ctp
 
             ~Ieee1609Data()
             {
-                std::cout << "Ieee1609Data::~Ieee1609Data" << std::endl;
+                log_dbg("Ieee1609Data::~Ieee1609Data\n", MODULE);
                 enc.reset();
                 dec.reset();
                 Ieee1609Dot2Data *data_ = tbsData->payload.data;
@@ -87,7 +87,7 @@ namespace ctp
                     uint8_t **signedData, size_t *signedDataLen);
             
             /* sign with a supplied certificate */
-            void sign(int psid, const uint8_t *buf, size_t len,
+            int sign(int psid, const uint8_t *buf, size_t len,
                     uint8_t **signedData, size_t *signedDataLen,
                     SHARED_CERT cert);
             
@@ -185,17 +185,20 @@ namespace ctp
                         log_ << std::endl;
                         LOG_ERR(log_.str(), MODULE);
                         buf_free(hashBuf);
+                        hashBuf = nullptr;
                         throw Exception(log_.str());
                     }
                 }catch(ctp::Exception &e)
                 {
-                    buf_free(hashBuf);
+                    if(hashBuf)
+                        buf_free(hashBuf);
                     log_.str("");
                     log_ << "Ieee1609Data::verify exit" << e.what() << std::endl;
                     LOG_ERR(log_.str(), MODULE);
                     throw;
                 }
-                buf_free(hashBuf);
+                if(hashBuf)
+                    buf_free(hashBuf);
                 log_ << "Ieee1609Data::verify() exit " << std::endl;
                 log_info(log_.str(), MODULE);
                 log_.str("");

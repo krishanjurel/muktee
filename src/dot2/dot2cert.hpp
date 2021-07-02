@@ -65,7 +65,7 @@ namespace ctp
         SHARED_ENC pEncObj;
         SHARED_DEC pDecObj;
 
-        const EC_GROUP *ecGroup;
+        EC_GROUP *ecGroup;
         EC_KEY *ecKey;
         uint8_t keyType;
 
@@ -79,14 +79,21 @@ namespace ctp
         SequenceOfPsidSsp *seqOfPsidSsp;
         //SequenceOfCertificate *seqOfCert;
         /* hash id 8 of this certificate */
-        HashedId8 hashid8;
+        uint8_t *hashid32;
+        HashedData32 hashedData32;
+
+        void hashid_create() {
+            if(hashid32) free(hashid32);
+            Hash256(encodedBuf,encodedBufLen,&hashid32);
+        }
+
         int public_key_get(point_conversion_form_t conv = POINT_CONVERSION_COMPRESSED);
         int private_key_get();
         int _sign(const uint8_t *buf, size_t len, SignatureType type);
         /* encode the certificate */
-
+        int _create(const std::vector<int> psids, int nid=NID_X9_62_prime256v1);
         // int EncodeCertBase(bool cont = true); /* encode certificate base */
-        int sign(); /* sign the certificate, this is valid only for self-signed */
+        int sign(SHARED_CERT signer); /* sign the certificate, this is valid only for self-signed */
         int sign(const uint8_t *buf, size_t len, SignatureType type=ecdsaNistP256Signature);
         const Signature *signEx(const uint8_t *buf, size_t len, SignatureType type = ecdsaNistP256Signature);
         /*FIXME! cache the encoded cert */
@@ -96,8 +103,8 @@ namespace ctp
         const static int MODULE=MODULE_CERT;
         public:
 
-            void create(int nid = NID_X9_62_prime256v1);
-            void create(const std::vector<int> psids, int nid=NID_X9_62_prime256v1);
+            int create(SHARED_CERT signer, int nid = NID_X9_62_prime256v1);
+            int create(const std::vector<int> psids, SHARED_CERT signer,int nid=NID_X9_62_prime256v1);
             int private_key_set(const uint8_t *keyBuf, size_t keyBufLen);
             explicit Ieee1609Cert();
             /* no copy constructure */
@@ -108,14 +115,14 @@ namespace ctp
             Ieee1609Cert(const Ieee1609Cert&&) = delete;
             ~Ieee1609Cert()
             {
-                std::cout << "Ieee1609Cert::~Ieee1609Cert()"<< std::endl;
+                log_dbg("Ieee1609Cert::~Ieee1609Cert()\n", MODULE);
                 pEncObj.reset();
                 pDecObj.reset();
                 pEncObj = nullptr;
                 pDecObj = nullptr;
                 if(seqOfPsidSsp && seqOfPsidSsp->psidSsp)
                 {
-                    std::cout << "Ieee1609Cert::~Ieee1609Cert()::buf_free(seqOfPsidSsp->psidSsp)"<< std::endl;
+                    log_dbg("Ieee1609Cert::~Ieee1609Cert()::buf_free(seqOfPsidSsp->psidSsp)\n", MODULE);
                     buf_free(seqOfPsidSsp->psidSsp);
                 }
                 buf_free(base);
@@ -124,10 +131,22 @@ namespace ctp
                 if(encodedBuf)
                     buf_free(encodedBuf);
                 encodedBufLen = 0;
-                std::cout << "Ieee1609Cert::~Ieee1609Cert done" << std::endl;
+                log_dbg("Ieee1609Cert::~Ieee1609Cert done\n", MODULE);
             }
 
+            const uint8_t* HashId8Get() const {
+                /* return the pointer to the last 8 bytes in the hash of the cert */
+                return hashid32 + (SHA256_DIGEST_LENGTH - 8);
+            }
+
+            const uint8_t* HashId10Get() const {
+                /* return the pointer to the last 8 bytes in the hash of the cert */
+                return hashid32 + (SHA256_DIGEST_LENGTH - 10);
+            }
+
+            /* the data to be signed by this certificate */
             const ECDSA_SIG* SignData(const uint8_t *buf, size_t len, SignatureType type);
+
             /* verify the signature of the certificate */
             int verify(const uint8_t *dgst, size_t len);
             /* verify a signature signed this cert */
@@ -168,7 +187,6 @@ namespace ctp
 
             void CertPathSet(std::string path){certPath = path;}
             int store(std::string path);
-
             /* print to stdout or store in a file */
             int print_encoded(const std::string filename);
             int print_decoded(const std::string filename);
@@ -198,9 +216,9 @@ namespace ctp
             ~Ieee1609Certs();
             const Ieee1609Cert *get() const;
             /* create variants */
-            void create(int nid = NID_X9_62_prime256v1);
-            void create(int nid, std::vector<int> psids);
-            void create(std::vector<int> psids);
+            // void create(int nid = NID_X9_62_prime256v1);
+            // void create(int nid, std::vector<int> psids);
+            // void create(std::vector<int> psids);
 
 
             /* encoded message of the signer, 
@@ -245,7 +263,7 @@ namespace ctp
             Ieee1609Encode():encBuf(nullptr),encLen(0){};
             ~Ieee1609Encode()
             {
-                std::cout << " Ieee1609Encode::~Ieee1609Encode " << std::endl;
+                log_dbg(" Ieee1609Encode::~Ieee1609Encode \n", MODULE);
                 if(encBuf)
                     buf_free(encBuf);
                 encBuf = nullptr;
@@ -314,7 +332,7 @@ namespace ctp
             Ieee1609Decode():buf(nullptr),len(0){};
             ~Ieee1609Decode()
             {
-                std::cout << "Ieee1609Decode::~Ieee1609Decode" << std::endl;
+                log_dbg("Ieee1609Decode::~Ieee1609Decode\n", MODULE);
                 delete buf;
                 len = 0;
             }
@@ -678,12 +696,16 @@ namespace ctp
 
     struct HashedId8Cmp
     {
-        bool operator()(const HashedId8& lhs, const HashedId8& rhs)
+        bool operator()(const uint8_t* lhs, const uint8_t* rhs)
         {
-            return std::string(lhs.x, sizeof(HashedId8)).compare(std::string(rhs.x, sizeof(HashedId8)));
+            bool _temp = true;
+            for(int i = 0; i < sizeof(HashedId8); i++)
+            {
+                if(*lhs != *rhs) { _temp = false; break;}
+            }
+            return _temp;
         }
-    };
-
+    };//HashedIdCmp;
 
     /* certificate manager, creates, maintaines , updates the certificats in the system
     */
@@ -691,7 +713,7 @@ namespace ctp
     {
         const int MODULE=MODULE_CERTMGR;
         // std::map<int, std::shared_ptr<Ieee1609Cert>> psidMap;
-        std::map<HashedId8, SHARED_CERT, HashedId8Cmp> hashIdMap;
+        // std::map<HashedId8, SHARED_CERT, HashedId8Cmp> hashIdMap;
         int _stop;
         static int _initDone;
         static SHARED_CERTMGR pCertMgr;
@@ -709,6 +731,8 @@ namespace ctp
         std::mutex hashdMapMutex;
         // std::condtional_variable cv;
         std::condition_variable cv;
+
+        HashedId8Cmp hashedId8Cmp;
 
         // /* only one instance of the certificate manager at all costs */
         // explicit CertMgr():mem_mgr(),_stop(0)
@@ -772,15 +796,15 @@ namespace ctp
                 SHARED_CERT _cert = nullptr;
                 std::unique_lock<std::mutex> lck(hashdMapMutex);
                 cv.wait(lck, [this](){ return certReady == 1;});
-                for (SHARED_CERT cert : signerList)
+                for (auto it : signerList)
                 {
-                    const SequenceOfPsidSsp& psids = cert->psid_get();
+                    const SequenceOfPsidSsp& psids = it->psid_get();
                     for(int i =0; i < psids.quantity; i++)
                     {
                         PsidSsp *psidSsp = psids.psidSsp;
                         if(psid == psidSsp->psid)
                         {
-                            _cert = cert;
+                            _cert = it;
                             break;
                         }
                     }
@@ -788,11 +812,19 @@ namespace ctp
                 return _cert;
             }
             /* get the certificate for the specified hashId */
-            SHARED_CERT operator[](HashedId8 hashId)
+            SHARED_CERT operator[](const HashedId8 hashId8)
             {
+                bool found = false;
+                SHARED_CERT _cert = nullptr;
                 std::unique_lock<std::mutex> lck(hashdMapMutex);
                 cv.wait(lck, [this](){ return certReady == 1;});
-                return signerList[0];
+                const uint8_t *hashId = (uint8_t *)hashId8.x;
+                for(auto& it: signerList)
+                {
+                    found =  hashedId8Cmp(hashId, it->HashId8Get());
+                    if(found) { _cert = it; break;}
+                }
+                return _cert;
             }
 
             void start(std::shared_ptr<tp_cfg> tpcfg)
@@ -801,7 +833,7 @@ namespace ctp
                 remoteThread = std::thread(&CertMgr::cert_mgr_remote_handler, this);
                 validThread = std::thread(&CertMgr::cert_mgr_valid_handler, this);
                 localThread = std::thread(&CertMgr::cert_mgr_local_handler, this);
-                hashIdMap.clear();
+                // hashIdMap.clear();
             }
 
             void stop()
@@ -868,7 +900,7 @@ namespace ctp
                     log_dbg(log_.str(), MODULE);
                     log_.str("");
                     /* open the certs directory */
-                    DIR *dir = opendir(cfg->certcfg.signers);
+                    DIR *dir = opendir(cfg->certcfg.signers.c_str());
                     if(dir != nullptr)
                     {
                         while((dent = readdir(dir)) != nullptr)
@@ -899,7 +931,7 @@ namespace ctp
                         std::string _temp(cfg->certcfg.signers);
                         _temp.append("/");
                         _temp.append(_dir);
-                        std::cout << "directory found " << _temp << std::endl;
+                        // std::cout << "directory found " << _temp << std::endl;
                         ctp::Ieee1609Cert::decode(_temp, signerList);
                     }
 
@@ -912,9 +944,9 @@ namespace ctp
                         try
                         {
                             if(cfg && cfg->psids.size())
-                                cert->create(cfg->psids);
+                                cert->create(cfg->psids, cert);
                             else
-                                cert->create();
+                                cert->create(cert);
 
                             cert->store(_file);
                             /* store it */

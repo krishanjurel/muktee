@@ -405,13 +405,18 @@ void TEST(data_decoding)()
     // ctp::Ieee1609Data *pdata = nullptr;
     uint8_t *signedData = nullptr;
     size_t signedDataLength = 0;
+    size_t encLen2 = 0;
+    int ret = 1;
+
+    uint8_t *appData = nullptr;
+    size_t appDataLen = 0;
     // ctp::Ieee1609Certs *pcerts = nullptr;
     ctp::Ieee1609Data *pdata2 = nullptr;
     ctp::SHARED_TP tp = nullptr;
+    ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_DBG);
+
     try
     {
-        ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_INFO);
-
         tp = ctp::SHARED_TP(new ctp::TP(),
                     [](const ctp::PTR_TP ptr){std::cout << "TP delete " << std::endl; delete ptr;});
         tp->start();
@@ -429,7 +434,7 @@ void TEST(data_decoding)()
         pdata2->decode(signedData,signedDataLength);
         uint8_t *encBuf2 = nullptr;
 
-        size_t encLen2 = pdata2->encode(&encBuf2);
+        encLen2 = pdata2->encode(&encBuf2);
 
         unlink("data_decoding_dec_data.txt");
         print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
@@ -439,48 +444,45 @@ void TEST(data_decoding)()
         {
             log_ << "the decoding has failed length(expected) " << encLen2 << "(" << signedDataLength << ")" << std::endl;
             LOG_ERR(log_.str(), MODULE);
-            throw;
+            ret = 0;
         }
-        for(int i =0; i < encLen2; i++)
+        for(int i =0; ret == 1 && i < encLen2; i++)
         {
             if(signedData[i] != encBuf2[i])
             {
                 log_ << "the decoding failed at index " << i << std::endl;
                 LOG_ERR(log_.str(), MODULE);
-                throw;
+                ret = 0;
             }
         }
-        log_.str("");
-        log_ << "data_decoding verification start " << std::endl;
-        log_info(log_.str(), MODULE);
-        log_.str("");
-        /* do the verification */
-        // pdata2->verify();
+        if(ret == 1)
+        {
+            log_.str("");
+            log_ << "data_decoding verification start " << std::endl;
+            log_info(log_.str(), MODULE);
+            log_.str("");
 
-        uint8_t *appData = nullptr;
-        size_t appDataLen = 0;
+            appData = nullptr;
+            appDataLen = 0;
 
-        tp->verify(signedData, signedDataLength,&appData, &appDataLen);
-        free(appData);
+            ret = tp->verify(signedData, signedDataLength,&appData, &appDataLen);
+        }
     }catch(ctp::Exception& e)
     {
-        log_ << "TEST(data_decoding)() is failed " << std::endl;
-        LOG_ERR(log_.str(), MODULE);
-        throw;
+        ret = 0;
     }
-    // delete pcerts;
-    // delete pdata;
+    if(ret == 0)
+    {
+        LOG_ERR("TEST(data_decoding)() failed\n", MODULE);
+    }else{
+        LOG_DBG("TEST(data_decoding)() passed\n", MODULE);
+    }
+
+    if(appData) free(appData);
+
     delete pdata2;
-    log_.str("");
-    log_ << "stop the TP" << std::endl;
-    log_dbg(log_.str(), MODULE);
-    log_.str("");
     tp->stop();
     tp.reset();
-    log_ << "TEST(data_decoding)() passed " << std::endl;
-    log_dbg(log_.str(), MODULE);
-
-    std::this_thread::sleep_for(std::chrono::seconds(5));
     return;
 }
 void TEST(certs_encoding)()
@@ -495,15 +497,15 @@ void TEST(certs_encoding)()
 void TEST(cert_encoding)()
 {
     printf("cert_encoding\n");
-    ctp::Ieee1609Cert *pcert = new ctp::Ieee1609Cert();
-    pcert->create();
+    ctp::SHARED_CERT pcert = ctp::SHARED_CERT(new ctp::Ieee1609Cert());
+    pcert->create(pcert);
     uint8_t *encBuf = nullptr;
     size_t encLen = 0;
     encLen = pcert->encode(&encBuf);
     // std::cout << "encoded buffer length " << encLen << std::endl;
     unlink("encoded-cert.txt");
     pcert->print_encoded(std::string("encoded-cert.txt"));
-    delete pcert;
+    pcert.reset();
     raise(SIGKILL);
     return;
 }
@@ -511,16 +513,16 @@ void TEST(cert_encoding)()
 void TEST(cert_decoding)()
 {
     std::stringstream log_(std::ios_base::out);
-    ctp::Ieee1609Cert *pcert2 = nullptr;
-    ctp::Ieee1609Cert *pcert1 = nullptr;
+    ctp::SHARED_CERT pcert2 = nullptr;
+    ctp::SHARED_CERT pcert1 = nullptr;
     try
     {
 
         log_ << "cert_decoding: encoding cycle" << std::endl;
         LOG_DBG(log_.str(), MODULE);
         log_.str("");
-        pcert1 = new ctp::Ieee1609Cert();
-        pcert1->create();
+        pcert1 = ctp::SHARED_CERT(new ctp::Ieee1609Cert());
+        pcert1->create(pcert1);
         uint8_t *encBuf = nullptr;
         size_t encLen = 0;
         encLen = pcert1->encode(&encBuf);
@@ -531,7 +533,7 @@ void TEST(cert_decoding)()
         log_.str("");
 
         /* create a certificate object */
-        pcert2 = new ctp::Ieee1609Cert();
+        pcert2 = ctp::SHARED_CERT(new ctp::Ieee1609Cert());
         pcert2->decode(encBuf, encLen);
         uint8_t *encBuf2 = nullptr;
         size_t encLen2 = 0;
@@ -557,8 +559,8 @@ void TEST(cert_decoding)()
     log_ << "TEST(cert_decoding)() passed " << std::endl;
     LOG_DBG(log_.str(), MODULE);
 
-    delete pcert1;
-    delete pcert2;
+    pcert1.reset();
+    pcert2.reset();
     return;
 }
 
