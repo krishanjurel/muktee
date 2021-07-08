@@ -1,17 +1,4 @@
 #include "dot2cert.hpp"
-// #include "dot2data.hpp"
-
-// #include <stdio.h>
-// #include <string.h>
-// #include <algorithm>
-// #include <iostream>
-// #include <fstream>
-// #include <iomanip>
-
-// #include <fcntl.h>
-// #include <unistd.h>
-// #include <stdio.h>
-// #include <stdlib.h>
 
     
 namespace ctp
@@ -432,7 +419,9 @@ namespace ctp
     /*status of the conversion */
     int Ieee1609Cert::SigToSignature(const ECDSA_SIG* sig, Signature& signature)
     {
-        int ret = -1;
+        volatile int bnlen_ = 0;
+        volatile int len_ = 0;
+        int ret = 1;
         const BIGNUM *r;
         const BIGNUM *s;
         uint8_t *sign_r, *sign_s;
@@ -447,23 +436,54 @@ namespace ctp
         signature.signature.ecdsaP256Signature.r.type= EccP256CurvPointTypeXOnly;
         sign_r = (uint8_t *)signature.signature.ecdsaP256Signature.r.point.octets.x;
         sign_s = (uint8_t *)&signature.signature.ecdsaP256Signature.s.x[0];
-        
-        
-        if(BN_bn2bin(r, sign_r) != sizeof(HashedData32))
+
+        memset(sign_r, 0, sizeof(HashedData32));
+        memset(sign_s, 0, sizeof(HashedData32));
+
+        bnlen_ = BN_num_bytes(r);
+        len_ = BN_bn2bin(r, sign_r + (sizeof(HashedData32)-bnlen_));
+
+        if(len_ != bnlen_)
         {
+            std::cout << "length of the r BN_bn2bin is " << len_ << std::endl;
+            std::cout << "length of the r BN_num_bytes is " << bnlen_ << std::endl;
             LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
-            ret = -1;
-            /*FIXME, try to avoid it */
-            goto done;
-        }
-        if(BN_bn2bin(s, sign_s) != sizeof(HashedData32))
-        {
-            LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
-            ret = -1;
+            ret = 0;
             /*FIXME, try to avoid it */
             goto done;
         }
 
+        if(len_ != sizeof(HashedData32))
+        {
+            std::cout << "length of the s conversion is " << len_ << std::endl;
+            std::cout << "length of the s BN_num_bytes is " << bnlen_ << std::endl;
+            LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
+            // ret = -1;
+            // /*FIXME, try to avoid it */
+            // goto done;
+        }
+
+        bnlen_ = BN_num_bytes(s);
+        len_ = BN_bn2bin(s, sign_s + (sizeof(HashedData32)-bnlen_));
+        if(len_ != bnlen_)
+        {
+            std::cout << "length of the s conversion is " << len_ << std::endl;
+            std::cout << "length of the s BN_num_bytes is " << bnlen_ << std::endl;
+            LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
+            ret = 0;
+            /*FIXME, try to avoid it */
+            goto done;
+        }
+
+        if(len_ != sizeof(HashedData32))
+        {
+            std::cout << "length of the s conversion is " << len_ << std::endl;
+            std::cout << "length of the s BN_num_bytes is " << bnlen_ << std::endl;
+            LOG_ERR("Ieee1609Cert::SigToSignature BN_bn2bin(r, sign_r)", 1);
+            // ret = -1;
+            // /*FIXME, try to avoid it */
+            // goto done;
+        }
         done:
             return ret;
     }
@@ -1249,7 +1269,7 @@ namespace ctp
         size_t validity;
 
         /* even though the certs are issued weekly, but its ambiguous when the week starts,
-           so we will track the validity by the hours 
+           so we will track the validity by the hours
         */
         if(durationType == DurationTypeMilliSeconds)
             validity = MILLSEC_TO_HOUR(duration);
@@ -1300,16 +1320,29 @@ namespace ctp
                 log_ << "Ieee1609Cert::store::file_write " << certfile << " " << strerror(errno) << std::endl;
                 return 0;
             }
-            buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
-            if(buflen_ == 0)
+
+            const BIGNUM* bn = EC_KEY_get0_private_key(ecKey);
+            if(bn == nullptr)
             {
-                log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
+                log_ << "Ieee1609Cert::store::EC_KEY_get0_private_key fails " << std::endl;
                 /* error computing the key buffer */
                 /* delete the cert file */
                 unlink(certfile.c_str());
                 LOG_ERR(log_.str(), MODULE);
                 return 0;
             }
+            /*FIXME, not supported by ettifos ssl */
+            // buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
+            // if(buflen_ == 0)
+            // {
+            //     log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
+            //     /* error computing the key buffer */
+            //     /* delete the cert file */
+            //     unlink(certfile.c_str());
+            //     LOG_ERR(log_.str(), MODULE);
+            //     return 0;
+            // }
+            buflen_ = BN_num_bytes(bn);
 
             buf_ = (uint8_t *)buf_alloc(buflen_);
             if(buf_ ==  nullptr)
@@ -1320,18 +1353,18 @@ namespace ctp
                 return 0;
             }
 
-            buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
-            if(buflen_ == 0)
-            {
-                log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
-                /* error computing the key buffer */
-                /* delete the cert file */
-                unlink(certfile.c_str());
-                LOG_ERR(log_.str(), MODULE);
-                buf_free(buf_);
-                return 0;
-            }
-
+            BN_bn2bin(bn, buf_);
+            // buflen_= EC_KEY_priv2oct(ecKey, buf_, buflen_);
+            // if(buflen_ == 0)
+            // {
+            //     log_ << "Ieee1609Cert::store::EC_KEY_priv2oct fails " << std::endl;
+            //     /* error computing the key buffer */
+            //     /* delete the cert file */
+            //     unlink(certfile.c_str());
+            //     LOG_ERR(log_.str(), MODULE);
+            //     buf_free(buf_);
+            //     return 0;
+            // }
             ret = file_write(keyfile.c_str(), buf_, buflen_);
             buf_free(buf_);
             buf_ = nullptr;
@@ -1359,9 +1392,9 @@ namespace ctp
 
     Ieee1609Certs::Ieee1609Certs()
     {
-        quantity = 0; 
-        enc = SHARED_ENC(new Ieee1609Encode(), [this](const PTR_ENC p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete enc\n", MODULE); delete p;});
-        dec = SHARED_DEC(new Ieee1609Decode, [this](const PTR_DEC p){log_dbg("Ieee1609Certs::Ieee1609Certs() delete dec\n", MODULE);delete p;});
+        quantity = 0;
+        enc = SHARED_ENC(new Ieee1609Encode(), [this](const PTR_ENC p){/*log_dbg("Ieee1609Certs::Ieee1609Certs() delete enc\n", MODULE);*/ delete p;});
+        dec = SHARED_DEC(new Ieee1609Decode, [this](const PTR_DEC p){/*log_dbg("Ieee1609Certs::Ieee1609Certs() delete dec\n", MODULE);*/delete p;});
         certs.clear();
     }
 
@@ -1456,7 +1489,7 @@ namespace ctp
     }
     Ieee1609Certs::~Ieee1609Certs()
     {
-        std::cout << "Ieee1609Certs::~Ieee1609Certs()" << std::endl;
+        // std::cout << "Ieee1609Certs::~Ieee1609Certs()" << std::endl;
         enc = nullptr;
         dec = nullptr;
         certs.clear();
@@ -1589,11 +1622,3 @@ namespace ctp
         print_data("certs.txt", buf, len);
     }
 } //namespace ctp
-
-
-
-
-
-
-
-

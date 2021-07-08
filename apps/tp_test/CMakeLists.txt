@@ -15,10 +15,10 @@ list(APPEND EXTRA_HDRS ${CMAKE_CURRENT_SOURCE_DIR}/../src/dot2)
 
 
 
-target_include_directories(tp_test PUBLIC ${pwd})
-target_include_directories(tp_test PUBLIC ${EXTRA_HDRS})
+# target_include_directories(tp_test PUBLIC ${pwd})
+# target_include_directories(tp_test PUBLIC ${EXTRA_HDRS})
 
-# target_include_directories(tp_test PUBLIC ${PROJECT_BINARY_DIR})
+target_include_directories(tp_test PUBLIC ${PROJECT_BINARY_DIR})
 # target_include_directories(tp_test PUBLIC ${PROJECT_SOURCE_DIR}/tp)
 # target_include_directories(tp_test PUBLIC ${PROJECT_SOURCE_DIR}/tp/ieee1609)
 

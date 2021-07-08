@@ -30,6 +30,14 @@ namespace ctp
         MODULE_USER     /* test programs use from here */
     };
 
+    /* trusted operations */
+    enum {
+        TP_OP_SIGN = 1,
+        TP_OP_ENCRYPT=2,
+        TP_OP_NONE = 4,     /* no signing or encrypting but the packet will be formatted in dot2 format*/
+        TP_OP_USER = 8      /* no dot2, the packet will not use TP-DOT2 formatting, it is user specific */
+    };
+
     enum {
         PSID_BSM = 0x20,
         /* use this to test the unspported psid */

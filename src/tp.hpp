@@ -18,8 +18,6 @@
 #include "dot2cert.hpp"
 #include "dot2data.hpp"
 
-
-
 namespace ctp
 {
     class TP;
@@ -102,7 +100,7 @@ namespace ctp
             void curves_list();
 
             /* to keep track of calling process */
-            const int module_id_get() const { 
+            const int module_id_get() const {
                 // char thrdId[16];
                 // pthread_getname_np(pthread_self(), thrdId, 16);
                 // return atoi(thrdId);

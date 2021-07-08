@@ -198,7 +198,7 @@ namespace ctp
             {
                 /* call out the config manager */
                 log_ << "TP::start() ";
-                cfg = std::shared_ptr<tp_cfg>(new tp_cfg("./bin/config.file"),[this](const tp_cfg* p){ log_dbg(" TP::start() delete tp_cfg\n", MODULE); delete p;});
+                cfg = std::shared_ptr<tp_cfg>(new tp_cfg("./config/config.file"),[this](const tp_cfg* p){ log_dbg(" TP::start() delete tp_cfg\n", MODULE); delete p;});
             }
             catch(const std::exception& e)
             {
@@ -285,7 +285,6 @@ namespace ctp
             log_ << "TP::sign() psid" << psid << " is not supported " << std::endl;
             LOG_ERR(log_.str(), MODULE);
             throw Exception(log_.str());
-
         }
 
         try
@@ -299,6 +298,9 @@ namespace ctp
             LOG_ERR(log_.str(), MODULE);
             LOG_ERR(e.what(), MODULE);
         }
+
+        unlink("out_signed_data.txt");
+        print_data("out_signed_data.txt",(const uint8_t *)(*signedData), *signedDataLen);
         log_ << "TP::sign exit " << ret << std::endl;
         log_info(log_.str(),MODULE);
         delete pdata;
@@ -334,8 +336,8 @@ namespace ctp
         Ieee1609Data *ieee1609DataObj = new ctp::Ieee1609Data();
         try
         {
-            unlink("in_secured_data.txt");
-            print_data("in_secured_data.txt",(const uint8_t *)buf, len);
+            unlink("in_signed_data.txt");
+            print_data("in_signed_data.txt",(const uint8_t *)buf, len);
             /* decode the message */
             ieee1609DataObj->decode((const uint8_t *)buf, len);
             /* verify the given data */
@@ -362,18 +364,17 @@ namespace ctp
                 log_ << " unspoorted data type " <<  dot2data->content.type << std::endl;
                 LOG_ERR(log_.str(), module_id_get());
             }
-            
             if(_databuflen != 0)
             {
                 *outLength = _databuflen;
                 log_ << "header info psid " << hdrInfo->psid << std::endl;
-                log_dbg(log_.str(), module_id_get());
+                log_info(log_.str(), module_id_get());
                 log_.str("");
                 *out = (uint8_t *)malloc(*outLength);
                 memcpy(*out,_databuf, *outLength);
             }
-            unlink("in_app_data.txt");
-            print_data("in_app_data.txt",(const uint8_t *)*out, *outLength);
+            // unlink("in_app_data.txt");
+            // print_data("in_app_data.txt",(const uint8_t *)*out, *outLength);
         }catch(Exception& e)
         {
             /* handle the exception and process the next message in queue */

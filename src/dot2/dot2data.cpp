@@ -144,7 +144,10 @@ namespace ctp
             }
 
             if(signature == nullptr)
+            {
+                std::terminate();
                 signature = (Signature *)buf_alloc(sizeof(Signature));
+            }
             /* get the signature from sig */
             cert->SigToSignature(sig, std::ref(*signature));
         }
@@ -153,7 +156,7 @@ namespace ctp
         encode();
         /* get the encoded buffer */
         *signedDataLen = enc->get(signedData);
-        std::cout << "Ieee1609Data::sign encoded length" << *signedDataLen << std::endl;
+        // std::cout << "Ieee1609Data::sign encoded length" << *signedDataLen << std::endl;
         done:
             if(hash)
                 free (hash);

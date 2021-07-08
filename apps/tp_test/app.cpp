@@ -414,59 +414,66 @@ void TEST(data_decoding)()
     ctp::Ieee1609Data *pdata2 = nullptr;
     ctp::SHARED_TP tp = nullptr;
     ctp::log_mgr::log_level(ctp::LogLvl::LOG_LVL_DBG);
+    size_t count=0;
 
     try
     {
         tp = ctp::SHARED_TP(new ctp::TP(),
                     [](const ctp::PTR_TP ptr){std::cout << "TP delete " << std::endl; delete ptr;});
         tp->start();
-        tp->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.size(), &signedData, &signedDataLength);
-        /* decoding section */
-        file_write("signed.data", signedData,signedDataLength);
-        free(signedData);
-        signedData = nullptr;
-        signedDataLength = 0;
-        file_read("signed.data", &signedData, &signedDataLength);
-
-        log_info(std::string("Start decoding "), MODULE);
-        std::cout <<"data decoding starts " << std::endl;
-        pdata2 = new ctp::Ieee1609Data();
-        pdata2->decode(signedData,signedDataLength);
-        uint8_t *encBuf2 = nullptr;
-
-        encLen2 = pdata2->encode(&encBuf2);
-
-        unlink("data_decoding_dec_data.txt");
-        print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
-        // print_data(nullptr, encBuf2, encLen2);
-
-        if(signedDataLength != encLen2)
+        while(count++ < 10)
         {
-            log_ << "the decoding has failed length(expected) " << encLen2 << "(" << signedDataLength << ")" << std::endl;
-            LOG_ERR(log_.str(), MODULE);
-            ret = 0;
-        }
-        for(int i =0; ret == 1 && i < encLen2; i++)
-        {
-            if(signedData[i] != encBuf2[i])
+            tp->sign(ctp::PSID_BSM, (uint8_t *)tbsData.c_str(), tbsData.size(), &signedData, &signedDataLength);
+            /* decoding section */
+            file_write("signed.data", signedData,signedDataLength);
+            free(signedData);
+            signedData = nullptr;
+            signedDataLength = 0;
+            file_read("signed.data", &signedData, &signedDataLength);
+
+            log_info(std::string("Start decoding "), MODULE);
+            std::cout <<"data decoding starts " << std::endl;
+            pdata2 = new ctp::Ieee1609Data();
+            pdata2->decode(signedData,signedDataLength);
+            uint8_t *encBuf2 = nullptr;
+
+            encLen2 = pdata2->encode(&encBuf2);
+
+            unlink("data_decoding_dec_data.txt");
+            print_data("data_decoding_dec_data.txt", encBuf2, encLen2);
+            // print_data(nullptr, encBuf2, encLen2);
+
+            if(signedDataLength != encLen2)
             {
-                log_ << "the decoding failed at index " << i << std::endl;
+                log_ << "the decoding has failed length(expected) " << encLen2 << "(" << signedDataLength << ")" << std::endl;
                 LOG_ERR(log_.str(), MODULE);
                 ret = 0;
             }
-        }
-        if(ret == 1)
-        {
-            log_.str("");
-            log_ << "data_decoding verification start " << std::endl;
-            log_info(log_.str(), MODULE);
-            log_.str("");
+            for(int i =0; ret == 1 && i < encLen2; i++)
+            {
+                if(signedData[i] != encBuf2[i])
+                {
+                    log_ << "the decoding failed at index " << i << std::endl;
+                    LOG_ERR(log_.str(), MODULE);
+                    ret = 0;
+                }
+            }
+            if(ret == 1)
+            {
+                log_.str("");
+                log_ << "data_decoding verification start " << std::endl;
+                log_info(log_.str(), MODULE);
+                log_.str("");
 
-            appData = nullptr;
-            appDataLen = 0;
+                appData = nullptr;
+                appDataLen = 0;
 
             ret = tp->verify(signedData, signedDataLength,&appData, &appDataLen);
-        }
+            }
+        if(appData) free(appData);
+        delete pdata2;
+        pdata2 = nullptr;
+        } /* while (count) */
     }catch(ctp::Exception& e)
     {
         ret = 0;
