@@ -56,7 +56,7 @@ namespace ctp
 
             ~Ieee1609Data()
             {
-                log_dbg("Ieee1609Data::~Ieee1609Data\n", MODULE);
+                // log_dbg("Ieee1609Data::~Ieee1609Data\n", MODULE);
                 enc.reset();
                 dec.reset();
                 Ieee1609Dot2Data *data_ = tbsData->payload.data;
@@ -69,7 +69,7 @@ namespace ctp
                     buf_free(data_);
                 }
                 buf_free(data);
-                if(certs.operator bool() == true)
+                if(certs)
                 {
                     certs = nullptr;
                 }

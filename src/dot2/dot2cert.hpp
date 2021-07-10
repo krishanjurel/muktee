@@ -115,14 +115,14 @@ namespace ctp
             Ieee1609Cert(const Ieee1609Cert&&) = delete;
             ~Ieee1609Cert()
             {
-                log_dbg("Ieee1609Cert::~Ieee1609Cert()\n", MODULE);
+                // log_dbg("Ieee1609Cert::~Ieee1609Cert()\n", MODULE);
                 pEncObj.reset();
                 pDecObj.reset();
                 pEncObj = nullptr;
                 pDecObj = nullptr;
                 if(seqOfPsidSsp && seqOfPsidSsp->psidSsp)
                 {
-                    log_dbg("Ieee1609Cert::~Ieee1609Cert()::buf_free(seqOfPsidSsp->psidSsp)\n", MODULE);
+                    // log_dbg("Ieee1609Cert::~Ieee1609Cert()::buf_free(seqOfPsidSsp->psidSsp)\n", MODULE);
                     buf_free(seqOfPsidSsp->psidSsp);
                 }
                 buf_free(base);
@@ -131,7 +131,7 @@ namespace ctp
                 if(encodedBuf)
                     buf_free(encodedBuf);
                 encodedBufLen = 0;
-                log_dbg("Ieee1609Cert::~Ieee1609Cert done\n", MODULE);
+                // log_dbg("Ieee1609Cert::~Ieee1609Cert done\n", MODULE);
             }
 
             const uint8_t* HashId8Get() const {
@@ -263,7 +263,7 @@ namespace ctp
             Ieee1609Encode():encBuf(nullptr),encLen(0){};
             ~Ieee1609Encode()
             {
-                log_dbg(" Ieee1609Encode::~Ieee1609Encode \n", MODULE);
+                // log_dbg(" Ieee1609Encode::~Ieee1609Encode \n", MODULE);
                 if(encBuf)
                     buf_free(encBuf);
                 encBuf = nullptr;
@@ -332,7 +332,7 @@ namespace ctp
             Ieee1609Decode():buf(nullptr),len(0){};
             ~Ieee1609Decode()
             {
-                log_dbg("Ieee1609Decode::~Ieee1609Decode\n", MODULE);
+                // log_dbg("Ieee1609Decode::~Ieee1609Decode\n", MODULE);
                 delete buf;
                 len = 0;
             }
@@ -888,7 +888,7 @@ namespace ctp
             void cert_mgr_local_handler()
             {
                 std::vector<std::string> files;
-                std::vector<std::string> dirs; 
+                std::vector<std::string> dirs;
 
                 SHARED_CERT cert = nullptr;
                 {
