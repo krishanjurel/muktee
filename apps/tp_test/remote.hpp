@@ -13,8 +13,7 @@
 
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C"{
 #endif
 void close_socket(int fd)
 {
@@ -25,9 +24,23 @@ void close_socket(int fd)
 }
 #endif
 
+extern "C"
+{
+struct __attribute__((__packed__))remote_data
+{
+    int id;
+    _Float64 longitude;
+    _Float64 latitude;
+    _Float64 heading;
+    _Float64 speed;
+};
+}
+
 
 namespace remote
 {
+
+
     enum class Type {
             server,
             client
@@ -133,6 +146,7 @@ namespace remote
 
                 if(_res)
                     freeaddrinfo(_res);
+                return 0;
 
            }
 
@@ -207,6 +221,7 @@ namespace remote
 
         void start()
         {
+            std::cout << "start the the network thread" << std::endl;
             if(static_cast<int>(type) == static_cast<int>(Type::server))
             {
                 m_thread = std::thread(&_remote::server, this);
@@ -230,6 +245,7 @@ namespace remote
             // int data_socket=0;
             int ret = 0;
             bool connected = false;
+            struct remote_data remoteData{0};
 
             while(!stop_)
             {
@@ -249,10 +265,16 @@ namespace remote
                 }
                 // std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 // ret = write(fd, msg.c_str(),msg.size());
-                ret = sendto(fd, msg.c_str(), msg.size(),0,(struct sockaddr *)&peer_addr, sizeof(struct sockaddr_un));
-                if(ret == -1)
+                remoteData.id = 12345;
+                remoteData.heading = 1.0523;
+                remoteData.speed = 2.52437;
+                remoteData.longitude += 1.0867;
+                remoteData.latitude += 2.0566;
+                ret = sendto(fd, (void *)&remoteData, sizeof(remoteData),0,(struct sockaddr *)&peer_addr, sizeof(struct sockaddr_un));
+                if(ret == -1 || ret != sizeof(remoteData))
                 {
                     perror("remote::_remote::client::write");
+                    std::cout << "num bytes written " << ret << " written " << std::endl;
                     stop_= 1;
                 }
                 // else{
