@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <sys/un.h>
 #include <sys/types.h>
 #include <netdb.h>
@@ -9,6 +10,7 @@
 #include <string.h>
 #include <string>
 #include <unistd.h>
+
 
 #ifdef __cplusplus
 extern "C"
@@ -45,8 +47,10 @@ namespace remote
         int stop_;
         Type type;
         struct sockaddr_un my_addr, peer_addr;
+        sa_family_t saFamily;
+        size_t addrlen;
+        uint16_t port;
         struct sockaddr _sockadr;
-
         public:
             SharedRemotePtr get()
             {
@@ -58,6 +62,7 @@ namespace remote
                 this->type = type;
                 fd = -1;
                 stop_ = 0;
+                addrlen = INET_ADDRSTRLEN;
             }
 
             ~_remote()
@@ -65,69 +70,140 @@ namespace remote
                 close_socket(fd);
             }
 
-        int create(std::string& addr,int domain = AF_LOCAL, int type = SOCK_SEQPACKET, int protocol=0)
-        {
-            int ret = 0;
-            int sockVal = 1;
-            
-            if(static_cast<int>(this->type)==static_cast<int>(Type::server))
+            int create(std::string& peer, int port, int domain = AF_UNSPEC, int type = SOCK_DGRAM, int protocol=0)
             {
-                unlink(addr.c_str());
-            }
+                struct addrinfo hints;
+                struct addrinfo *res = nullptr;
+                const char *node = nullptr;
+                std::string service(std::to_string(port));
 
-            fd = socket(domain, type, protocol);
-            if(fd == -1)
-            {
-                perror("_remote::create");
-                return fd;
-            }
 
-            if(setsockopt(fd, SOL_SOCKET,SO_REUSEADDR,&sockVal, sizeof(int)) == -1)
-            {
-                perror ("remote::_remote::setsockopt");
-            }
+                hints.ai_family = domain;
+                hints.ai_socktype = type;
+                hints.ai_protocol = protocol;
+                hints.ai_addr = nullptr;
+                hints.ai_canonname = nullptr;
+                hints.ai_next = nullptr;
 
-            // if(domain == AF_LOCAL)
-            {
-                /* use the struct sockaddr_un to create a handle to a file */
-                
-                /* reset the structure */
-                memset(&my_addr, 0, sizeof(my_addr));
-                my_addr.sun_family = domain;
-                strncpy(my_addr.sun_path, addr.c_str(), sizeof(my_addr.sun_path)-1);
-            }
-            // else if(domain == AF_UNSPEC){
-            //     struct addrinfo hints;
-            //     hints.ai_family=domain;
-            //     hints.ai_socktype = 0; /* anytype*/
-            //     hints.ai_protocol = 0;
-            //     hints.ai_flags = AI_PASSIVE;
+                this->port = port;
 
-            //     getaddrinfo()
 
-            // }
-            if(static_cast<int>(this->type) == static_cast<int>(Type::server))
-            {
-                std::cout << "bind " << my_addr.sun_path << std::endl;
-                ret = bind(fd, (struct sockaddr *)&my_addr, sizeof(my_addr));
-                if(ret == -1)
+                hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+
+                if(this->type == Type::server)
                 {
-                    perror("_remote::create::bind");
-                    close(fd);
-                    fd = -1;
-                    return fd;
+                    hints.ai_flags = AI_PASSIVE; /*fill my address for me */
                 }
-                ret =  listen(fd, 20);
-                if(ret == -1)
+
+                if(!peer.empty())
+                    node = peer.c_str();
+                if(port > 0)
+                    service = std::to_string(port);
+                std::cout << "port numeber " << service << std::endl;
+                int ret = getaddrinfo(node, service.c_str(), &hints,&res);
+                if(ret != 0)
                 {
-                    perror("_remote::create::listen");
-                    close(fd);
-                    fd = -1;
-                    return fd;
+                    perror("getaddrinfo failes");
+                    std::cout << "getaddrinfo error " << gai_strerror(ret) << std::endl;
+                    return ret;
                 }
-            }
-            return fd;
-        }
+                struct addrinfo *_res = res;
+
+                while (res != nullptr)
+                {
+                    /* lets just take the first one */
+                    fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+                    if(fd == -1)
+                    {
+                        perror("socket failed");
+                        res = res->ai_next;
+                        continue;
+                    }
+                    if(this->type == Type::server)
+                    {
+                        if(bind(fd, res->ai_addr, res->ai_addrlen) == 0) break;
+                    }else{
+                            memcpy(&peer_addr, res->ai_addr, res->ai_addrlen);
+                            break;
+                    }
+
+                    close(fd);
+                    res = res->ai_next;
+                }
+
+                if(_res)
+                    freeaddrinfo(_res);
+
+           }
+
+        // int create(std::string& addr,int domain = AF_LOCAL, int type = SOCK_SEQPACKET, int protocol=0)
+        // {
+        //     int ret = 0;
+        //     int sockVal = 1;
+        //     if(static_cast<int>(this->type)==static_cast<int>(Type::server))
+        //     {
+        //         unlink(addr.c_str());
+        //     }
+
+        //     fd = socket(domain, type, protocol);
+        //     if(fd == -1)
+        //     {
+        //         perror("_remote::create");
+        //         return fd;
+        //     }
+
+        //     if(setsockopt(fd, SOL_SOCKET,SO_REUSEADDR,&sockVal, sizeof(int)) == -1)
+        //     {
+        //         perror ("remote::_remote::setsockopt");
+        //     }
+        //     if(this->type == Type::client)
+        //     {
+        //         struct addrinfo _hints;
+        //         _hints.ai_family = AF_UNSPEC;
+        //         _hints.ai_socktype = type;
+        //     }
+
+
+        //     // if(domain == AF_LOCAL)
+        //     {
+        //         /* use the struct sockaddr_un to create a handle to a file */
+        //         /* reset the structure */
+        //         memset(&my_addr, 0, sizeof(my_addr));
+        //         my_addr.sun_family = domain;
+        //         strncpy(my_addr.sun_path, addr.c_str(), sizeof(my_addr.sun_path)-1);
+        //     }
+        //     // else if(domain == AF_UNSPEC){
+        //     //     struct addrinfo hints;
+        //     //     hints.ai_family=domain;
+        //     //     hints.ai_socktype = 0; /* anytype*/
+        //     //     hints.ai_protocol = 0;
+        //     //     hints.ai_flags = AI_PASSIVE;
+
+        //     //     getaddrinfo()
+
+        //     // }
+        //     if(static_cast<int>(this->type) == static_cast<int>(Type::server))
+        //     {
+        //         std::cout << "bind " << my_addr.sun_path << std::endl;
+        //         ret = bind(fd, (struct sockaddr *)&my_addr, sizeof(my_addr));
+        //         if(ret == -1)
+        //         {
+        //             perror("_remote::create::bind");
+        //             close(fd);
+        //             fd = -1;
+        //             return fd;
+        //         }
+        //         ret =  listen(fd, 20);
+        //         if(ret == -1)
+        //         {
+        //             perror("_remote::create::listen");
+        //             close(fd);
+        //             fd = -1;
+        //             return fd;
+        //         }
+        //     }
+        //     return fd;
+        // }
 
         void start()
         {
@@ -140,6 +216,7 @@ namespace remote
            m_thread.detach();
         }
         void stop()
+
         {
             stop_=1;
         }
@@ -158,7 +235,7 @@ namespace remote
             {
                 if(connected == false)
                 {
-                    ret = connect(fd, (struct sockaddr *)&my_addr, sizeof(my_addr));
+                    ret = connect(fd, (struct sockaddr *)&peer_addr, sizeof(struct sockaddr_un));
                     if(ret == -1 && errno != EISCONN)
                     {
                         
@@ -170,17 +247,19 @@ namespace remote
                     }
                     connected = true;
                 }
-
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                ret = write(fd, msg.c_str(),msg.size());
+                // std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                // ret = write(fd, msg.c_str(),msg.size());
+                ret = sendto(fd, msg.c_str(), msg.size(),0,(struct sockaddr *)&peer_addr, sizeof(struct sockaddr_un));
                 if(ret == -1)
                 {
                     perror("remote::_remote::client::write");
                     stop_= 1;
-                }else{
-                    std::cout << "msg " << msg.c_str() << " written " << std::endl;
-
                 }
+                // else{
+                //     std::cout << "num bytes " << ret << " written " << std::endl;
+
+                // }
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             close_socket(fd);
         }

@@ -214,11 +214,11 @@ int main()
     // pData->print_encoded("decoded-data.txt");
 
 
-    //TEST(ipc_sockets)();
+    TEST(ipc_sockets)();
     // TEST(certs_encoding)();
     // TEST(data_encoding)();
     // TEST(cert_decoding)();
-    TEST(data_decoding)();
+    // TEST(data_decoding)();
     // TEST(logging)();
     // TEST(hashing)();
     // TEST(encoding)();
@@ -569,45 +569,47 @@ void TEST(cert_decoding)()
 void TEST(ipc_sockets)()
 {
     int wstatus;
-    remote::_remote *ptrServer = new remote::_remote(remote::Type::server);
+    // remote::_remote *ptrServer = new remote::_remote(remote::Type::server);
     remote::_remote *ptrClient = new remote::_remote(remote::Type::client);
-    std::string filename("/tmp/test.txt");
-    ptrServer->create(filename, AF_LOCAL);
-    ptrClient->create(filename, AF_LOCAL);
+    // std::string filename("/tmp/test.txt");
+    std::string peer_address("192.168.1.101");
+    int port=12345;
+    // ptrServer->create(filename, AF_LOCAL);
+    ptrClient->create(peer_address, port);
 
     /* create a new process */
-    pid_t cpid = fork();
+    // pid_t cpid = fork();
 
-    if(cpid == 0)
-    {
-        /* start the server process */
-        ptrServer->start();
-        while(1)
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }else{
+    // if(cpid == 0)
+    // {
+    //     /* start the server process */
+    //     ptrServer->start();
+    //     while(1)
+    //     {
+    //         std::this_thread::sleep_for(std::chrono::seconds(1));
+    //     }
+    // }else{
         ptrClient->start();
         while(1)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
         }
-    }
+    // /}
 
     std::cout << "wait for the child to finish " << std::endl;
 
-    waitpid(cpid, &wstatus, WUNTRACED | WCONTINUED);
+    // waitpid(cpid, &wstatus, WUNTRACED | WCONTINUED);
 
-    if(WIFEXITED(wstatus))
-    {
-        std::cout << "exited status " << WEXITSTATUS(wstatus) << std::endl;
-    }else if(WIFSIGNALED(wstatus))
-    {
-        std::cout << "exited status " << WTERMSIG(wstatus) << std::endl;
-    }else if(WIFCONTINUED(wstatus))
-    {
-        std::cout << "continued " << std::endl;
-    }
+    // if(WIFEXITED(wstatus))
+    // {
+    //     std::cout << "exited status " << WEXITSTATUS(wstatus) << std::endl;
+    // }else if(WIFSIGNALED(wstatus))
+    // {
+    //     std::cout << "exited status " << WTERMSIG(wstatus) << std::endl;
+    // }else if(WIFCONTINUED(wstatus))
+    // {
+    //     std::cout << "continued " << std::endl;
+    // }
 }
 
 void TEST(logging)()
