@@ -81,6 +81,7 @@ namespace ctp
         _dc  dc;    /* distribution center */
         _remote_host ra; /* registration authority */
         _remote_host dcm; /* device config manager */
+        _remote_host stats; /* to send the instrumentation data*/
         _cert_cfg certcfg;
         tp_cfg(const char *filename);
         ~tp_cfg()

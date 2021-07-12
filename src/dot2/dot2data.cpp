@@ -321,7 +321,7 @@ namespace ctp
         std::stringstream log_(std::ios_base::out);
         try
         {
-            dec->Ieee1609Dot2Data_(std::ref(*data));
+            ret = dec->Ieee1609Dot2Data_(std::ref(*data));
             if(data->content.type == Ieee1609Dot2ContentSignedData)
             {
                 decode_signeridentifier();

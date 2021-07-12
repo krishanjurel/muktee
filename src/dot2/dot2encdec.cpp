@@ -826,6 +826,7 @@ namespace ctp
             os << " Ieee1609Decode::Ieee1609Dot2Data_ unspoorted choice " << choice << std::endl;
             LOG_ERR(log_.str(), MODULE);
             offset = 0;
+            throw Exception(log_.str());
         }
         log_.str("");
         os << " Ieee1609Decode::Ieee1609Dot2Data_ exit " <<  len << " offset " << offset << std::endl;

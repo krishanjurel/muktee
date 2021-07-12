@@ -10,6 +10,8 @@
 #include <string.h>
 #include <string>
 #include <unistd.h>
+#include <condition_variable>
+#include <vector>
 
 
 #ifdef __cplusplus
@@ -29,6 +31,7 @@ extern "C"
 struct __attribute__((__packed__))remote_data
 {
     int id;
+    int msgcount;
     double longitude;
     double latitude;
     double heading;
@@ -55,7 +58,9 @@ namespace remote
         int fd; /* socket decscriptor */
         int domain;
         int protocol;
-        
+
+        std::condition_variable cv;
+        std::mutex m;
         std::thread m_thread;
         int stop_;
         Type type;
@@ -64,6 +69,12 @@ namespace remote
         size_t addrlen;
         uint16_t port;
         struct sockaddr _sockadr;
+        struct remote_data *_rem_data;
+
+        std::vector<struct remote_data *> dataList;
+
+
+
         public:
             SharedRemotePtr get()
             {
@@ -147,78 +158,7 @@ namespace remote
                 if(_res)
                     freeaddrinfo(_res);
                 return 0;
-
            }
-
-        // int create(std::string& addr,int domain = AF_LOCAL, int type = SOCK_SEQPACKET, int protocol=0)
-        // {
-        //     int ret = 0;
-        //     int sockVal = 1;
-        //     if(static_cast<int>(this->type)==static_cast<int>(Type::server))
-        //     {
-        //         unlink(addr.c_str());
-        //     }
-
-        //     fd = socket(domain, type, protocol);
-        //     if(fd == -1)
-        //     {
-        //         perror("_remote::create");
-        //         return fd;
-        //     }
-
-        //     if(setsockopt(fd, SOL_SOCKET,SO_REUSEADDR,&sockVal, sizeof(int)) == -1)
-        //     {
-        //         perror ("remote::_remote::setsockopt");
-        //     }
-        //     if(this->type == Type::client)
-        //     {
-        //         struct addrinfo _hints;
-        //         _hints.ai_family = AF_UNSPEC;
-        //         _hints.ai_socktype = type;
-        //     }
-
-
-        //     // if(domain == AF_LOCAL)
-        //     {
-        //         /* use the struct sockaddr_un to create a handle to a file */
-        //         /* reset the structure */
-        //         memset(&my_addr, 0, sizeof(my_addr));
-        //         my_addr.sun_family = domain;
-        //         strncpy(my_addr.sun_path, addr.c_str(), sizeof(my_addr.sun_path)-1);
-        //     }
-        //     // else if(domain == AF_UNSPEC){
-        //     //     struct addrinfo hints;
-        //     //     hints.ai_family=domain;
-        //     //     hints.ai_socktype = 0; /* anytype*/
-        //     //     hints.ai_protocol = 0;
-        //     //     hints.ai_flags = AI_PASSIVE;
-
-        //     //     getaddrinfo()
-
-        //     // }
-        //     if(static_cast<int>(this->type) == static_cast<int>(Type::server))
-        //     {
-        //         std::cout << "bind " << my_addr.sun_path << std::endl;
-        //         ret = bind(fd, (struct sockaddr *)&my_addr, sizeof(my_addr));
-        //         if(ret == -1)
-        //         {
-        //             perror("_remote::create::bind");
-        //             close(fd);
-        //             fd = -1;
-        //             return fd;
-        //         }
-        //         ret =  listen(fd, 20);
-        //         if(ret == -1)
-        //         {
-        //             perror("_remote::create::listen");
-        //             close(fd);
-        //             fd = -1;
-        //             return fd;
-        //         }
-        //     }
-        //     return fd;
-        // }
-
         void start()
         {
             std::cout << "start the the network thread" << std::endl;
@@ -236,6 +176,27 @@ namespace remote
             stop_=1;
         }
 
+        void data_send(const struct remote_data data)
+        {
+            {
+                /* acquire the lock */
+                std::lock_guard<std::mutex> lck(m);
+                _rem_data = (remote_data *)malloc(sizeof(remote_data));
+                if(_rem_data == nullptr)
+                {
+                    return ;
+                }
+                _rem_data->id = data.id;
+                _rem_data->msgcount = data.msgcount;
+                _rem_data->heading = data.heading;
+                _rem_data->longitude = data.longitude;
+                _rem_data->latitude = data.latitude;
+                _rem_data->speed = data.speed;
+                dataList.push_back(_rem_data);
+                cv.notify_all();
+            }
+        }
+
         /* client handler */
         void client()
         {
@@ -245,7 +206,7 @@ namespace remote
             // int data_socket=0;
             int ret = 0;
             bool connected = false;
-            struct remote_data remoteData{0};
+            struct remote_data *remoteData;
 
             while(!stop_)
             {
@@ -263,25 +224,25 @@ namespace remote
                     }
                     connected = true;
                 }
-                // std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                // ret = write(fd, msg.c_str(),msg.size());
-                remoteData.id = 12345;
-                remoteData.heading = 1.0523;
-                remoteData.speed = 2.52437;
-                remoteData.longitude += 1.0867;
-                remoteData.latitude += 2.0566;
-                ret = sendto(fd, (void *)&remoteData, sizeof(remoteData),0,(struct sockaddr *)&peer_addr, sizeof(struct sockaddr_un));
-                if(ret == -1 || ret != sizeof(remoteData))
+                /* wait for data arrival */
                 {
-                    perror("remote::_remote::client::write");
-                    std::cout << "num bytes written " << ret << " written " << std::endl;
-                    stop_= 1;
+                    std::unique_lock<std::mutex> lck(m);
+                    cv.wait(lck, [this](){return dataList.size() != 0;});
+                    while(dataList.size() != 0)
+                    {
+                        remoteData = (remote_data *)dataList.front();
+                        dataList.pop_back();
+                        ret = sendto(fd, (void *)remoteData, sizeof(*remoteData),0,(struct sockaddr *)&peer_addr, sizeof(struct sockaddr_un));
+                        if(ret == -1 || ret != sizeof(*remoteData))
+                        {
+                            perror("remote::_remote::client::write");
+                            std::cout << "num bytes written " << ret << " written " << std::endl;
+                            stop_= 1;
+                        }
+                        free(remoteData);
+                    }
+                    // lck.unlock();
                 }
-                // else{
-                //     std::cout << "num bytes " << ret << " written " << std::endl;
-
-                // }
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
             close_socket(fd);
         }

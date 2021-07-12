@@ -19,11 +19,14 @@ namespace ctp
     #define DC_CRLS_PORT    "crls.port"
     #define DC_CTLS_IP      "ctls.ip"
     #define DC_CTLS_PORT    "ctls.port"
+    #define IP              "ip"
+    #define PORT            "port"
 
     #define DC_SETTINGS     "app.components.DC"
     #define RA_SETTINGS     "app.components.RA"
     #define DCM_SETTINGS    "app.components.DCM"
     #define CERT_SETTINGS   "app.components.CERTS"
+    #define STATS_SETTINGS  "app.components.STATS"
 
 
     #define CERTS_CURVES    "curves"
@@ -103,6 +106,17 @@ namespace ctp
                     }
                     certSettings.lookupValue(CERTS_CAS, certcfg.cas);
                     certSettings.lookupValue(CERTS_SIGNERS, certcfg.signers);
+                }
+                stats.port = -1;
+                /* look for stat settings */
+                libconfig::Setting& statSettings = config.lookup(STATS_SETTINGS);
+                if(statSettings.getLength() == 0)
+                {
+                    log_ << " tp_cfg::tp_cfg::config.lookup( " << STATS_SETTINGS << ")" <<  " not specified " << std::endl;
+                    LOG_ERR(log_.str(), MODULE);
+                }else{
+                    statSettings.lookupValue(IP, stats.ip);
+                    statSettings.lookupValue(PORT, stats.port);
                 }
             }
             catch(const std::exception& e)

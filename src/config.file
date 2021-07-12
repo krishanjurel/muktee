@@ -38,18 +38,17 @@ app:
             }
         }
 
-        LOG_MGR:
+        STATS:
         {
-            ip:"INADDR_LOOPBACK";
-            port: 0x1239;
+            ip:"192.168.1.101";
+            port:12345;
         }
-
         /* sign and verify the given psids */
         CERTS:
         {
             /* location to store ca and signer certs */
-            cas = "./cas1234",
-            signers = "./signers5678",
+            cas = "./cas",
+            signers = "./signers",
             /* NIST P-256 and brainpool P-256 r1 */
             curves=["nistp256","brainpoolp256r1"];
             /* for now it only contains the psid */
