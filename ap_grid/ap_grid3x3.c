@@ -98,53 +98,16 @@ int main(int argc, char *argv[1])
         exit(EXIT_FAILURE);
     }
 
-    FILE *fp = fopen(argv[1], "r");
+    FILE *fp = freopen(argv[1], "r", stdin);
 
-    if(fp == NULL)
-    {
-        perror("fopen");
-        exit(EXIT_FAILURE);
-    }
-
-    size_t sz_ = getline(&line, &sz, fp);
-    if(sz_ == -1)
-    {
-        perror("getline error ");
-        exit(EXIT_FAILURE);
-    }
-    sscanf(line, "%d", &T);
+    
+    
+    scanf("%d", &T);
     for(int i = 0; i < T; i++)
     {
-        sz_ = getline(&line, &sz, fp);
-        if(sz_ == -1)
-        {
-            break;
-        }
-        sscanf(line, "%d %d %d", &g[0][0], &g[0][1],&g[0][2]);
-        free(line);
-        line = NULL;
-        sz = 0;
-
-        sz_ = getline(&line, &sz, fp);
-        if(sz_ == -1)
-        {
-            break;
-        }
-        sscanf(line, "%d %d", &g[1][0],&g[1][2]);
-        free(line);
-        line = NULL;
-        sz = 0;
-       
-        sz_ = getline(&line, &sz, fp);
-        if(sz_ == -1)
-        {
-            break;
-        }
-        sscanf(line, "%d %d %d", &g[2][0], &g[2][1],&g[2][2]);
-        free(line);
-        line = NULL;
-        sz = 0;
-
+        scanf("%d %d %d", &g[0][0], &g[0][1],&g[0][2]);
+        scanf("%d %d", &g[1][0],&g[1][2]);
+        scanf("%d %d %d", &g[2][0], &g[2][1],&g[2][2]);
         printf("Case #%d: %d\n", i+1, max_progressions(g));
 
     }
