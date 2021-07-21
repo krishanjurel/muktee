@@ -22,8 +22,8 @@ int64_t adjust_consecutive_cells(int **g, int **visitMap, int row, int col, int 
         diff = abs(g[row][col]-g[row-1][col]); 
         if(diff > 1)
         {
-            cellsAdded += (diff-1)
-            g[row-1][col] = (diff-1)
+            cellsAdded += (diff-1);
+            g[row-1][col] = (diff-1);
             // visitMap[row-1][col] = 1;
         }
     }
